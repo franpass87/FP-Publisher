@@ -19,7 +19,7 @@ class TTSAdvancedFeatures {
 
     setupKeyboardShortcuts() {
         // Define keyboard shortcuts
-        this.shortcuts.set('ctrl+shift+d', () => this.navigateTo('tts-main'));
+        this.shortcuts.set('ctrl+shift+d', () => this.navigateTo('fp-publisher-main'));
         this.shortcuts.set('ctrl+shift+c', () => this.navigateTo('tts-calendar'));
         this.shortcuts.set('ctrl+shift+a', () => this.navigateTo('tts-analytics'));
         this.shortcuts.set('ctrl+shift+h', () => this.navigateTo('tts-health'));
@@ -973,7 +973,7 @@ class TTSAdvancedFeatures {
         const newState = !isEnabled;
         localStorage.setItem('tts-auto-refresh', newState.toString());
         
-        if (newState && window.location.href.includes('page=tts-main')) {
+        if (newState && window.location.href.includes('page=fp-publisher-main')) {
             // Enable auto refresh for dashboard
             this.startAutoRefresh();
         } else {
@@ -1023,7 +1023,7 @@ class TTSAdvancedFeatures {
             let helpContent = '';
             
             switch (currentPage) {
-                case 'tts-main':
+                case 'fp-publisher-main':
                     helpContent = this.getDashboardHelp();
                     break;
                 case 'tts-calendar':

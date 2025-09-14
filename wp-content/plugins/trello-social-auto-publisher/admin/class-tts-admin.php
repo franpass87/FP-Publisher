@@ -150,7 +150,7 @@ class TTS_Admin {
             __( 'Calendario', 'fp-publisher' ),
             'manage_options',
             'fp-publisher-calendar',
-            array( 'TTS_Calendar_Page', 'render_page' )
+            array( $this, 'render_calendar_page' )
         );
 
         // Analytics submenu
@@ -160,7 +160,7 @@ class TTS_Admin {
             __( 'Analytics', 'fp-publisher' ),
             'manage_options',
             'fp-publisher-analytics',
-            array( 'TTS_Analytics_Page', 'render_page' )
+            array( $this, 'render_analytics_page' )
         );
 
         // Health Status submenu
@@ -170,7 +170,7 @@ class TTS_Admin {
             __( 'Stato', 'fp-publisher' ),
             'manage_options',
             'fp-publisher-health',
-            array( 'TTS_Health_Page', 'render_page' )
+            array( $this, 'render_health_page' )
         );
 
         // Log submenu
@@ -180,7 +180,7 @@ class TTS_Admin {
             __( 'Log', 'fp-publisher' ),
             'manage_options',
             'fp-publisher-log',
-            array( 'TTS_Log_Page', 'render_page' )
+            array( $this, 'render_log_page' )
         );
 
         // AI Features submenu
@@ -190,7 +190,7 @@ class TTS_Admin {
             __( 'AI & Advanced Features', 'fp-publisher' ),
             'manage_options',
             'fp-publisher-ai-features',
-            array( 'TTS_AI_Features_Page', 'render_page' )
+            array( $this, 'render_ai_features_page' )
         );
 
         // Frequency Status submenu
@@ -200,7 +200,7 @@ class TTS_Admin {
             __( 'Publishing Status', 'fp-publisher' ),
             'manage_options',
             'fp-publisher-frequency-status',
-            array( 'TTS_Frequency_Status_Page', 'render_page' )
+            array( $this, 'render_frequency_status_page' )
         );
     }
 
@@ -1719,7 +1719,7 @@ class TTS_Admin {
             echo '<h3>' . esc_html__( 'Social Media Setup Required', 'trello-social-auto-publisher' ) . '</h3>';
             echo '<p>' . esc_html__( 'To connect social media accounts, you must first configure OAuth apps for each platform. Click "Configure App" for platforms that are not set up.', 'trello-social-auto-publisher' ) . '</p>';
             echo '<p><a href="' . esc_url( admin_url( 'admin.php?page=tts-social-connections' ) ) . '" class="button">' . esc_html__( 'Manage Social Connections', 'trello-social-auto-publisher' ) . '</a> ';
-            echo '<a href="' . esc_url( admin_url( 'admin.php?page=tts-main' ) ) . '" target="_blank">' . esc_html__( 'View Setup Guide', 'trello-social-auto-publisher' ) . '</a></p>';
+            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-help' ) ) . '" target="_blank">' . esc_html__( 'View Setup Guide', 'trello-social-auto-publisher' ) . '</a></p>';
             echo '</div>';
         }
 
@@ -3974,6 +3974,64 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         </script>
         <?php
     }
-}
 
-new TTS_Admin();
+    /**
+     * Delegate to calendar page render method.
+     */
+    public function render_calendar_page() {
+        global $tts_calendar_page;
+        if ( isset( $tts_calendar_page ) && $tts_calendar_page instanceof TTS_Calendar_Page ) {
+            $tts_calendar_page->render_page();
+        }
+    }
+
+    /**
+     * Delegate to analytics page render method.
+     */
+    public function render_analytics_page() {
+        global $tts_analytics_page;
+        if ( isset( $tts_analytics_page ) && $tts_analytics_page instanceof TTS_Analytics_Page ) {
+            $tts_analytics_page->render_page();
+        }
+    }
+
+    /**
+     * Delegate to health page render method.
+     */
+    public function render_health_page() {
+        global $tts_health_page;
+        if ( isset( $tts_health_page ) && $tts_health_page instanceof TTS_Health_Page ) {
+            $tts_health_page->render_page();
+        }
+    }
+
+    /**
+     * Delegate to log page render method.
+     */
+    public function render_log_page() {
+        global $tts_log_page;
+        if ( isset( $tts_log_page ) && $tts_log_page instanceof TTS_Log_Page ) {
+            $tts_log_page->render_page();
+        }
+    }
+
+    /**
+     * Delegate to AI features page render method.
+     */
+    public function render_ai_features_page() {
+        global $tts_ai_features_page;
+        if ( isset( $tts_ai_features_page ) && $tts_ai_features_page instanceof TTS_AI_Features_Page ) {
+            $tts_ai_features_page->render_page();
+        }
+    }
+
+    /**
+     * Delegate to frequency status page render method.
+     */
+    public function render_frequency_status_page() {
+        global $tts_frequency_status_page;
+        if ( isset( $tts_frequency_status_page ) && $tts_frequency_status_page instanceof TTS_Frequency_Status_Page ) {
+            $tts_frequency_status_page->render_page();
+        }
+    }
+}
