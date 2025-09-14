@@ -15,26 +15,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Analytics_Page {
 
     /**
-     * Hook into WordPress actions.
+     * Initialize the analytics page.
      */
     public function __construct() {
-        add_action( 'admin_menu', array( $this, 'register_menu' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
     }
 
     /**
-     * Register the analytics menu.
+     * Remove the analytics menu registration method since it's handled by TTS_Admin.
      */
-    public function register_menu() {
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Analytics', 'fp-publisher' ),
-            __( 'Analytics', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-analytics',
-            array( $this, 'render_page' )
-        );
-    }
 
     /**
      * Enqueue Chart.js and custom scripts.
@@ -42,7 +31,7 @@ class TTS_Analytics_Page {
      * @param string $hook Current admin page hook.
      */
     public function enqueue_assets( $hook ) {
-        if ( 'social-auto-publisher_page_tts-analytics' !== $hook ) {
+        if ( 'fp-publisher_page_fp-publisher-analytics' !== $hook ) {
             return;
         }
 

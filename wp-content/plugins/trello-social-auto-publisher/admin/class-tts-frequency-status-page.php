@@ -15,10 +15,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Frequency_Status_Page {
 
     /**
-     * Constructor.
+     * Initialize the frequency status page.
      */
     public function __construct() {
-        add_action( 'admin_menu', array( $this, 'add_menu_page' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
         add_action( 'wp_ajax_tts_refresh_frequency_status', array( $this, 'ajax_refresh_status' ) );
         add_action( 'wp_ajax_tts_check_all_frequencies', array( $this, 'ajax_check_all_frequencies' ) );
@@ -26,18 +25,8 @@ class TTS_Frequency_Status_Page {
     }
 
     /**
-     * Add the menu page.
+     * Remove the frequency status menu registration method since it's handled by TTS_Admin.
      */
-    public function add_menu_page() {
-        add_submenu_page(
-            'tts-main',
-            __( 'Publishing Status', 'trello-social-auto-publisher' ),
-            __( 'Publishing Status', 'trello-social-auto-publisher' ),
-            'manage_options',
-            'tts-frequency-status',
-            array( $this, 'render_page' )
-        );
-    }
 
     /**
      * Enqueue page assets.
@@ -45,7 +34,7 @@ class TTS_Frequency_Status_Page {
      * @param string $hook Current admin page hook.
      */
     public function enqueue_assets( $hook ) {
-        if ( 'social-auto-publisher_page_tts-frequency-status' !== $hook ) {
+        if ( 'fp-publisher_page_fp-publisher-frequency-status' !== $hook ) {
             return;
         }
 

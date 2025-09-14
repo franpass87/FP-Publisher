@@ -15,10 +15,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Health_Page {
 
     /**
-     * Hook into WordPress actions.
+     * Initialize the health page.
      */
     public function __construct() {
-        add_action( 'admin_menu', array( $this, 'register_menu' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
     }
 
@@ -28,7 +27,7 @@ class TTS_Health_Page {
      * @param string $hook Current admin page hook.
      */
     public function enqueue_assets( $hook ) {
-        if ( 'social-auto-publisher_page_tts-health' !== $hook ) {
+        if ( 'fp-publisher_page_fp-publisher-health' !== $hook ) {
             return;
         }
 
@@ -41,18 +40,8 @@ class TTS_Health_Page {
     }
 
     /**
-     * Register the health status menu page.
+     * Remove the health menu registration method since it's handled by TTS_Admin.
      */
-    public function register_menu() {
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Stato', 'fp-publisher' ),
-            __( 'Stato', 'fp-publisher' ),
-            'manage_tts_posts',
-            'fp-publisher-health',
-            array( $this, 'render_page' )
-        );
-    }
 
     /**
      * Render the health status page.

@@ -18,7 +18,7 @@ class TTSHelpSystem {
 
     loadHelpData() {
         this.helpData = {
-            'tts-main': {
+            'fp-publisher-main': {
                 title: 'Dashboard Help',
                 sections: [
                     {

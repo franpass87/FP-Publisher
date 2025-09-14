@@ -96,11 +96,15 @@ add_action( 'plugins_loaded', function () {
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-frequency-dashboard-widget.php';
 
         new TTS_Admin();
-        new TTS_Calendar_Page();
-        new TTS_Health_Page();
+        $GLOBALS['tts_calendar_page'] = new TTS_Calendar_Page();
+        $GLOBALS['tts_health_page'] = new TTS_Health_Page();
+        $GLOBALS['tts_analytics_page'] = new TTS_Analytics_Page();
+        $GLOBALS['tts_log_page'] = new TTS_Log_Page();
+        $GLOBALS['tts_frequency_status_page'] = new TTS_Frequency_Status_Page();
         
         // Load AI Features page
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-ai-features-page.php';
+        $GLOBALS['tts_ai_features_page'] = new TTS_AI_Features_Page();
 
         add_action( 'admin_enqueue_scripts', function( $hook ) {
             if ( 'fp-publisher_page_fp-publisher-calendar' !== $hook ) {

@@ -15,24 +15,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Calendar_Page {
 
     /**
-     * Hook into admin_menu.
+     * Initialize the calendar page.
      */
     public function __construct() {
-        add_action( 'admin_menu', array( $this, 'register_menu' ) );
-    }
-
-    /**
-     * Register the calendar menu page.
-     */
-    public function register_menu() {
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Calendario', 'fp-publisher' ),
-            __( 'Calendario', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-calendar',
-            array( $this, 'render_page' )
-        );
+        // Menu registration handled by TTS_Admin class
     }
 
     /**
