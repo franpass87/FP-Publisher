@@ -1,0 +1,74 @@
+name: Build WordPress Plugin ZIP
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Create plugin ZIP
+      run: |
+        # Create temporary directory for the plugin
+        mkdir -p fp-publisher-build
+        
+        # Copy only the plugin files
+        cp -r wp-content/plugins/trello-social-auto-publisher/* fp-publisher-build/
+        
+        # Copy root documentation files that might be useful for the plugin
+        cp README.md fp-publisher-build/ 2>/dev/null || true
+        cp OPTIMIZATION_GUIDE.md fp-publisher-build/ 2>/dev/null || true
+        cp SECURITY_IMPROVEMENTS.md fp-publisher-build/ 2>/dev/null || true
+        cp SOCIAL_MEDIA_SETUP.md fp-publisher-build/ 2>/dev/null || true
+        
+        # Remove any development/build files that shouldn't be in the distribution
+        find fp-publisher-build -name "*.log" -delete
+        find fp-publisher-build -name "*.tmp" -delete
+        find fp-publisher-build -name "*.temp" -delete
+        find fp-publisher-build -name ".DS_Store" -delete
+        find fp-publisher-build -name "Thumbs.db" -delete
+        find fp-publisher-build -name "*.bak" -delete
+        find fp-publisher-build -name "node_modules" -type d -exec rm -rf {} + 2>/dev/null || true
+        find fp-publisher-build -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
+        find fp-publisher-build -name ".sass-cache" -type d -exec rm -rf {} + 2>/dev/null || true
+        find fp-publisher-build -name "vendor" -type d -exec rm -rf {} + 2>/dev/null || true
+        
+        # Create the ZIP file
+        cd fp-publisher-build
+        zip -r ../fp-publisher-wordpress-plugin.zip . -x "*.git*" "*.DS_Store" "Thumbs.db"
+        cd ..
+        
+        # Verify ZIP contents
+        echo "ZIP file contents:"
+        unzip -l fp-publisher-wordpress-plugin.zip | head -20
+        
+        # Get file size
+        ls -lh fp-publisher-wordpress-plugin.zip
+        
+    - name: Upload plugin ZIP as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: fp-publisher-wordpress-plugin
+        path: fp-publisher-wordpress-plugin.zip
+        retention-days: 30
+        
+    - name: Upload to release (if this is a release)
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./fp-publisher-wordpress-plugin.zip
+        asset_name: fp-publisher-wordpress-plugin.zip
+        asset_content_type: application/zip
