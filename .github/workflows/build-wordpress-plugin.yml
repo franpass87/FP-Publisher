@@ -17,6 +17,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
+    - name: Extract plugin version
+      id: version
+      run: |
+        VERSION=$(grep -o "Version:.*" wp-content/plugins/trello-social-auto-publisher/trello-social-auto-publisher.php | sed 's/Version:[[:space:]]*//')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Plugin version: $VERSION"
+        
     - name: Create plugin ZIP
       run: |
         # Create temporary directory for the plugin
@@ -30,6 +37,8 @@ jobs:
         cp OPTIMIZATION_GUIDE.md fp-publisher-build/ 2>/dev/null || true
         cp SECURITY_IMPROVEMENTS.md fp-publisher-build/ 2>/dev/null || true
         cp SOCIAL_MEDIA_SETUP.md fp-publisher-build/ 2>/dev/null || true
+        cp ENTERPRISE_FEATURES.md fp-publisher-build/ 2>/dev/null || true
+        cp MENU_STRUCTURE.md fp-publisher-build/ 2>/dev/null || true
         
         # Remove any development/build files that shouldn't be in the distribution
         find fp-publisher-build -name "*.log" -delete
@@ -38,27 +47,65 @@ jobs:
         find fp-publisher-build -name ".DS_Store" -delete
         find fp-publisher-build -name "Thumbs.db" -delete
         find fp-publisher-build -name "*.bak" -delete
+        find fp-publisher-build -name "*.swp" -delete
+        find fp-publisher-build -name "*.swo" -delete
+        find fp-publisher-build -name "*~" -delete
         find fp-publisher-build -name "node_modules" -type d -exec rm -rf {} + 2>/dev/null || true
         find fp-publisher-build -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
         find fp-publisher-build -name ".sass-cache" -type d -exec rm -rf {} + 2>/dev/null || true
         find fp-publisher-build -name "vendor" -type d -exec rm -rf {} + 2>/dev/null || true
+        find fp-publisher-build -name ".vscode" -type d -exec rm -rf {} + 2>/dev/null || true
+        find fp-publisher-build -name ".idea" -type d -exec rm -rf {} + 2>/dev/null || true
         
-        # Create the ZIP file
+        # Remove any potential cache directories
+        find fp-publisher-build -name "cache" -type d -exec rm -rf {} + 2>/dev/null || true
+        find fp-publisher-build -name "tmp" -type d -exec rm -rf {} + 2>/dev/null || true
+        
+        # Create the ZIP file with version in filename
         cd fp-publisher-build
-        zip -r ../fp-publisher-wordpress-plugin.zip . -x "*.git*" "*.DS_Store" "Thumbs.db"
+        zip -r ../fp-publisher-wordpress-plugin-v${{ steps.version.outputs.version }}.zip . -x "*.git*" "*.DS_Store" "Thumbs.db"
         cd ..
         
-        # Verify ZIP contents
-        echo "ZIP file contents:"
-        unzip -l fp-publisher-wordpress-plugin.zip | head -20
+        # Create a generic filename as well for easier access
+        cp fp-publisher-wordpress-plugin-v${{ steps.version.outputs.version }}.zip fp-publisher-wordpress-plugin.zip
         
-        # Get file size
-        ls -lh fp-publisher-wordpress-plugin.zip
+        # Verify ZIP contents
+        echo "=== ZIP file contents ==="
+        unzip -l fp-publisher-wordpress-plugin.zip | head -20
+        echo ""
+        echo "=== ZIP file info ==="
+        ls -lh fp-publisher-wordpress-plugin*.zip
+        echo ""
+        echo "=== Verifying WordPress plugin structure ==="
+        if unzip -l fp-publisher-wordpress-plugin.zip | grep -q "trello-social-auto-publisher.php"; then
+          echo "✅ Main plugin file found"
+        else
+          echo "❌ Main plugin file missing"
+          exit 1
+        fi
+        if unzip -l fp-publisher-wordpress-plugin.zip | grep -q "includes/"; then
+          echo "✅ Includes directory found"
+        else
+          echo "❌ Includes directory missing"
+        fi
+        if unzip -l fp-publisher-wordpress-plugin.zip | grep -q "admin/"; then
+          echo "✅ Admin directory found"
+        else
+          echo "❌ Admin directory missing"
+        fi
         
     - name: Upload plugin ZIP as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: fp-publisher-wordpress-plugin
+        name: fp-publisher-wordpress-plugin-v${{ steps.version.outputs.version }}
+        path: |
+          fp-publisher-wordpress-plugin*.zip
+        retention-days: 30
+        
+    - name: Upload generic plugin ZIP as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: fp-publisher-wordpress-plugin-latest
         path: fp-publisher-wordpress-plugin.zip
         retention-days: 30
         
@@ -69,6 +116,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./fp-publisher-wordpress-plugin.zip
-        asset_name: fp-publisher-wordpress-plugin.zip
+        asset_path: ./fp-publisher-wordpress-plugin-v${{ steps.version.outputs.version }}.zip
+        asset_name: fp-publisher-wordpress-plugin-v${{ steps.version.outputs.version }}.zip
         asset_content_type: application/zip

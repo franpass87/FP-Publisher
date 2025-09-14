@@ -1,6 +1,18 @@
 # FP-Social-Auto-Publisher
 
+[![Build WordPress Plugin](https://github.com/franpass87/FP-Publisher/actions/workflows/build-wordpress-plugin.yml/badge.svg)](https://github.com/franpass87/FP-Publisher/actions/workflows/build-wordpress-plugin.yml)
+
 Questo progetto pubblica automaticamente contenuti sui social a partire da Trello.
+
+## 📦 Download WordPress Plugin
+
+Il plugin è disponibile come ZIP pronto per l'installazione su WordPress tramite [GitHub Actions Artifacts](https://github.com/franpass87/FP-Publisher/actions). 
+
+Per scaricare l'ultima versione:
+1. Vai alle [GitHub Actions](https://github.com/franpass87/FP-Publisher/actions/workflows/build-wordpress-plugin.yml)
+2. Clicca sull'ultimo workflow run completato con successo
+3. Scarica l'artifact `fp-publisher-wordpress-plugin-latest`
+4. Carica il file ZIP in WordPress Admin > Plugin > Aggiungi nuovo > Carica plugin
 
 ## ✨ Aggiornamenti Recenti
 
