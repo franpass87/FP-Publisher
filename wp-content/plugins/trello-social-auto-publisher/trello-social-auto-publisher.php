@@ -98,9 +98,13 @@ add_action( 'plugins_loaded', function () {
         new TTS_Admin();
         new TTS_Calendar_Page();
         new TTS_Health_Page();
+        new TTS_Analytics_Page();
+        new TTS_Log_Page();
+        new TTS_Frequency_Status_Page();
         
         // Load AI Features page
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-ai-features-page.php';
+        new TTS_AI_Features_Page();
 
         add_action( 'admin_enqueue_scripts', function( $hook ) {
             if ( 'fp-publisher_page_fp-publisher-calendar' !== $hook ) {

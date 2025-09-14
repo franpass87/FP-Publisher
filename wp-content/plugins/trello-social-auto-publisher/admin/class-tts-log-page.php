@@ -19,24 +19,10 @@ if ( ! class_exists( 'WP_List_Table' ) ) {
 class TTS_Log_Page {
 
     /**
-     * Hook into admin_menu.
+     * Initialize the log page.
      */
     public function __construct() {
-        add_action( 'admin_menu', array( $this, 'register_menu' ) );
-    }
-
-    /**
-     * Register the menu page.
-     */
-    public function register_menu() {
-        add_submenu_page(
-            'tts-main',
-            __( 'Log', 'trello-social-auto-publisher' ),
-            __( 'Log', 'trello-social-auto-publisher' ),
-            'manage_options',
-            'tts-log',
-            array( $this, 'render_page' )
-        );
+        // Menu registration handled by TTS_Admin class
     }
 
     /**

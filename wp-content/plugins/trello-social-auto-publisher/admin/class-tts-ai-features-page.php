@@ -15,26 +15,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_AI_Features_Page {
 
     /**
-     * Initialize the page.
+     * Initialize the AI features page.
      */
     public function __construct() {
-        add_action( 'admin_menu', array( $this, 'register_page' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
     }
 
     /**
-     * Register admin page.
+     * Remove the AI features menu registration method since it's handled by TTS_Admin.
      */
-    public function register_page() {
-        add_submenu_page(
-            'tts-main',
-            __( 'AI & Advanced Features', 'trello-social-auto-publisher' ),
-            __( 'AI & Advanced Features', 'trello-social-auto-publisher' ),
-            'manage_options',
-            'tts-ai-features',
-            array( $this, 'render_page' )
-        );
-    }
 
     /**
      * Enqueue page assets.
@@ -42,7 +31,7 @@ class TTS_AI_Features_Page {
      * @param string $hook Current admin page hook.
      */
     public function enqueue_assets( $hook ) {
-        if ( 'social-auto-publisher_page_tts-ai-features' !== $hook ) {
+        if ( 'fp-publisher_page_fp-publisher-ai-features' !== $hook ) {
             return;
         }
 

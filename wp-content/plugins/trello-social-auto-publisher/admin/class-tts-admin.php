@@ -142,6 +142,66 @@ class TTS_Admin {
             'fp-publisher-help',
             array( $this, 'render_help_page' )
         );
+
+        // Calendar submenu
+        add_submenu_page(
+            'fp-publisher-main',
+            __( 'Calendario', 'fp-publisher' ),
+            __( 'Calendario', 'fp-publisher' ),
+            'manage_options',
+            'fp-publisher-calendar',
+            array( 'TTS_Calendar_Page', 'render_page' )
+        );
+
+        // Analytics submenu
+        add_submenu_page(
+            'fp-publisher-main',
+            __( 'Analytics', 'fp-publisher' ),
+            __( 'Analytics', 'fp-publisher' ),
+            'manage_options',
+            'fp-publisher-analytics',
+            array( 'TTS_Analytics_Page', 'render_page' )
+        );
+
+        // Health Status submenu
+        add_submenu_page(
+            'fp-publisher-main',
+            __( 'Stato', 'fp-publisher' ),
+            __( 'Stato', 'fp-publisher' ),
+            'manage_options',
+            'fp-publisher-health',
+            array( 'TTS_Health_Page', 'render_page' )
+        );
+
+        // Log submenu
+        add_submenu_page(
+            'fp-publisher-main',
+            __( 'Log', 'fp-publisher' ),
+            __( 'Log', 'fp-publisher' ),
+            'manage_options',
+            'fp-publisher-log',
+            array( 'TTS_Log_Page', 'render_page' )
+        );
+
+        // AI Features submenu
+        add_submenu_page(
+            'fp-publisher-main',
+            __( 'AI & Advanced Features', 'fp-publisher' ),
+            __( 'AI & Advanced Features', 'fp-publisher' ),
+            'manage_options',
+            'fp-publisher-ai-features',
+            array( 'TTS_AI_Features_Page', 'render_page' )
+        );
+
+        // Frequency Status submenu
+        add_submenu_page(
+            'fp-publisher-main',
+            __( 'Publishing Status', 'fp-publisher' ),
+            __( 'Publishing Status', 'fp-publisher' ),
+            'manage_options',
+            'fp-publisher-frequency-status',
+            array( 'TTS_Frequency_Status_Page', 'render_page' )
+        );
     }
 
     /**
@@ -419,7 +479,7 @@ class TTS_Admin {
      * @param string $hook Current admin page hook.
      */
     public function enqueue_wizard_assets( $hook ) {
-        if ( 'social-auto-publisher_page_tts-client-wizard' !== $hook ) {
+        if ( 'fp-publisher_page_fp-publisher-client-wizard' !== $hook ) {
             return;
         }
 
