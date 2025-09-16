@@ -72,6 +72,36 @@ class TTS_Rate_Limiter {
     public function is_request_allowed( $platform, $endpoint = 'default' ) {
         $platform = strtolower( $platform );
         
+        // Check for active throttling first
+        $user_id = get_current_user_id();
+        $emergency_throttle = get_transient( 'tts_emergency_throttle_' . $user_id );
+        $critical_throttle = get_transient( 'tts_critical_throttle_' . $user_id );
+        $warning_throttle = get_transient( 'tts_warning_throttle_' . $user_id );
+        
+        if ( $emergency_throttle && time() < $emergency_throttle ) {
+            return array(
+                'allowed' => false,
+                'reason' => 'Emergency throttling active',
+                'retry_after' => $emergency_throttle - time()
+            );
+        }
+        
+        if ( $critical_throttle && time() < $critical_throttle ) {
+            return array(
+                'allowed' => false,
+                'reason' => 'Critical throttling active',
+                'retry_after' => $critical_throttle - time()
+            );
+        }
+        
+        if ( $warning_throttle && time() < $warning_throttle ) {
+            return array(
+                'allowed' => false,
+                'reason' => 'Warning throttling active',
+                'retry_after' => $warning_throttle - time()
+            );
+        }
+        
         if ( ! isset( $this->rate_limits[ $platform ] ) ) {
             return array(
                 'allowed' => true,
@@ -552,12 +582,16 @@ class TTS_Rate_Limiter {
         $health_score = $status['health_score']['score'];
         
         // Implement smart delays based on usage
+        // Use non-blocking delay by scheduling a delayed action instead of sleep()
         if ( $health_score < 20 ) {
-            sleep( 5 ); // Emergency throttling
+            // Schedule emergency throttling - delay next request by 5 seconds
+            set_transient( 'tts_emergency_throttle_' . get_current_user_id(), time() + 5, 10 );
         } elseif ( $health_score < 40 ) {
-            sleep( 2 ); // Critical throttling
+            // Schedule critical throttling - delay next request by 2 seconds  
+            set_transient( 'tts_critical_throttle_' . get_current_user_id(), time() + 2, 5 );
         } elseif ( $health_score < 60 ) {
-            sleep( 1 ); // Warning throttling
+            // Schedule warning throttling - delay next request by 1 second
+            set_transient( 'tts_warning_throttle_' . get_current_user_id(), time() + 1, 3 );
         }
         // No delay for good/excellent health scores
     }

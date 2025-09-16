@@ -392,14 +392,17 @@ class TTS_Security_Audit {
      * Monitor nonce failures
      */
     public function monitor_nonce_failures() {
-        if ( isset( $_REQUEST['_wpnonce'] ) || isset( $_REQUEST['_ajax_nonce'] ) ) {
+        // Check for nonce verification failures - use $_POST instead of $_REQUEST for security
+        if ( ( isset( $_POST['_wpnonce'] ) || isset( $_POST['_ajax_nonce'] ) ) &&
+             ( ! wp_verify_nonce( $_POST['_wpnonce'] ?? '', 'wp_rest' ) && 
+               ! check_ajax_referer( $_POST['_ajax_nonce'] ?? '', false, false ) ) ) {
             $this->log_security_event(
                 self::EVENT_PERMISSION_VIOLATION,
                 'Nonce verification failed',
                 self::RISK_MEDIUM,
                 array(
-                    'action' => $_REQUEST['action'] ?? 'unknown',
-                    'nonce_provided' => ! empty( $_REQUEST['_wpnonce'] ) || ! empty( $_REQUEST['_ajax_nonce'] )
+                    'action' => sanitize_text_field( $_POST['action'] ?? 'unknown' ),
+                    'nonce_provided' => ! empty( $_POST['_wpnonce'] ) || ! empty( $_POST['_ajax_nonce'] )
                 )
             );
         }

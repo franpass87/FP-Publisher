@@ -1788,7 +1788,7 @@ class TTS_Admin {
             }
         }
 
-        $step = isset( $_REQUEST['step'] ) ? absint( $_REQUEST['step'] ) : 1;
+        $step = isset( $_GET['step'] ) ? absint( $_GET['step'] ) : 1;
 
         echo '<div class="wrap tts-client-wizard">';
         echo '<h1>' . esc_html__( 'Client Wizard', 'trello-social-auto-publisher' ) . '</h1>';
@@ -1808,8 +1808,8 @@ class TTS_Admin {
         $yt_token = get_transient( 'tts_oauth_youtube_token' );
         $tt_token = get_transient( 'tts_oauth_tiktok_token' );
 
-        $trello_key   = isset( $_REQUEST['trello_key'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['trello_key'] ) ) : '';
-        $trello_token = isset( $_REQUEST['trello_token'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['trello_token'] ) ) : '';
+        $trello_key   = isset( $_GET['trello_key'] ) ? sanitize_text_field( wp_unslash( $_GET['trello_key'] ) ) : '';
+        $trello_token = isset( $_GET['trello_token'] ) ? sanitize_text_field( wp_unslash( $_GET['trello_token'] ) ) : '';
         $board        = isset( $_REQUEST['trello_board'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['trello_board'] ) ) : '';
         $channels     = isset( $_REQUEST['channels'] ) ? array_map( 'sanitize_text_field', (array) $_REQUEST['channels'] ) : array();
 
