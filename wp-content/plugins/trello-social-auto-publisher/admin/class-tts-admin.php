@@ -42,6 +42,8 @@ class TTS_Admin {
         add_action( 'wp_ajax_tts_refresh_health', array( $this, 'ajax_refresh_health' ) );
         add_action( 'wp_ajax_tts_show_export_modal', array( $this, 'ajax_show_export_modal' ) );
         add_action( 'wp_ajax_tts_show_import_modal', array( $this, 'ajax_show_import_modal' ) );
+        add_action( 'wp_ajax_tts_test_client_connections', array( $this, 'ajax_test_client_connections' ) );
+        add_action( 'wp_ajax_tts_test_single_connection', array( $this, 'ajax_test_single_connection' ) );
         add_filter( 'manage_tts_social_post_posts_columns', array( $this, 'add_approved_column' ) );
         add_action( 'manage_tts_social_post_posts_custom_column', array( $this, 'render_approved_column' ), 10, 2 );
         add_filter( 'bulk_actions-edit-tts_social_post', array( $this, 'register_bulk_actions' ) );
@@ -83,7 +85,7 @@ class TTS_Admin {
             array( $this, 'render_content_management_page' )
         );
 
-        // Clients submenu
+        // Clients submenu - moved under main menu properly
         add_submenu_page(
             'fp-publisher-main',
             __( 'Clienti', 'fp-publisher' ),
@@ -103,7 +105,7 @@ class TTS_Admin {
             array( $this, 'tts_render_client_wizard' )
         );
 
-        // Social Posts submenu
+        // Social Posts submenu - moved under main menu properly
         add_submenu_page(
             'fp-publisher-main',
             __( 'Social Post', 'fp-publisher' ),
@@ -111,6 +113,16 @@ class TTS_Admin {
             'manage_options',
             'fp-publisher-social-posts',
             array( $this, 'render_social_posts_page' )
+        );
+
+        // Connection Testing submenu - NEW
+        add_submenu_page(
+            'fp-publisher-main',
+            __( 'Test Connections', 'fp-publisher' ),
+            __( 'Test Connections', 'fp-publisher' ),
+            'manage_options',
+            'fp-publisher-test-connections',
+            array( $this, 'render_connection_test_page' )
         );
 
         // Settings submenu
@@ -990,6 +1002,7 @@ class TTS_Admin {
         
         echo '<div class="tts-dashboard-right">';
         $this->render_quick_actions_section();
+        $this->render_connection_test_widget();
         $this->render_system_status_widget();
         echo '</div>';
         echo '</div>';
@@ -1514,6 +1527,48 @@ class TTS_Admin {
             echo '</a>';
             echo '</div>';
         }
+        echo '</div>';
+    }
+
+    /**
+     * Render connection test widget for dashboard.
+     */
+    private function render_connection_test_widget() {
+        echo '<div class="tts-dashboard-widget">';
+        echo '<h3>🔗 ' . esc_html__( 'Connection Testing', 'fp-publisher' ) . '</h3>';
+        
+        // Quick connection status
+        $clients = get_posts( array(
+            'post_type'      => 'tts_client',
+            'posts_per_page' => 3,
+            'post_status'    => 'any'
+        ) );
+        
+        if ( ! empty( $clients ) ) {
+            echo '<div class="tts-connection-quick-status">';
+            foreach ( $clients as $client ) {
+                $title = get_the_title( $client->ID );
+                $facebook_token = get_post_meta( $client->ID, '_tts_facebook_token', true );
+                $instagram_token = get_post_meta( $client->ID, '_tts_instagram_token', true );
+                $connected_count = 0;
+                
+                if ( $facebook_token ) $connected_count++;
+                if ( $instagram_token ) $connected_count++;
+                
+                echo '<div class="tts-client-status">';
+                echo '<strong>' . esc_html( wp_trim_words( $title, 3 ) ) . '</strong><br>';
+                echo '<small>' . sprintf( esc_html__( '%d platforms connected', 'fp-publisher' ), $connected_count ) . '</small>';
+                echo '</div>';
+            }
+            echo '</div>';
+        }
+        
+        echo '<div class="tts-widget-actions">';
+        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-test-connections' ) ) . '" class="button button-primary">';
+        echo esc_html__( 'Test All Connections', 'fp-publisher' );
+        echo '</a>';
+        echo '</div>';
+        
         echo '</div>';
     }
 
@@ -3676,6 +3731,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
     private function render_content_management_tabs() {
         $sources = TTS_Content_Source::SOURCES;
         $stats = TTS_Content_Source::get_source_stats();
+        $trello_enabled = get_option( 'tts_trello_enabled', 1 );
         
         echo '<div class="tts-content-tabs">';
         echo '<nav class="nav-tab-wrapper">';
@@ -3685,6 +3741,11 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         
         // Source tabs
         foreach ( $sources as $source_key => $source_name ) {
+            // Skip Trello if disabled
+            if ( ! $trello_enabled && $source_key === 'trello' ) {
+                continue;
+            }
+            
             $count = isset( $stats[ $source_key ] ) ? $stats[ $source_key ]['count'] : 0;
             echo '<a href="#' . esc_attr( $source_key ) . '" class="nav-tab" data-tab="' . esc_attr( $source_key ) . '">';
             echo esc_html( $source_name );
@@ -3706,6 +3767,11 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         
         // Source tab contents
         foreach ( $sources as $source_key => $source_name ) {
+            // Skip Trello if disabled
+            if ( ! $trello_enabled && $source_key === 'trello' ) {
+                continue;
+            }
+            
             echo '<div id="' . esc_attr( $source_key ) . '-content" class="tab-panel">';
             $this->render_source_content( $source_key, $source_name );
             echo '</div>';
@@ -3724,11 +3790,36 @@ class TTS_Social_Posts_Table extends WP_List_Table {
      * @param array $stats Source statistics.
      */
     private function render_overview_content( $stats ) {
+        $trello_enabled = get_option( 'tts_trello_enabled', 1 );
+        
         echo '<div class="tts-overview-grid">';
+        
+        if ( ! $trello_enabled ) {
+            // Show prominent manual upload section when Trello is disabled
+            echo '<div class="tts-manual-first-section">';
+            echo '<h3>📁 ' . esc_html__( 'Manual Content Management', 'fp-publisher' ) . '</h3>';
+            echo '<p>' . esc_html__( 'Trello integration is disabled. Focus on manual content creation and uploads.', 'fp-publisher' ) . '</p>';
+            echo '<div class="tts-manual-actions">';
+            echo '<button class="tts-btn primary large" data-action="create-manual">';
+            echo '<span class="dashicons dashicons-plus"></span>';
+            echo esc_html__( 'Create New Content', 'fp-publisher' );
+            echo '</button>';
+            echo '<button class="tts-btn secondary large" data-action="upload-file">';
+            echo '<span class="dashicons dashicons-upload"></span>';
+            echo esc_html__( 'Upload Files', 'fp-publisher' );
+            echo '</button>';
+            echo '</div>';
+            echo '</div>';
+        }
         
         // Statistics cards
         echo '<div class="tts-stats-grid">';
         foreach ( TTS_Content_Source::SOURCES as $source_key => $source_name ) {
+            // Skip Trello if disabled
+            if ( ! $trello_enabled && $source_key === 'trello' ) {
+                continue;
+            }
+            
             $count = isset( $stats[ $source_key ] ) ? $stats[ $source_key ]['count'] : 0;
             echo '<div class="tts-stat-card">';
             echo '<h3>' . esc_html( $source_name ) . '</h3>';
@@ -3743,10 +3834,12 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         echo '<h3>' . esc_html__( 'Quick Actions', 'fp-publisher' ) . '</h3>';
         echo '<div class="actions-grid">';
         
-        echo '<button class="tts-btn primary" data-action="sync-all">';
-        echo '<span class="dashicons dashicons-update"></span>';
-        echo esc_html__( 'Sync All Sources', 'fp-publisher' );
-        echo '</button>';
+        if ( $trello_enabled ) {
+            echo '<button class="tts-btn primary" data-action="sync-all">';
+            echo '<span class="dashicons dashicons-update"></span>';
+            echo esc_html__( 'Sync All Sources', 'fp-publisher' );
+            echo '</button>';
+        }
         
         echo '<button class="tts-btn secondary" data-action="create-manual">';
         echo '<span class="dashicons dashicons-plus"></span>';
@@ -3864,6 +3957,16 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         .tab-panel { display: none; padding: 20px 0; }
         .tab-panel.active { display: block; }
         .tts-overview-grid { display: grid; gap: 20px; }
+        .tts-manual-first-section { 
+            background: #e7f3ff; 
+            border: 2px solid #135e96; 
+            border-radius: 8px; 
+            padding: 20px; 
+            margin-bottom: 20px; 
+            text-align: center; 
+        }
+        .tts-manual-first-section h3 { margin-top: 0; color: #135e96; }
+        .tts-manual-actions { margin-top: 15px; display: flex; gap: 15px; justify-content: center; }
         .tts-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
         .tts-stat-card { background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 20px; text-align: center; }
         .tts-stat-card h3 { margin: 0 0 10px; font-size: 14px; color: #50575e; }
@@ -3872,6 +3975,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         .tts-quick-actions h3 { margin: 0 0 15px; }
         .actions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
         .tts-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 14px; }
+        .tts-btn.large { padding: 12px 20px; font-size: 16px; font-weight: bold; }
         .tts-btn.primary { background: #2271b1; color: #fff; }
         .tts-btn.secondary { background: #f0f0f1; color: #50575e; border: 1px solid #c3c4c7; }
         .tts-btn:hover.primary { background: #135e96; }
@@ -3880,6 +3984,9 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         .source-header h3 { margin: 0; }
         .tts-empty-state { text-align: center; padding: 40px; color: #646970; }
         .nav-tab .count { background: #72aee6; color: #fff; border-radius: 9px; padding: 2px 6px; font-size: 11px; margin-left: 4px; }
+        .tts-connection-quick-status { margin: 10px 0; }
+        .tts-client-status { margin-bottom: 8px; padding: 8px; background: #f9f9f9; border-radius: 4px; }
+        .tts-widget-actions { margin-top: 15px; }
         </style>
         
         <script>
@@ -4023,6 +4130,655 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         if ( isset( $tts_ai_features_page ) && $tts_ai_features_page instanceof TTS_AI_Features_Page ) {
             $tts_ai_features_page->render_page();
         }
+    }
+
+    /**
+     * Render connection test page.
+     */
+    public function render_connection_test_page() {
+        // Handle settings save
+        if ( isset( $_POST['tts_settings_nonce'] ) && wp_verify_nonce( $_POST['tts_settings_nonce'], 'tts_settings' ) ) {
+            $trello_enabled = isset( $_POST['trello_enabled'] ) ? 1 : 0;
+            update_option( 'tts_trello_enabled', $trello_enabled );
+            
+            echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved successfully.', 'fp-publisher' ) . '</p></div>';
+        }
+        
+        $trello_enabled = get_option( 'tts_trello_enabled', 1 );
+        
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'Test Connections & Settings', 'fp-publisher' ) . '</h1>';
+        
+        // Trello Settings Section
+        echo '<div class="tts-connection-section">';
+        echo '<h2>' . esc_html__( 'Trello Integration Settings', 'fp-publisher' ) . '</h2>';
+        echo '<form method="post">';
+        wp_nonce_field( 'tts_settings', 'tts_settings_nonce' );
+        echo '<table class="form-table">';
+        echo '<tr>';
+        echo '<th scope="row">' . esc_html__( 'Enable Trello Integration', 'fp-publisher' ) . '</th>';
+        echo '<td>';
+        echo '<label><input type="checkbox" name="trello_enabled" value="1" ' . checked( $trello_enabled, 1, false ) . ' /> ';
+        echo esc_html__( 'Enable automatic content import from Trello boards', 'fp-publisher' ) . '</label>';
+        echo '<p class="description">' . esc_html__( 'When disabled, the platform will focus on manual content uploads and creation.', 'fp-publisher' ) . '</p>';
+        echo '</td>';
+        echo '</tr>';
+        echo '</table>';
+        submit_button( __( 'Save Settings', 'fp-publisher' ) );
+        echo '</form>';
+        echo '</div>';
+        
+        // Connection Testing Section
+        echo '<div class="tts-connection-section">';
+        echo '<h2>' . esc_html__( 'Test Client Connections', 'fp-publisher' ) . '</h2>';
+        echo '<p>' . esc_html__( 'Test the API connections for your configured clients and social media accounts.', 'fp-publisher' ) . '</p>';
+        
+        // Get all clients
+        $clients = get_posts( array(
+            'post_type'      => 'tts_client',
+            'posts_per_page' => -1,
+            'post_status'    => 'any'
+        ) );
+        
+        if ( ! empty( $clients ) ) {
+            echo '<div class="tts-clients-grid">';
+            foreach ( $clients as $client ) {
+                $this->render_client_connection_card( $client );
+            }
+            echo '</div>';
+        } else {
+            echo '<div class="tts-no-clients">';
+            echo '<p>' . esc_html__( 'No clients configured yet.', 'fp-publisher' ) . '</p>';
+            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-client-wizard' ) ) . '" class="button button-primary">' . esc_html__( 'Create Your First Client', 'fp-publisher' ) . '</a>';
+            echo '</div>';
+        }
+        echo '</div>';
+        
+        // Social Media Platform Testing Section
+        echo '<div class="tts-connection-section">';
+        echo '<h2>' . esc_html__( 'Test Social Media API Connections', 'fp-publisher' ) . '</h2>';
+        echo '<p>' . esc_html__( 'Test the global API configurations for each social media platform.', 'fp-publisher' ) . '</p>';
+        
+        $social_apps = get_option( 'tts_social_apps', array() );
+        $platforms = array(
+            'facebook' => __( 'Facebook', 'fp-publisher' ),
+            'instagram' => __( 'Instagram', 'fp-publisher' ),
+            'youtube' => __( 'YouTube', 'fp-publisher' ),
+            'tiktok' => __( 'TikTok', 'fp-publisher' )
+        );
+        
+        echo '<div class="tts-platforms-grid">';
+        foreach ( $platforms as $platform_key => $platform_name ) {
+            $this->render_platform_connection_card( $platform_key, $platform_name, $social_apps );
+        }
+        echo '</div>';
+        echo '</div>';
+        
+        // Add JavaScript for testing
+        $this->add_connection_test_scripts();
+        
+        echo '</div>';
+    }
+
+    /**
+     * Render a client connection card.
+     *
+     * @param WP_Post $client The client post object.
+     */
+    private function render_client_connection_card( $client ) {
+        $client_id = $client->ID;
+        $client_title = get_the_title( $client_id );
+        
+        // Get client tokens and settings
+        $trello_key = get_post_meta( $client_id, '_tts_trello_key', true );
+        $trello_token = get_post_meta( $client_id, '_tts_trello_token', true );
+        $facebook_token = get_post_meta( $client_id, '_tts_facebook_token', true );
+        $instagram_token = get_post_meta( $client_id, '_tts_instagram_token', true );
+        $youtube_token = get_post_meta( $client_id, '_tts_youtube_token', true );
+        $tiktok_token = get_post_meta( $client_id, '_tts_tiktok_token', true );
+        
+        echo '<div class="tts-client-card" data-client-id="' . esc_attr( $client_id ) . '">';
+        echo '<h3>' . esc_html( $client_title ) . '</h3>';
+        
+        // Test results container
+        echo '<div class="tts-test-results" id="test-results-' . esc_attr( $client_id ) . '"></div>';
+        
+        // Connection status overview
+        echo '<div class="tts-connection-overview">';
+        if ( $trello_key && $trello_token ) {
+            echo '<span class="tts-connection-item configured">📋 Trello</span>';
+        } else {
+            echo '<span class="tts-connection-item not-configured">📋 Trello</span>';
+        }
+        
+        if ( $facebook_token ) {
+            echo '<span class="tts-connection-item configured">📘 Facebook</span>';
+        } else {
+            echo '<span class="tts-connection-item not-configured">📘 Facebook</span>';
+        }
+        
+        if ( $instagram_token ) {
+            echo '<span class="tts-connection-item configured">📷 Instagram</span>';
+        } else {
+            echo '<span class="tts-connection-item not-configured">📷 Instagram</span>';
+        }
+        
+        if ( $youtube_token ) {
+            echo '<span class="tts-connection-item configured">🎥 YouTube</span>';
+        } else {
+            echo '<span class="tts-connection-item not-configured">🎥 YouTube</span>';
+        }
+        
+        if ( $tiktok_token ) {
+            echo '<span class="tts-connection-item configured">🎵 TikTok</span>';
+        } else {
+            echo '<span class="tts-connection-item not-configured">🎵 TikTok</span>';
+        }
+        echo '</div>';
+        
+        // Action buttons
+        echo '<div class="tts-client-actions">';
+        echo '<button class="button button-primary tts-test-client-btn" data-client-id="' . esc_attr( $client_id ) . '">';
+        echo esc_html__( 'Test All Connections', 'fp-publisher' );
+        echo '</button>';
+        echo '<a href="' . esc_url( get_edit_post_link( $client_id ) ) . '" class="button">' . esc_html__( 'Edit Client', 'fp-publisher' ) . '</a>';
+        echo '</div>';
+        
+        echo '</div>';
+    }
+
+    /**
+     * Render a platform connection card.
+     *
+     * @param string $platform_key   The platform key.
+     * @param string $platform_name  The platform display name.
+     * @param array  $social_apps    Social apps configuration.
+     */
+    private function render_platform_connection_card( $platform_key, $platform_name, $social_apps ) {
+        $is_configured = isset( $social_apps[ $platform_key ] ) && ! empty( $social_apps[ $platform_key ] );
+        
+        echo '<div class="tts-platform-card" data-platform="' . esc_attr( $platform_key ) . '">';
+        echo '<h3>' . esc_html( $platform_name ) . '</h3>';
+        
+        // Test results container
+        echo '<div class="tts-test-results" id="platform-results-' . esc_attr( $platform_key ) . '"></div>';
+        
+        // Configuration status
+        echo '<div class="tts-config-status">';
+        if ( $is_configured ) {
+            echo '<span class="tts-status configured">✅ ' . esc_html__( 'API Configured', 'fp-publisher' ) . '</span>';
+        } else {
+            echo '<span class="tts-status not-configured">❌ ' . esc_html__( 'Not Configured', 'fp-publisher' ) . '</span>';
+        }
+        echo '</div>';
+        
+        // Action buttons
+        echo '<div class="tts-platform-actions">';
+        if ( $is_configured ) {
+            echo '<button class="button button-primary tts-test-platform-btn" data-platform="' . esc_attr( $platform_key ) . '">';
+            echo esc_html__( 'Test Connection', 'fp-publisher' );
+            echo '</button>';
+        }
+        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ) . '" class="button">' . esc_html__( 'Configure', 'fp-publisher' ) . '</a>';
+        echo '</div>';
+        
+        echo '</div>';
+    }
+
+    /**
+     * Add connection test scripts.
+     */
+    private function add_connection_test_scripts() {
+        ?>
+        <style>
+        .tts-connection-section {
+            background: #fff;
+            border: 1px solid #c3c4c7;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .tts-clients-grid, .tts-platforms-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .tts-client-card, .tts-platform-card {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .tts-client-card h3, .tts-platform-card h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .tts-connection-overview {
+            margin: 15px 0;
+        }
+        .tts-connection-item {
+            display: inline-block;
+            margin: 2px 5px 2px 0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .tts-connection-item.configured {
+            background: #d1eddd;
+            color: #00a32a;
+        }
+        .tts-connection-item.not-configured {
+            background: #f7dde0;
+            color: #d63638;
+        }
+        .tts-client-actions, .tts-platform-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        .tts-test-results {
+            margin: 10px 0;
+            min-height: 30px;
+        }
+        .tts-test-result {
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .tts-test-result.success {
+            background: #d1eddd;
+            color: #00a32a;
+            border: 1px solid #46b450;
+        }
+        .tts-test-result.error {
+            background: #f7dde0;
+            color: #d63638;
+            border: 1px solid #d63638;
+        }
+        .tts-test-result.info {
+            background: #e5f5fa;
+            color: #0073aa;
+            border: 1px solid #00a0d2;
+        }
+        .tts-no-clients {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .tts-status.configured {
+            color: #00a32a;
+        }
+        .tts-status.not-configured {
+            color: #d63638;
+        }
+        .tts-config-status {
+            margin: 10px 0;
+        }
+        </style>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            // Test client connections
+            $('.tts-test-client-btn').on('click', function() {
+                var $btn = $(this);
+                var clientId = $btn.data('client-id');
+                var $results = $('#test-results-' + clientId);
+                
+                $btn.prop('disabled', true).text('<?php echo esc_js( __( 'Testing...', 'fp-publisher' ) ); ?>');
+                $results.html('<div class="tts-test-result info">🔄 ' + '<?php echo esc_js( __( 'Testing client connections...', 'fp-publisher' ) ); ?>' + '</div>');
+                
+                $.post(ajaxurl, {
+                    action: 'tts_test_client_connections',
+                    client_id: clientId,
+                    nonce: '<?php echo wp_create_nonce( 'tts_ajax_nonce' ); ?>'
+                }, function(response) {
+                    if (response.success) {
+                        var html = '';
+                        $.each(response.data.results, function(platform, result) {
+                            var className = result.success ? 'success' : 'error';
+                            var icon = result.success ? '✅' : '❌';
+                            html += '<div class="tts-test-result ' + className + '">' + icon + ' ' + platform + ': ' + result.message + '</div>';
+                        });
+                        $results.html(html);
+                    } else {
+                        $results.html('<div class="tts-test-result error">❌ ' + response.data + '</div>');
+                    }
+                }).fail(function() {
+                    $results.html('<div class="tts-test-result error">❌ ' + '<?php echo esc_js( __( 'Connection test failed', 'fp-publisher' ) ); ?>' + '</div>');
+                }).always(function() {
+                    $btn.prop('disabled', false).text('<?php echo esc_js( __( 'Test All Connections', 'fp-publisher' ) ); ?>');
+                });
+            });
+            
+            // Test platform connections
+            $('.tts-test-platform-btn').on('click', function() {
+                var $btn = $(this);
+                var platform = $btn.data('platform');
+                var $results = $('#platform-results-' + platform);
+                
+                $btn.prop('disabled', true).text('<?php echo esc_js( __( 'Testing...', 'fp-publisher' ) ); ?>');
+                $results.html('<div class="tts-test-result info">🔄 ' + '<?php echo esc_js( __( 'Testing platform connection...', 'fp-publisher' ) ); ?>' + '</div>');
+                
+                $.post(ajaxurl, {
+                    action: 'tts_test_single_connection',
+                    platform: platform,
+                    nonce: '<?php echo wp_create_nonce( 'tts_ajax_nonce' ); ?>'
+                }, function(response) {
+                    if (response.success) {
+                        var className = response.data.success ? 'success' : 'error';
+                        var icon = response.data.success ? '✅' : '❌';
+                        $results.html('<div class="tts-test-result ' + className + '">' + icon + ' ' + response.data.message + '</div>');
+                    } else {
+                        $results.html('<div class="tts-test-result error">❌ ' + response.data + '</div>');
+                    }
+                }).fail(function() {
+                    $results.html('<div class="tts-test-result error">❌ ' + '<?php echo esc_js( __( 'Connection test failed', 'fp-publisher' ) ); ?>' + '</div>');
+                }).always(function() {
+                    $btn.prop('disabled', false).text('<?php echo esc_js( __( 'Test Connection', 'fp-publisher' ) ); ?>');
+                });
+            });
+        });
+        </script>
+        <?php
+    }
+
+    /**
+     * AJAX handler for testing client connections.
+     */
+    public function ajax_test_client_connections() {
+        check_ajax_referer( 'tts_ajax_nonce', 'nonce' );
+        
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( __( 'Insufficient permissions.', 'fp-publisher' ) );
+        }
+        
+        $client_id = absint( $_POST['client_id'] );
+        if ( ! $client_id ) {
+            wp_send_json_error( __( 'Invalid client ID.', 'fp-publisher' ) );
+        }
+        
+        $results = array();
+        
+        // Test Trello connection
+        $trello_key = get_post_meta( $client_id, '_tts_trello_key', true );
+        $trello_token = get_post_meta( $client_id, '_tts_trello_token', true );
+        
+        if ( $trello_key && $trello_token ) {
+            $trello_result = $this->test_trello_connection( $trello_key, $trello_token );
+            $results['Trello'] = $trello_result;
+        } else {
+            $results['Trello'] = array(
+                'success' => false,
+                'message' => __( 'No Trello credentials configured', 'fp-publisher' )
+            );
+        }
+        
+        // Test Facebook connection
+        $facebook_token = get_post_meta( $client_id, '_tts_facebook_token', true );
+        if ( $facebook_token ) {
+            $facebook_result = $this->test_facebook_client_connection( $facebook_token );
+            $results['Facebook'] = $facebook_result;
+        } else {
+            $results['Facebook'] = array(
+                'success' => false,
+                'message' => __( 'No Facebook token configured', 'fp-publisher' )
+            );
+        }
+        
+        // Test Instagram connection
+        $instagram_token = get_post_meta( $client_id, '_tts_instagram_token', true );
+        if ( $instagram_token ) {
+            $instagram_result = $this->test_instagram_client_connection( $instagram_token );
+            $results['Instagram'] = $instagram_result;
+        } else {
+            $results['Instagram'] = array(
+                'success' => false,
+                'message' => __( 'No Instagram token configured', 'fp-publisher' )
+            );
+        }
+        
+        // Test YouTube connection
+        $youtube_token = get_post_meta( $client_id, '_tts_youtube_token', true );
+        if ( $youtube_token ) {
+            $youtube_result = $this->test_youtube_client_connection( $youtube_token );
+            $results['YouTube'] = $youtube_result;
+        } else {
+            $results['YouTube'] = array(
+                'success' => false,
+                'message' => __( 'No YouTube token configured', 'fp-publisher' )
+            );
+        }
+        
+        // Test TikTok connection
+        $tiktok_token = get_post_meta( $client_id, '_tts_tiktok_token', true );
+        if ( $tiktok_token ) {
+            $tiktok_result = $this->test_tiktok_client_connection( $tiktok_token );
+            $results['TikTok'] = $tiktok_result;
+        } else {
+            $results['TikTok'] = array(
+                'success' => false,
+                'message' => __( 'No TikTok token configured', 'fp-publisher' )
+            );
+        }
+        
+        wp_send_json_success( array( 'results' => $results ) );
+    }
+
+    /**
+     * AJAX handler for testing single platform connection.
+     */
+    public function ajax_test_single_connection() {
+        check_ajax_referer( 'tts_ajax_nonce', 'nonce' );
+        
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( __( 'Insufficient permissions.', 'fp-publisher' ) );
+        }
+        
+        $platform = sanitize_key( $_POST['platform'] );
+        if ( ! $platform ) {
+            wp_send_json_error( __( 'Invalid platform.', 'fp-publisher' ) );
+        }
+        
+        $social_apps = get_option( 'tts_social_apps', array() );
+        $platform_settings = isset( $social_apps[ $platform ] ) ? $social_apps[ $platform ] : array();
+        
+        $result = $this->test_platform_connection( $platform, $platform_settings );
+        
+        wp_send_json_success( $result );
+    }
+
+    /**
+     * Test Trello connection.
+     *
+     * @param string $api_key   Trello API key.
+     * @param string $token     Trello token.
+     * @return array Test result.
+     */
+    private function test_trello_connection( $api_key, $token ) {
+        $response = wp_remote_get(
+            'https://api.trello.com/1/members/me?key=' . rawurlencode( $api_key ) . '&token=' . rawurlencode( $token ),
+            array( 'timeout' => 15 )
+        );
+        
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'message' => __( 'Connection failed: ', 'fp-publisher' ) . $response->get_error_message()
+            );
+        }
+        
+        $response_code = wp_remote_retrieve_response_code( $response );
+        if ( $response_code === 200 ) {
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( isset( $body['username'] ) ) {
+                return array(
+                    'success' => true,
+                    'message' => sprintf( __( 'Connected as %s', 'fp-publisher' ), $body['username'] )
+                );
+            }
+        }
+        
+        return array(
+            'success' => false,
+            'message' => sprintf( __( 'HTTP %d - Invalid credentials', 'fp-publisher' ), $response_code )
+        );
+    }
+
+    /**
+     * Test Facebook client connection.
+     *
+     * @param string $token Facebook token (format: page_id|access_token).
+     * @return array Test result.
+     */
+    private function test_facebook_client_connection( $token ) {
+        $parts = explode( '|', $token );
+        if ( count( $parts ) !== 2 ) {
+            return array(
+                'success' => false,
+                'message' => __( 'Invalid token format. Expected: page_id|access_token', 'fp-publisher' )
+            );
+        }
+        
+        list( $page_id, $access_token ) = $parts;
+        
+        $response = wp_remote_get(
+            'https://graph.facebook.com/v18.0/' . rawurlencode( $page_id ) . '?fields=name,access_token&access_token=' . rawurlencode( $access_token ),
+            array( 'timeout' => 15 )
+        );
+        
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'message' => __( 'Connection failed: ', 'fp-publisher' ) . $response->get_error_message()
+            );
+        }
+        
+        $response_code = wp_remote_retrieve_response_code( $response );
+        if ( $response_code === 200 ) {
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( isset( $body['name'] ) ) {
+                return array(
+                    'success' => true,
+                    'message' => sprintf( __( 'Connected to page: %s', 'fp-publisher' ), $body['name'] )
+                );
+            }
+        }
+        
+        return array(
+            'success' => false,
+            'message' => sprintf( __( 'HTTP %d - Unable to access page', 'fp-publisher' ), $response_code )
+        );
+    }
+
+    /**
+     * Test Instagram client connection.
+     *
+     * @param string $token Instagram token (format: ig_user_id|access_token).
+     * @return array Test result.
+     */
+    private function test_instagram_client_connection( $token ) {
+        $parts = explode( '|', $token );
+        if ( count( $parts ) !== 2 ) {
+            return array(
+                'success' => false,
+                'message' => __( 'Invalid token format. Expected: ig_user_id|access_token', 'fp-publisher' )
+            );
+        }
+        
+        list( $ig_user_id, $access_token ) = $parts;
+        
+        $response = wp_remote_get(
+            'https://graph.instagram.com/' . rawurlencode( $ig_user_id ) . '?fields=username&access_token=' . rawurlencode( $access_token ),
+            array( 'timeout' => 15 )
+        );
+        
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'message' => __( 'Connection failed: ', 'fp-publisher' ) . $response->get_error_message()
+            );
+        }
+        
+        $response_code = wp_remote_retrieve_response_code( $response );
+        if ( $response_code === 200 ) {
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( isset( $body['username'] ) ) {
+                return array(
+                    'success' => true,
+                    'message' => sprintf( __( 'Connected as @%s', 'fp-publisher' ), $body['username'] )
+                );
+            }
+        }
+        
+        return array(
+            'success' => false,
+            'message' => sprintf( __( 'HTTP %d - Unable to access Instagram account', 'fp-publisher' ), $response_code )
+        );
+    }
+
+    /**
+     * Test YouTube client connection.
+     *
+     * @param string $token YouTube access token.
+     * @return array Test result.
+     */
+    private function test_youtube_client_connection( $token ) {
+        $response = wp_remote_get(
+            'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true&access_token=' . rawurlencode( $token ),
+            array( 'timeout' => 15 )
+        );
+        
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'message' => __( 'Connection failed: ', 'fp-publisher' ) . $response->get_error_message()
+            );
+        }
+        
+        $response_code = wp_remote_retrieve_response_code( $response );
+        if ( $response_code === 200 ) {
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( isset( $body['items'] ) && ! empty( $body['items'] ) ) {
+                $channel_title = $body['items'][0]['snippet']['title'];
+                return array(
+                    'success' => true,
+                    'message' => sprintf( __( 'Connected to channel: %s', 'fp-publisher' ), $channel_title )
+                );
+            }
+        }
+        
+        return array(
+            'success' => false,
+            'message' => sprintf( __( 'HTTP %d - Unable to access YouTube channel', 'fp-publisher' ), $response_code )
+        );
+    }
+
+    /**
+     * Test TikTok client connection.
+     *
+     * @param string $token TikTok access token.
+     * @return array Test result.
+     */
+    private function test_tiktok_client_connection( $token ) {
+        // Note: TikTok API testing is more complex and requires specific endpoints
+        // For now, we'll do a basic token validation
+        
+        if ( empty( $token ) || strlen( $token ) < 10 ) {
+            return array(
+                'success' => false,
+                'message' => __( 'Invalid or empty token', 'fp-publisher' )
+            );
+        }
+        
+        // Basic validation passed
+        return array(
+            'success' => true,
+            'message' => __( 'Token format appears valid (full API test requires video upload)', 'fp-publisher' )
+        );
     }
 
     /**
