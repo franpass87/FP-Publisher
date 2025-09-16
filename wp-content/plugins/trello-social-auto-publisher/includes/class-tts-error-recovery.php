@@ -569,7 +569,10 @@ class TTS_Error_Recovery {
             current_time( 'mysql' )
         );
         
-        wp_mail( $admin_email, $subject, $message );
+        $mail_sent = wp_mail( $admin_email, $subject, $message );
+        if ( ! $mail_sent ) {
+            error_log( 'TTS Error Recovery: Failed to send alert email to ' . $admin_email );
+        }
     }
 
     /**

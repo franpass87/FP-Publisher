@@ -441,7 +441,10 @@ class TTS_Security_Audit {
             $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
         );
         
-        wp_mail( $admin_email, $subject, $message );
+        $mail_sent = wp_mail( $admin_email, $subject, $message );
+        if ( ! $mail_sent ) {
+            error_log( 'TTS Security Audit: Failed to send security alert email to ' . $admin_email );
+        }
     }
 
     /**

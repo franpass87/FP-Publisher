@@ -541,6 +541,12 @@ class TTS_Backup {
         $fp_out = fopen( $decompressed_path, 'wb' );
         $fp_in = gzopen( $compressed_path, 'rb' );
         
+        if ( false === $fp_out || false === $fp_in ) {
+            if ( $fp_out ) fclose( $fp_out );
+            if ( $fp_in ) gzclose( $fp_in );
+            throw new Exception( __( 'Failed to decompress backup file', 'trello-social-auto-publisher' ) );
+        }
+        
         while ( ! gzeof( $fp_in ) ) {
             fwrite( $fp_out, gzread( $fp_in, 1024 * 512 ) );
         }
