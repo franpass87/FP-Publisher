@@ -1810,8 +1810,8 @@ class TTS_Admin {
 
         $trello_key   = isset( $_GET['trello_key'] ) ? sanitize_text_field( wp_unslash( $_GET['trello_key'] ) ) : '';
         $trello_token = isset( $_GET['trello_token'] ) ? sanitize_text_field( wp_unslash( $_GET['trello_token'] ) ) : '';
-        $board        = isset( $_REQUEST['trello_board'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['trello_board'] ) ) : '';
-        $channels     = isset( $_REQUEST['channels'] ) ? array_map( 'sanitize_text_field', (array) $_REQUEST['channels'] ) : array();
+        $board        = isset( $_GET['trello_board'] ) ? sanitize_text_field( wp_unslash( $_GET['trello_board'] ) ) : '';
+        $channels     = isset( $_GET['channels'] ) ? array_map( 'sanitize_text_field', (array) $_GET['channels'] ) : array();
 
         if ( 1 === $step ) {
             echo '<form method="post" class="tts-wizard-step tts-step-1">';
