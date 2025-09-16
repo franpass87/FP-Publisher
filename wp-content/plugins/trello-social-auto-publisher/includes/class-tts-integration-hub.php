@@ -284,9 +284,11 @@ class TTS_Integration_Hub {
         $integration_config = $this->available_integrations[ $integration_type ][ $integration_name ];
         
         // Validate required fields
-        foreach ( $integration_config['fields'] as $field ) {
-            if ( empty( $credentials[ $field ] ) ) {
-                throw new Exception( "Missing required field: {$field}" );
+        if ( isset( $integration_config['fields'] ) && is_array( $integration_config['fields'] ) ) {
+            foreach ( $integration_config['fields'] as $field ) {
+                if ( ! isset( $credentials[ $field ] ) || empty( $credentials[ $field ] ) ) {
+                    throw new Exception( "Missing required field: {$field}" );
+                }
             }
         }
         
@@ -294,7 +296,8 @@ class TTS_Integration_Hub {
         $test_result = $this->test_integration_connection( $integration_type, $integration_name, $credentials );
         
         if ( ! $test_result['success'] ) {
-            throw new Exception( 'Connection test failed: ' . $test_result['error'] );
+            $error_message = isset( $test_result['error'] ) ? $test_result['error'] : 'Unknown connection error';
+            throw new Exception( 'Connection test failed: ' . $error_message );
         }
         
         // Encrypt credentials for storage

@@ -87,7 +87,7 @@ class TTS_Rate_Limiter {
         $hourly_key = $this->cache_prefix . $platform . '_hourly_' . floor( $current_time / 3600 );
         $hourly_count = get_transient( $hourly_key ) ?: 0;
         
-        if ( $hourly_count >= $limits['requests_per_hour'] ) {
+        if ( isset( $limits['requests_per_hour'] ) && $hourly_count >= $limits['requests_per_hour'] ) {
             $retry_after = 3600 - ( $current_time % 3600 );
             return array(
                 'allowed' => false,
@@ -103,7 +103,7 @@ class TTS_Rate_Limiter {
         $daily_key = $this->cache_prefix . $platform . '_daily_' . date( 'Y-m-d' );
         $daily_count = get_transient( $daily_key ) ?: 0;
         
-        if ( $daily_count >= $limits['requests_per_day'] ) {
+        if ( isset( $limits['requests_per_day'] ) && $daily_count >= $limits['requests_per_day'] ) {
             $retry_after = strtotime( 'tomorrow' ) - $current_time;
             return array(
                 'allowed' => false,
@@ -119,7 +119,7 @@ class TTS_Rate_Limiter {
         $burst_key = $this->cache_prefix . $platform . '_burst_' . floor( $current_time / 300 );
         $burst_count = get_transient( $burst_key ) ?: 0;
         
-        if ( $burst_count >= $limits['burst_limit'] ) {
+        if ( isset( $limits['burst_limit'] ) && $burst_count >= $limits['burst_limit'] ) {
             $retry_after = 300 - ( $current_time % 300 );
             return array(
                 'allowed' => false,
@@ -134,11 +134,11 @@ class TTS_Rate_Limiter {
         return array(
             'allowed' => true,
             'hourly_used' => $hourly_count,
-            'hourly_limit' => $limits['requests_per_hour'],
+            'hourly_limit' => isset( $limits['requests_per_hour'] ) ? $limits['requests_per_hour'] : 0,
             'daily_used' => $daily_count,
-            'daily_limit' => $limits['requests_per_day'],
+            'daily_limit' => isset( $limits['requests_per_day'] ) ? $limits['requests_per_day'] : 0,
             'burst_used' => $burst_count,
-            'burst_limit' => $limits['burst_limit']
+            'burst_limit' => isset( $limits['burst_limit'] ) ? $limits['burst_limit'] : 0
         );
     }
 
