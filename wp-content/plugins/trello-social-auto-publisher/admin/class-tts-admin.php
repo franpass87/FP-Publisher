@@ -54,6 +54,31 @@ class TTS_Admin {
      * Register plugin menu pages.
      */
     public function register_menu() {
+        // Verify that all required methods exist before registering menus
+        $required_methods = array(
+            'render_dashboard_page',
+            'render_content_management_page', 
+            'render_clients_page',
+            'tts_render_client_wizard',
+            'render_social_posts_page',
+            'render_connection_test_page',
+            'render_settings_page',
+            'render_social_connections_page',
+            'render_help_page',
+            'render_calendar_page',
+            'render_analytics_page',
+            'render_health_page',
+            'render_log_page',
+            'render_ai_features_page',
+            'render_frequency_status_page'
+        );
+        
+        foreach ( $required_methods as $method ) {
+            if ( ! method_exists( $this, $method ) ) {
+                error_log( "TTS_Admin: Missing method $method" );
+            }
+        }
+        
         // Main menu page
         add_menu_page(
             __( 'FP Publisher', 'fp-publisher' ),
@@ -2435,15 +2460,26 @@ class TTS_Social_Posts_Table extends WP_List_Table {
      * Render the social connections page.
      */
     public function render_social_connections_page() {
-        // Handle form submissions
-        if ( isset( $_POST['action'] ) && $_POST['action'] === 'save_social_apps' ) {
-            if ( wp_verify_nonce( $_POST['tts_social_nonce'], 'tts_save_social_apps' ) ) {
-                $this->save_social_app_settings();
-                echo '<div class="notice notice-success"><p>' . esc_html__( 'Social media app settings saved successfully!', 'trello-social-auto-publisher' ) . '</p></div>';
-            }
+        // Ensure we're in WordPress admin context
+        if ( ! is_admin() ) {
+            wp_die( __( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
         }
+        
+        // Check user capabilities early
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
+        }
+        
+        try {
+            // Handle form submissions
+            if ( isset( $_POST['action'] ) && $_POST['action'] === 'save_social_apps' ) {
+                if ( wp_verify_nonce( $_POST['tts_social_nonce'], 'tts_save_social_apps' ) ) {
+                    $this->save_social_app_settings();
+                    echo '<div class="notice notice-success"><p>' . esc_html__( 'Social media app settings saved successfully!', 'trello-social-auto-publisher' ) . '</p></div>';
+                }
+            }
 
-        $settings = get_option( 'tts_social_apps', array() );
+            $settings = get_option( 'tts_social_apps', array() );
         ?>
         <div class="wrap">
             <h1><?php esc_html_e( 'Social Media Connections', 'trello-social-auto-publisher' ); ?></h1>
@@ -2686,6 +2722,17 @@ class TTS_Social_Posts_Table extends WP_List_Table {
             </style>
         </div>
         <?php
+        } catch ( Exception $e ) {
+            // Log the error and show a user-friendly message
+            error_log( 'TTS_Admin render_social_connections_page error: ' . $e->getMessage() );
+            echo '<div class="wrap">';
+            echo '<h1>' . esc_html__( 'Social Media Connections', 'fp-publisher' ) . '</h1>';
+            echo '<div class="notice notice-error">';
+            echo '<p>' . esc_html__( 'An error occurred while loading the social connections page. Please refresh the page or contact support.', 'fp-publisher' ) . '</p>';
+            echo '</div>';
+            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
+            echo '</div>';
+        }
     }
 
     /**
@@ -4086,17 +4133,33 @@ class TTS_Social_Posts_Table extends WP_List_Table {
      * Delegate to calendar page render method.
      */
     public function render_calendar_page() {
-        global $tts_calendar_page;
-        if ( isset( $tts_calendar_page ) && $tts_calendar_page instanceof TTS_Calendar_Page ) {
-            $tts_calendar_page->render_page();
-        } else {
-            // Fallback content when calendar page class is not available
+        // Check user capabilities early
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
+        }
+        
+        try {
+            global $tts_calendar_page;
+            if ( isset( $tts_calendar_page ) && $tts_calendar_page instanceof TTS_Calendar_Page ) {
+                $tts_calendar_page->render_page();
+            } else {
+                // Fallback content when calendar page class is not available
+                echo '<div class="wrap">';
+                echo '<h1>' . esc_html__( 'Calendar', 'fp-publisher' ) . '</h1>';
+                echo '<div class="notice notice-warning">';
+                echo '<p>' . esc_html__( 'Calendar functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
+                echo '</div>';
+                echo '<p>' . esc_html__( 'This page will display your scheduled social media posts in a calendar view.', 'fp-publisher' ) . '</p>';
+                echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
+                echo '</div>';
+            }
+        } catch ( Exception $e ) {
+            error_log( 'TTS_Admin render_calendar_page error: ' . $e->getMessage() );
             echo '<div class="wrap">';
             echo '<h1>' . esc_html__( 'Calendar', 'fp-publisher' ) . '</h1>';
-            echo '<div class="notice notice-warning">';
-            echo '<p>' . esc_html__( 'Calendar functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
+            echo '<div class="notice notice-error">';
+            echo '<p>' . esc_html__( 'An error occurred while loading the calendar page. Please refresh the page or contact support.', 'fp-publisher' ) . '</p>';
             echo '</div>';
-            echo '<p>' . esc_html__( 'This page will display your scheduled social media posts in a calendar view.', 'fp-publisher' ) . '</p>';
             echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
             echo '</div>';
         }
@@ -4106,17 +4169,33 @@ class TTS_Social_Posts_Table extends WP_List_Table {
      * Delegate to analytics page render method.
      */
     public function render_analytics_page() {
-        global $tts_analytics_page;
-        if ( isset( $tts_analytics_page ) && $tts_analytics_page instanceof TTS_Analytics_Page ) {
-            $tts_analytics_page->render_page();
-        } else {
-            // Fallback content when analytics page class is not available
+        // Check user capabilities early
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
+        }
+        
+        try {
+            global $tts_analytics_page;
+            if ( isset( $tts_analytics_page ) && $tts_analytics_page instanceof TTS_Analytics_Page ) {
+                $tts_analytics_page->render_page();
+            } else {
+                // Fallback content when analytics page class is not available
+                echo '<div class="wrap">';
+                echo '<h1>' . esc_html__( 'Analytics', 'fp-publisher' ) . '</h1>';
+                echo '<div class="notice notice-warning">';
+                echo '<p>' . esc_html__( 'Analytics functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
+                echo '</div>';
+                echo '<p>' . esc_html__( 'This page will display analytics and insights for your social media publishing activities.', 'fp-publisher' ) . '</p>';
+                echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
+                echo '</div>';
+            }
+        } catch ( Exception $e ) {
+            error_log( 'TTS_Admin render_analytics_page error: ' . $e->getMessage() );
             echo '<div class="wrap">';
             echo '<h1>' . esc_html__( 'Analytics', 'fp-publisher' ) . '</h1>';
-            echo '<div class="notice notice-warning">';
-            echo '<p>' . esc_html__( 'Analytics functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
+            echo '<div class="notice notice-error">';
+            echo '<p>' . esc_html__( 'An error occurred while loading the analytics page. Please refresh the page or contact support.', 'fp-publisher' ) . '</p>';
             echo '</div>';
-            echo '<p>' . esc_html__( 'This page will display analytics and insights for your social media publishing activities.', 'fp-publisher' ) . '</p>';
             echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
             echo '</div>';
         }
