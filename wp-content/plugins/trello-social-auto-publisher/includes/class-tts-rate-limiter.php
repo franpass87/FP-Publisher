@@ -72,6 +72,36 @@ class TTS_Rate_Limiter {
     public function is_request_allowed( $platform, $endpoint = 'default' ) {
         $platform = strtolower( $platform );
         
+        // Check for active throttling first
+        $user_id = get_current_user_id();
+        $emergency_throttle = get_transient( 'tts_emergency_throttle_' . $user_id );
+        $critical_throttle = get_transient( 'tts_critical_throttle_' . $user_id );
+        $warning_throttle = get_transient( 'tts_warning_throttle_' . $user_id );
+        
+        if ( $emergency_throttle && time() < $emergency_throttle ) {
+            return array(
+                'allowed' => false,
+                'reason' => 'Emergency throttling active',
+                'retry_after' => $emergency_throttle - time()
+            );
+        }
+        
+        if ( $critical_throttle && time() < $critical_throttle ) {
+            return array(
+                'allowed' => false,
+                'reason' => 'Critical throttling active',
+                'retry_after' => $critical_throttle - time()
+            );
+        }
+        
+        if ( $warning_throttle && time() < $warning_throttle ) {
+            return array(
+                'allowed' => false,
+                'reason' => 'Warning throttling active',
+                'retry_after' => $warning_throttle - time()
+            );
+        }
+        
         if ( ! isset( $this->rate_limits[ $platform ] ) ) {
             return array(
                 'allowed' => true,
@@ -87,7 +117,7 @@ class TTS_Rate_Limiter {
         $hourly_key = $this->cache_prefix . $platform . '_hourly_' . floor( $current_time / 3600 );
         $hourly_count = get_transient( $hourly_key ) ?: 0;
         
-        if ( $hourly_count >= $limits['requests_per_hour'] ) {
+        if ( isset( $limits['requests_per_hour'] ) && $hourly_count >= $limits['requests_per_hour'] ) {
             $retry_after = 3600 - ( $current_time % 3600 );
             return array(
                 'allowed' => false,
@@ -100,18 +130,18 @@ class TTS_Rate_Limiter {
         }
         
         // Check daily limit
-        $daily_key = $this->cache_prefix . $platform . '_daily_' . date( 'Y-m-d' );
+        $daily_key = $this->cache_prefix . $platform . '_daily_' . current_time( 'Y-m-d' );
         $daily_count = get_transient( $daily_key ) ?: 0;
         
-        if ( $daily_count >= $limits['requests_per_day'] ) {
-            $retry_after = strtotime( 'tomorrow' ) - $current_time;
+        if ( isset( $limits['requests_per_day'] ) && $daily_count >= $limits['requests_per_day'] ) {
+            $retry_after = strtotime( 'tomorrow 00:00:00', current_time( 'timestamp' ) ) - $current_time;
             return array(
                 'allowed' => false,
                 'reason' => 'Daily limit exceeded',
                 'limit' => $limits['requests_per_day'],
                 'used' => $daily_count,
                 'retry_after' => $retry_after,
-                'reset_time' => strtotime( 'tomorrow' )
+                'reset_time' => strtotime( 'tomorrow 00:00:00', current_time( 'timestamp' ) )
             );
         }
         
@@ -119,7 +149,7 @@ class TTS_Rate_Limiter {
         $burst_key = $this->cache_prefix . $platform . '_burst_' . floor( $current_time / 300 );
         $burst_count = get_transient( $burst_key ) ?: 0;
         
-        if ( $burst_count >= $limits['burst_limit'] ) {
+        if ( isset( $limits['burst_limit'] ) && $burst_count >= $limits['burst_limit'] ) {
             $retry_after = 300 - ( $current_time % 300 );
             return array(
                 'allowed' => false,
@@ -134,11 +164,11 @@ class TTS_Rate_Limiter {
         return array(
             'allowed' => true,
             'hourly_used' => $hourly_count,
-            'hourly_limit' => $limits['requests_per_hour'],
+            'hourly_limit' => isset( $limits['requests_per_hour'] ) ? $limits['requests_per_hour'] : 0,
             'daily_used' => $daily_count,
-            'daily_limit' => $limits['requests_per_day'],
+            'daily_limit' => isset( $limits['requests_per_day'] ) ? $limits['requests_per_day'] : 0,
             'burst_used' => $burst_count,
-            'burst_limit' => $limits['burst_limit']
+            'burst_limit' => isset( $limits['burst_limit'] ) ? $limits['burst_limit'] : 0
         );
     }
 
@@ -155,7 +185,7 @@ class TTS_Rate_Limiter {
         
         // Update counters
         $this->increment_counter( $platform . '_hourly_' . floor( $current_time / 3600 ), 3600 );
-        $this->increment_counter( $platform . '_daily_' . date( 'Y-m-d' ), DAY_IN_SECONDS );
+        $this->increment_counter( $platform . '_daily_' . current_time( 'Y-m-d' ), DAY_IN_SECONDS );
         $this->increment_counter( $platform . '_burst_' . floor( $current_time / 300 ), 300 );
         
         // Record request details
@@ -219,12 +249,16 @@ class TTS_Rate_Limiter {
         // Facebook uses X-App-Usage header
         if ( isset( $headers['X-App-Usage'] ) ) {
             $usage = json_decode( $headers['X-App-Usage'], true );
-            $quota_data['app_usage'] = $usage;
+            if ( json_last_error() === JSON_ERROR_NONE && $usage ) {
+                $quota_data['app_usage'] = $usage;
+            }
         }
         
         if ( isset( $headers['X-Business-Use-Case-Usage'] ) ) {
             $business_usage = json_decode( $headers['X-Business-Use-Case-Usage'], true );
-            $quota_data['business_usage'] = $business_usage;
+            if ( json_last_error() === JSON_ERROR_NONE && $business_usage ) {
+                $quota_data['business_usage'] = $business_usage;
+            }
         }
         
         return $quota_data;
@@ -291,7 +325,7 @@ class TTS_Rate_Limiter {
         
         // Get current usage
         $hourly_key = $this->cache_prefix . $platform . '_hourly_' . floor( $current_time / 3600 );
-        $daily_key = $this->cache_prefix . $platform . '_daily_' . date( 'Y-m-d' );
+        $daily_key = $this->cache_prefix . $platform . '_daily_' . current_time( 'Y-m-d' );
         $burst_key = $this->cache_prefix . $platform . '_burst_' . floor( $current_time / 300 );
         
         $hourly_used = get_transient( $hourly_key ) ?: 0;
@@ -548,12 +582,16 @@ class TTS_Rate_Limiter {
         $health_score = $status['health_score']['score'];
         
         // Implement smart delays based on usage
+        // Use non-blocking delay by scheduling a delayed action instead of sleep()
         if ( $health_score < 20 ) {
-            sleep( 5 ); // Emergency throttling
+            // Schedule emergency throttling - delay next request by 5 seconds
+            set_transient( 'tts_emergency_throttle_' . get_current_user_id(), time() + 5, 10 );
         } elseif ( $health_score < 40 ) {
-            sleep( 2 ); // Critical throttling
+            // Schedule critical throttling - delay next request by 2 seconds  
+            set_transient( 'tts_critical_throttle_' . get_current_user_id(), time() + 2, 5 );
         } elseif ( $health_score < 60 ) {
-            sleep( 1 ); // Warning throttling
+            // Schedule warning throttling - delay next request by 1 second
+            set_transient( 'tts_warning_throttle_' . get_current_user_id(), time() + 1, 3 );
         }
         // No delay for good/excellent health scores
     }

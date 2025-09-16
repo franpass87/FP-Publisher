@@ -76,7 +76,10 @@ class TTS_Notifier {
             return;
         }
 
-        wp_mail( $recipients, $subject, $body );
+        $mail_sent = wp_mail( $recipients, $subject, $body );
+        if ( ! $mail_sent ) {
+            error_log( 'TTS Notifier: Failed to send notification email' );
+        }
     }
 }
 

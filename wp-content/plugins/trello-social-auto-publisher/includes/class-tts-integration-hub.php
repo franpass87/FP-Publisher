@@ -284,9 +284,11 @@ class TTS_Integration_Hub {
         $integration_config = $this->available_integrations[ $integration_type ][ $integration_name ];
         
         // Validate required fields
-        foreach ( $integration_config['fields'] as $field ) {
-            if ( empty( $credentials[ $field ] ) ) {
-                throw new Exception( "Missing required field: {$field}" );
+        if ( isset( $integration_config['fields'] ) && is_array( $integration_config['fields'] ) ) {
+            foreach ( $integration_config['fields'] as $field ) {
+                if ( ! isset( $credentials[ $field ] ) || empty( $credentials[ $field ] ) ) {
+                    throw new Exception( "Missing required field: {$field}" );
+                }
             }
         }
         
@@ -294,7 +296,8 @@ class TTS_Integration_Hub {
         $test_result = $this->test_integration_connection( $integration_type, $integration_name, $credentials );
         
         if ( ! $test_result['success'] ) {
-            throw new Exception( 'Connection test failed: ' . $test_result['error'] );
+            $error_message = isset( $test_result['error'] ) ? $test_result['error'] : 'Unknown connection error';
+            throw new Exception( 'Connection test failed: ' . $error_message );
         }
         
         // Encrypt credentials for storage
@@ -576,6 +579,10 @@ class TTS_Integration_Hub {
             $iv_length = openssl_cipher_iv_length( $method );
             
             $data = base64_decode( $encrypted_credentials );
+            if ( false === $data ) {
+                return array(); // Invalid base64 data
+            }
+            
             $iv = substr( $data, 0, $iv_length );
             $encrypted = substr( $data, $iv_length );
             
@@ -587,10 +594,17 @@ class TTS_Integration_Hub {
         
         // Handle fallback format
         $decoded = base64_decode( $encrypted_credentials );
+        if ( false === $decoded ) {
+            return array(); // Invalid base64 data
+        }
+        
         if ( strpos( $decoded, '|' ) !== false ) {
             list( $hash, $encoded_data ) = explode( '|', $decoded, 2 );
             if ( hash_equals( $hash, hash( 'sha256', wp_salt() ) ) ) {
-                return maybe_unserialize( base64_decode( $encoded_data ) );
+                $decoded_data = base64_decode( $encoded_data );
+                if ( false !== $decoded_data ) {
+                    return maybe_unserialize( $decoded_data );
+                }
             }
         }
         
@@ -884,11 +898,15 @@ class TTS_Integration_Hub {
         $body = wp_remote_retrieve_body( $response );
         $data = json_decode( $body, true );
         
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+            return new WP_Error( 'json_decode_error', 'Failed to decode HubSpot API response' );
+        }
+        
         $response_code = wp_remote_retrieve_response_code( $response );
         if ( $response_code !== 200 ) {
             return new WP_Error( 
                 'api_error', 
-                'HubSpot API error: ' . ( $data['message'] ?? 'Unknown error' ),
+                'HubSpot API error: ' . ( isset( $data['message'] ) ? $data['message'] : 'Unknown error' ),
                 $response_code 
             );
         }

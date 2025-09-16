@@ -861,7 +861,10 @@ class TTS_Workflow_System {
             $workflow['deadline'] ? date( 'Y-m-d H:i', strtotime( $workflow['deadline'] ) ) : 'No deadline'
         );
         
-        wp_mail( $assigned_user->user_email, $subject, $message );
+        $mail_sent = wp_mail( $assigned_user->user_email, $subject, $message );
+        if ( ! $mail_sent ) {
+            error_log( 'TTS Workflow: Failed to send assignment email to ' . $assigned_user->user_email );
+        }
     }
 
     /**

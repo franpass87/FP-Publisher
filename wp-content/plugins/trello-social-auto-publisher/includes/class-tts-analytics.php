@@ -106,6 +106,9 @@ class TTS_Analytics {
         }
 
         $data = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+            return new WP_Error( 'json_decode_error', 'Failed to decode Facebook API response' );
+        }
         return isset( $data['engagement'] ) ? $data['engagement'] : array();
     }
 
@@ -134,6 +137,9 @@ class TTS_Analytics {
         }
 
         $data = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+            return new WP_Error( 'json_decode_error', 'Failed to decode Instagram API response' );
+        }
         return $data;
     }
 
@@ -169,6 +175,9 @@ class TTS_Analytics {
         }
 
         $data = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+            return new WP_Error( 'json_decode_error', 'Failed to decode YouTube API response' );
+        }
         if ( isset( $data['items'][0]['statistics'] ) ) {
             return $data['items'][0]['statistics'];
         }
@@ -200,6 +209,9 @@ class TTS_Analytics {
         }
 
         $data = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+            return new WP_Error( 'json_decode_error', 'Failed to decode TikTok API response' );
+        }
         return $data;
     }
 }

@@ -76,8 +76,8 @@ class TTS_Log_Table extends WP_List_Table {
         $current_page = $this->get_pagenum();
         $offset       = ( $current_page - 1 ) * $per_page;
 
-        $channel = isset( $_REQUEST['channel'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['channel'] ) ) : '';
-        $status  = isset( $_REQUEST['status'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['status'] ) ) : '';
+        $channel = isset( $_GET['channel'] ) ? sanitize_text_field( wp_unslash( $_GET['channel'] ) ) : '';
+        $status  = isset( $_GET['status'] ) ? sanitize_text_field( wp_unslash( $_GET['status'] ) ) : '';
 
         $where   = ' WHERE 1=1';
         $params  = array();
@@ -174,8 +174,8 @@ class TTS_Log_Table extends WP_List_Table {
         $channels   = $wpdb->get_col( "SELECT DISTINCT channel FROM {$table_name}" );
         $statuses   = $wpdb->get_col( "SELECT DISTINCT status FROM {$table_name}" );
 
-        $current_channel = isset( $_REQUEST['channel'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['channel'] ) ) : '';
-        $current_status  = isset( $_REQUEST['status'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['status'] ) ) : '';
+        $current_channel = isset( $_GET['channel'] ) ? sanitize_text_field( wp_unslash( $_GET['channel'] ) ) : '';
+        $current_status  = isset( $_GET['status'] ) ? sanitize_text_field( wp_unslash( $_GET['status'] ) ) : '';
 
         echo '<div class="alignleft actions">';
         echo '<select name="channel">';

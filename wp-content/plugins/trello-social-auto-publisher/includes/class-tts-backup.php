@@ -88,11 +88,15 @@ class TTS_Backup {
             
             // Save backup to file
             $backup_json = wp_json_encode( $backup_data, JSON_PRETTY_PRINT );
-            file_put_contents( $backup_path, $backup_json );
+            if ( false === file_put_contents( $backup_path, $backup_json ) ) {
+                throw new Exception( __( 'Failed to save backup file', 'trello-social-auto-publisher' ) );
+            }
             
             // Compress backup
             $compressed_path = $this->compress_backup( $backup_path );
-            unlink( $backup_path ); // Remove uncompressed version
+            if ( ! unlink( $backup_path ) ) {
+                error_log( 'TTS Backup: Failed to remove uncompressed backup file: ' . $backup_path );
+            }
             
             // Log backup creation
             TTS_Logger::log( 'Backup created successfully: ' . $backup_filename );
@@ -263,7 +267,15 @@ class TTS_Backup {
             
             // Load backup data
             $backup_content = file_get_contents( $decompressed_path );
+            if ( false === $backup_content ) {
+                throw new Exception( __( 'Failed to read backup file', 'trello-social-auto-publisher' ) );
+            }
+            
             $backup_data = json_decode( $backup_content, true );
+            
+            if ( json_last_error() !== JSON_ERROR_NONE ) {
+                throw new Exception( __( 'Backup file contains invalid JSON', 'trello-social-auto-publisher' ) );
+            }
             
             if ( ! $backup_data ) {
                 throw new Exception( __( 'Invalid backup file format', 'trello-social-auto-publisher' ) );
@@ -488,8 +500,12 @@ class TTS_Backup {
             wp_mkdir_p( $backup_dir );
             
             // Add security files
-            file_put_contents( $backup_dir . '.htaccess', 'deny from all' );
-            file_put_contents( $backup_dir . 'index.php', '<?php // Silence is golden' );
+            if ( false === file_put_contents( $backup_dir . '.htaccess', 'deny from all' ) ) {
+                error_log( 'TTS Backup: Failed to create .htaccess security file' );
+            }
+            if ( false === file_put_contents( $backup_dir . 'index.php', '<?php // Silence is golden' ) ) {
+                error_log( 'TTS Backup: Failed to create index.php security file' );
+            }
         }
     }
 
@@ -501,6 +517,12 @@ class TTS_Backup {
         
         $fp_out = gzopen( $compressed_path, 'wb9' );
         $fp_in = fopen( $file_path, 'rb' );
+        
+        if ( false === $fp_out || false === $fp_in ) {
+            if ( $fp_in ) fclose( $fp_in );
+            if ( $fp_out ) gzclose( $fp_out );
+            throw new Exception( __( 'Failed to compress backup file', 'trello-social-auto-publisher' ) );
+        }
         
         while ( ! feof( $fp_in ) ) {
             gzwrite( $fp_out, fread( $fp_in, 1024 * 512 ) );
@@ -520,6 +542,12 @@ class TTS_Backup {
         
         $fp_out = fopen( $decompressed_path, 'wb' );
         $fp_in = gzopen( $compressed_path, 'rb' );
+        
+        if ( false === $fp_out || false === $fp_in ) {
+            if ( $fp_out ) fclose( $fp_out );
+            if ( $fp_in ) gzclose( $fp_in );
+            throw new Exception( __( 'Failed to decompress backup file', 'trello-social-auto-publisher' ) );
+        }
         
         while ( ! gzeof( $fp_in ) ) {
             fwrite( $fp_out, gzread( $fp_in, 1024 * 512 ) );
@@ -546,7 +574,9 @@ class TTS_Backup {
             
             $files_to_delete = array_slice( $files, 10 );
             foreach ( $files_to_delete as $file ) {
-                unlink( $file );
+                if ( ! unlink( $file ) ) {
+                    error_log( 'TTS Backup: Failed to delete old backup file: ' . $file );
+                }
             }
         }
     }
