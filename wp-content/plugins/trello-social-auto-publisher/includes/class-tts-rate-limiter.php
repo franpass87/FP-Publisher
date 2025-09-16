@@ -219,12 +219,16 @@ class TTS_Rate_Limiter {
         // Facebook uses X-App-Usage header
         if ( isset( $headers['X-App-Usage'] ) ) {
             $usage = json_decode( $headers['X-App-Usage'], true );
-            $quota_data['app_usage'] = $usage;
+            if ( json_last_error() === JSON_ERROR_NONE && $usage ) {
+                $quota_data['app_usage'] = $usage;
+            }
         }
         
         if ( isset( $headers['X-Business-Use-Case-Usage'] ) ) {
             $business_usage = json_decode( $headers['X-Business-Use-Case-Usage'], true );
-            $quota_data['business_usage'] = $business_usage;
+            if ( json_last_error() === JSON_ERROR_NONE && $business_usage ) {
+                $quota_data['business_usage'] = $business_usage;
+            }
         }
         
         return $quota_data;

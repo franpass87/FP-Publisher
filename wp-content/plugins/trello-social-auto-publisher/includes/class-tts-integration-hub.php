@@ -887,11 +887,15 @@ class TTS_Integration_Hub {
         $body = wp_remote_retrieve_body( $response );
         $data = json_decode( $body, true );
         
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+            return new WP_Error( 'json_decode_error', 'Failed to decode HubSpot API response' );
+        }
+        
         $response_code = wp_remote_retrieve_response_code( $response );
         if ( $response_code !== 200 ) {
             return new WP_Error( 
                 'api_error', 
-                'HubSpot API error: ' . ( $data['message'] ?? 'Unknown error' ),
+                'HubSpot API error: ' . ( isset( $data['message'] ) ? $data['message'] : 'Unknown error' ),
                 $response_code 
             );
         }
