@@ -102,6 +102,9 @@ add_action( 'plugins_loaded', function () {
         $GLOBALS['tts_log_page'] = new TTS_Log_Page();
         $GLOBALS['tts_frequency_status_page'] = new TTS_Frequency_Status_Page();
         
+        // Initialize content source management
+        new TTS_Content_Source();
+        
         // Load AI Features page
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-ai-features-page.php';
         $GLOBALS['tts_ai_features_page'] = new TTS_AI_Features_Page();
