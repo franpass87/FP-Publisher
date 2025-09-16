@@ -267,9 +267,13 @@ class TTS_Cache_Manager {
         if ( ! file_exists( $cache_dir ) ) {
             wp_mkdir_p( $cache_dir );
             
-            // Add security files
-            file_put_contents( $cache_dir . '.htaccess', 'deny from all' );
-            file_put_contents( $cache_dir . 'index.php', '<?php // Silence is golden' );
+            // Add security files with error checking
+            if ( false === file_put_contents( $cache_dir . '.htaccess', 'deny from all' ) ) {
+                error_log( 'TTS Cache Manager: Failed to create .htaccess security file' );
+            }
+            if ( false === file_put_contents( $cache_dir . 'index.php', '<?php // Silence is golden' ) ) {
+                error_log( 'TTS Cache Manager: Failed to create index.php security file' );
+            }
         }
         
         return $cache_dir;

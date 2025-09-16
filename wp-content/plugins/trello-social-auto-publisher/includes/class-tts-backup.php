@@ -94,7 +94,9 @@ class TTS_Backup {
             
             // Compress backup
             $compressed_path = $this->compress_backup( $backup_path );
-            unlink( $backup_path ); // Remove uncompressed version
+            if ( ! unlink( $backup_path ) ) {
+                error_log( 'TTS Backup: Failed to remove uncompressed backup file: ' . $backup_path );
+            }
             
             // Log backup creation
             TTS_Logger::log( 'Backup created successfully: ' . $backup_filename );
@@ -572,7 +574,9 @@ class TTS_Backup {
             
             $files_to_delete = array_slice( $files, 10 );
             foreach ( $files_to_delete as $file ) {
-                unlink( $file );
+                if ( ! unlink( $file ) ) {
+                    error_log( 'TTS Backup: Failed to delete old backup file: ' . $file );
+                }
             }
         }
     }
