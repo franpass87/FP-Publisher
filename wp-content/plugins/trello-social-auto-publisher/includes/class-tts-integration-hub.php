@@ -579,6 +579,10 @@ class TTS_Integration_Hub {
             $iv_length = openssl_cipher_iv_length( $method );
             
             $data = base64_decode( $encrypted_credentials );
+            if ( false === $data ) {
+                return array(); // Invalid base64 data
+            }
+            
             $iv = substr( $data, 0, $iv_length );
             $encrypted = substr( $data, $iv_length );
             
@@ -590,10 +594,17 @@ class TTS_Integration_Hub {
         
         // Handle fallback format
         $decoded = base64_decode( $encrypted_credentials );
+        if ( false === $decoded ) {
+            return array(); // Invalid base64 data
+        }
+        
         if ( strpos( $decoded, '|' ) !== false ) {
             list( $hash, $encoded_data ) = explode( '|', $decoded, 2 );
             if ( hash_equals( $hash, hash( 'sha256', wp_salt() ) ) ) {
-                return maybe_unserialize( base64_decode( $encoded_data ) );
+                $decoded_data = base64_decode( $encoded_data );
+                if ( false !== $decoded_data ) {
+                    return maybe_unserialize( $decoded_data );
+                }
             }
         }
         

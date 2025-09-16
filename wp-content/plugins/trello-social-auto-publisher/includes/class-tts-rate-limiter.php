@@ -100,18 +100,18 @@ class TTS_Rate_Limiter {
         }
         
         // Check daily limit
-        $daily_key = $this->cache_prefix . $platform . '_daily_' . date( 'Y-m-d' );
+        $daily_key = $this->cache_prefix . $platform . '_daily_' . current_time( 'Y-m-d' );
         $daily_count = get_transient( $daily_key ) ?: 0;
         
         if ( isset( $limits['requests_per_day'] ) && $daily_count >= $limits['requests_per_day'] ) {
-            $retry_after = strtotime( 'tomorrow' ) - $current_time;
+            $retry_after = strtotime( 'tomorrow 00:00:00', current_time( 'timestamp' ) ) - $current_time;
             return array(
                 'allowed' => false,
                 'reason' => 'Daily limit exceeded',
                 'limit' => $limits['requests_per_day'],
                 'used' => $daily_count,
                 'retry_after' => $retry_after,
-                'reset_time' => strtotime( 'tomorrow' )
+                'reset_time' => strtotime( 'tomorrow 00:00:00', current_time( 'timestamp' ) )
             );
         }
         
@@ -155,7 +155,7 @@ class TTS_Rate_Limiter {
         
         // Update counters
         $this->increment_counter( $platform . '_hourly_' . floor( $current_time / 3600 ), 3600 );
-        $this->increment_counter( $platform . '_daily_' . date( 'Y-m-d' ), DAY_IN_SECONDS );
+        $this->increment_counter( $platform . '_daily_' . current_time( 'Y-m-d' ), DAY_IN_SECONDS );
         $this->increment_counter( $platform . '_burst_' . floor( $current_time / 300 ), 300 );
         
         // Record request details
@@ -295,7 +295,7 @@ class TTS_Rate_Limiter {
         
         // Get current usage
         $hourly_key = $this->cache_prefix . $platform . '_hourly_' . floor( $current_time / 3600 );
-        $daily_key = $this->cache_prefix . $platform . '_daily_' . date( 'Y-m-d' );
+        $daily_key = $this->cache_prefix . $platform . '_daily_' . current_time( 'Y-m-d' );
         $burst_key = $this->cache_prefix . $platform . '_burst_' . floor( $current_time / 300 );
         
         $hourly_used = get_transient( $hourly_key ) ?: 0;
