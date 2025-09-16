@@ -1114,34 +1114,34 @@ class TTS_Admin {
         
         // Database performance
         if ( isset( $performance['database'] ) ) {
-            $db_status = $performance['database']['status'];
+            $db_status = isset( $performance['database']['status'] ) ? $performance['database']['status'] : 'unknown';
             $status_icon = $db_status === 'excellent' ? '🟢' : ( $db_status === 'good' ? '🟡' : '🔴' );
             
             echo '<div class="tts-metric-item">';
             echo '<span class="tts-metric-label">' . $status_icon . ' Database</span>';
-            echo '<span class="tts-metric-value">' . $performance['database']['response_ms'] . 'ms</span>';
+            echo '<span class="tts-metric-value">' . ( isset( $performance['database']['response_ms'] ) ? $performance['database']['response_ms'] : 'N/A' ) . 'ms</span>';
             echo '</div>';
         }
         
         // Memory usage
         if ( isset( $performance['memory'] ) ) {
-            $memory_status = $performance['memory']['status'];
+            $memory_status = isset( $performance['memory']['status'] ) ? $performance['memory']['status'] : 'unknown';
             $status_icon = $memory_status === 'good' ? '🟢' : '🟡';
             
             echo '<div class="tts-metric-item">';
             echo '<span class="tts-metric-label">' . $status_icon . ' Memory</span>';
-            echo '<span class="tts-metric-value">' . $performance['memory']['usage_percent'] . '%</span>';
+            echo '<span class="tts-metric-value">' . ( isset( $performance['memory']['usage_percent'] ) ? $performance['memory']['usage_percent'] : 'N/A' ) . '%</span>';
             echo '</div>';
         }
         
         // Cache performance
         if ( isset( $performance['cache'] ) ) {
-            $cache_status = $performance['cache']['status'];
+            $cache_status = isset( $performance['cache']['status'] ) ? $performance['cache']['status'] : 'unknown';
             $status_icon = $cache_status === 'excellent' ? '🟢' : ( $cache_status === 'good' ? '🟡' : '🔴' );
             
             echo '<div class="tts-metric-item">';
             echo '<span class="tts-metric-label">' . $status_icon . ' Cache</span>';
-            echo '<span class="tts-metric-value">' . $performance['cache']['hit_ratio'] . '%</span>';
+            echo '<span class="tts-metric-value">' . ( isset( $performance['cache']['hit_ratio'] ) ? $performance['cache']['hit_ratio'] : 'N/A' ) . '%</span>';
             echo '</div>';
         }
         
@@ -1408,9 +1408,9 @@ class TTS_Admin {
             echo '<div class="tts-stat-card tts-performance-card tts-tooltip">';
             echo '<h3>' . esc_html__('Performance', 'trello-social-auto-publisher') . '</h3>';
             echo '<div class="tts-perf-metrics">';
-            echo '<div class="tts-perf-item">DB: ' . $perf['database_response_ms'] . 'ms</div>';
-            echo '<div class="tts-perf-item">Memory: ' . $perf['memory_usage_mb'] . 'MB</div>';
-            echo '<div class="tts-perf-item">Cache: ' . $perf['cache_hit_ratio'] . '%</div>';
+            echo '<div class="tts-perf-item">DB: ' . ( isset( $perf['database_response_ms'] ) ? $perf['database_response_ms'] : 'N/A' ) . 'ms</div>';
+            echo '<div class="tts-perf-item">Memory: ' . ( isset( $perf['memory_usage_mb'] ) ? $perf['memory_usage_mb'] : 'N/A' ) . 'MB</div>';
+            echo '<div class="tts-perf-item">Cache: ' . ( isset( $perf['cache_hit_ratio'] ) ? $perf['cache_hit_ratio'] : 'N/A' ) . '%</div>';
             echo '</div>';
             echo '<span class="tts-tooltiptext">System performance metrics: database response time, memory usage, and cache hit ratio</span>';
             echo '</div>';
@@ -4089,6 +4089,16 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         global $tts_calendar_page;
         if ( isset( $tts_calendar_page ) && $tts_calendar_page instanceof TTS_Calendar_Page ) {
             $tts_calendar_page->render_page();
+        } else {
+            // Fallback content when calendar page class is not available
+            echo '<div class="wrap">';
+            echo '<h1>' . esc_html__( 'Calendar', 'fp-publisher' ) . '</h1>';
+            echo '<div class="notice notice-warning">';
+            echo '<p>' . esc_html__( 'Calendar functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
+            echo '</div>';
+            echo '<p>' . esc_html__( 'This page will display your scheduled social media posts in a calendar view.', 'fp-publisher' ) . '</p>';
+            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
+            echo '</div>';
         }
     }
 
@@ -4099,6 +4109,16 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         global $tts_analytics_page;
         if ( isset( $tts_analytics_page ) && $tts_analytics_page instanceof TTS_Analytics_Page ) {
             $tts_analytics_page->render_page();
+        } else {
+            // Fallback content when analytics page class is not available
+            echo '<div class="wrap">';
+            echo '<h1>' . esc_html__( 'Analytics', 'fp-publisher' ) . '</h1>';
+            echo '<div class="notice notice-warning">';
+            echo '<p>' . esc_html__( 'Analytics functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
+            echo '</div>';
+            echo '<p>' . esc_html__( 'This page will display analytics and insights for your social media publishing activities.', 'fp-publisher' ) . '</p>';
+            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
+            echo '</div>';
         }
     }
 
