@@ -482,15 +482,10 @@ class TTS_Error_Recovery {
             );
         }
 
-        $args = array( 'post_id' => $post_id );
-        if ( $channel ) {
-            $args['channel'] = $channel;
-        }
-
         $previous_status = get_post_meta( $post_id, '_published_status', true );
 
         try {
-            do_action( 'tts_publish_social_post', $args );
+            do_action( 'tts_publish_social_post', $post_id, $channel );
         } catch ( Throwable $throwable ) {
             return array(
                 'success' => false,

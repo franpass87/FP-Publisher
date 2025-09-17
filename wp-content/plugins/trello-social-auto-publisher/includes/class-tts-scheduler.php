@@ -19,7 +19,7 @@ class TTS_Scheduler {
      */
     public function __construct() {
         add_action( 'save_post_tts_social_post', array( $this, 'schedule_post' ), 10, 3 );
-        add_action( 'tts_publish_social_post', array( $this, 'publish_social_post' ) );
+        add_action( 'tts_publish_social_post', array( $this, 'publish_social_post' ), 10, 2 );
     }
 
     /**
@@ -47,7 +47,8 @@ class TTS_Scheduler {
             }
         }
 
-        as_unschedule_all_actions( 'tts_publish_social_post', array( 'post_id' => $post_id ) );
+        $existing_channels = get_post_meta( $post_id, '_tts_social_channel', true );
+        $this->unschedule_post_actions( $post_id, $existing_channels );
 
         $approved  = isset( $_POST['_tts_approved'] ) ? (bool) sanitize_text_field( $_POST['_tts_approved'] ) : (bool) get_post_meta( $post_id, '_tts_approved', true );
         if ( ! $approved ) {
@@ -60,28 +61,72 @@ class TTS_Scheduler {
         if ( ! empty( $publish_at ) ) {
             $timestamp = strtotime( $publish_at );
             if ( $timestamp ) {
+                $channels = is_array( $channels ) ? $channels : ( $channels ? array( $channels ) : array() );
+                $this->unschedule_post_actions( $post_id, $channels );
+
                 if ( ! empty( $channels ) ) {
                     $options = get_option( 'tts_settings', array() );
                     foreach ( $channels as $channel ) {
                         $offset = isset( $options[ $channel . '_offset' ] ) ? intval( $options[ $channel . '_offset' ] ) : 0;
                         $when   = $timestamp + $offset * MINUTE_IN_SECONDS;
-                        as_schedule_single_action( $when, 'tts_publish_social_post', array( 'post_id' => $post_id, 'channel' => $channel ) );
+                        as_schedule_single_action( $when, 'tts_publish_social_post', array( $post_id, $channel ) );
                     }
                 } else {
-                    as_schedule_single_action( $timestamp, 'tts_publish_social_post', array( 'post_id' => $post_id ) );
+                    as_schedule_single_action( $timestamp, 'tts_publish_social_post', array( $post_id ) );
                 }
             }
         }
     }
 
     /**
+     * Unschedule any pending publish actions for a post.
+     *
+     * @param int          $post_id  Post ID.
+     * @param string|array $channels Optional channel or list of channels.
+     */
+    private function unschedule_post_actions( $post_id, $channels = array() ) {
+        $post_id = absint( $post_id );
+
+        if ( ! $post_id ) {
+            return;
+        }
+
+        as_unschedule_all_actions( 'tts_publish_social_post', array( $post_id ) );
+        as_unschedule_all_actions( 'tts_publish_social_post', array( 'post_id' => $post_id ) );
+
+        if ( empty( $channels ) ) {
+            return;
+        }
+
+        if ( ! is_array( $channels ) ) {
+            $channels = array( $channels );
+        }
+
+        foreach ( $channels as $channel ) {
+            if ( ! is_string( $channel ) || '' === $channel ) {
+                continue;
+            }
+
+            as_unschedule_all_actions( 'tts_publish_social_post', array( $post_id, $channel ) );
+            as_unschedule_all_actions( 'tts_publish_social_post', array( 'post_id' => $post_id, 'channel' => $channel ) );
+        }
+    }
+
+    /**
      * Publish the social post to configured networks.
      *
-     * @param array $args Action Scheduler arguments.
+     * @param int|array $post_id Post ID or legacy argument array.
+     * @param string    $channel Optional channel override.
      */
-    public function publish_social_post( $args ) {
-        $post_id       = isset( $args['post_id'] ) ? intval( $args['post_id'] ) : 0;
-        $forced_channel = isset( $args['channel'] ) ? sanitize_text_field( $args['channel'] ) : '';
+    public function publish_social_post( $post_id, $channel = '' ) {
+        if ( is_array( $post_id ) ) {
+            $args    = $post_id;
+            $post_id = isset( $args['post_id'] ) ? intval( $args['post_id'] ) : ( isset( $args[0] ) ? intval( $args[0] ) : 0 );
+            $channel = isset( $args['channel'] ) ? $args['channel'] : ( isset( $args[1] ) ? $args[1] : '' );
+        }
+
+        $post_id        = intval( $post_id );
+        $forced_channel = is_string( $channel ) ? sanitize_text_field( $channel ) : '';
         if ( ! $post_id ) {
             return;
         }
@@ -276,7 +321,7 @@ class TTS_Scheduler {
 
             $delay     = $this->calculate_backoff_delay( $attempt );
             $timestamp = time() + $delay * MINUTE_IN_SECONDS;
-            as_schedule_single_action( $timestamp, 'tts_publish_social_post', array( 'post_id' => $post_id ) );
+            as_schedule_single_action( $timestamp, 'tts_publish_social_post', array( $post_id ) );
 
             tts_log_event( $post_id, 'scheduler', 'retry', sprintf( __( 'Retry #%1$d scheduled in %2$d minutes', 'trello-social-auto-publisher' ), $attempt, $delay ), '' );
             return;

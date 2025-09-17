@@ -20,7 +20,7 @@ class TTS_Frequency_Monitor {
     public function __construct() {
         add_action( 'init', array( $this, 'schedule_frequency_check' ) );
         add_action( 'tts_check_publishing_frequencies', array( $this, 'check_all_clients' ) );
-        add_action( 'tts_publish_social_post', array( $this, 'record_publication' ), 20 );
+        add_action( 'tts_publish_social_post', array( $this, 'record_publication' ), 20, 2 );
     }
 
     /**
@@ -135,12 +135,19 @@ class TTS_Frequency_Monitor {
     /**
      * Record a publication when a post is published.
      *
-     * @param array $args Action Scheduler arguments from publish action.
+     * @param int|array $post_id Post ID or legacy argument array.
+     * @param string    $channel Channel slug if explicitly provided.
      */
-    public function record_publication( $args ) {
-        $post_id = isset( $args['post_id'] ) ? intval( $args['post_id'] ) : 0;
-        $channel = isset( $args['channel'] ) ? sanitize_text_field( $args['channel'] ) : '';
-        
+    public function record_publication( $post_id, $channel = '' ) {
+        if ( is_array( $post_id ) ) {
+            $args    = $post_id;
+            $post_id = isset( $args['post_id'] ) ? intval( $args['post_id'] ) : ( isset( $args[0] ) ? intval( $args[0] ) : 0 );
+            $channel = isset( $args['channel'] ) ? $args['channel'] : ( isset( $args[1] ) ? $args[1] : '' );
+        }
+
+        $post_id = intval( $post_id );
+        $channel = is_string( $channel ) ? sanitize_text_field( $channel ) : '';
+
         if ( ! $post_id ) {
             return;
         }

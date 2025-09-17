@@ -2172,8 +2172,9 @@ class TTS_Admin {
                 wp_die( esc_html__( 'Sorry, you are not allowed to publish this post.', 'trello-social-auto-publisher' ) );
             }
 
-            check_admin_referer( 'tts_publish_social_post_' . absint( $_GET['post'] ) );
-            do_action( 'tts_publish_social_post', array( 'post_id' => absint( $_GET['post'] ) ) );
+            $post_id = absint( $_GET['post'] );
+            check_admin_referer( 'tts_publish_social_post_' . $post_id );
+            do_action( 'tts_publish_social_post', $post_id );
             echo '<div class="notice notice-success"><p>' . esc_html__( 'Post published.', 'trello-social-auto-publisher' ) . '</p></div>';
         }
 
