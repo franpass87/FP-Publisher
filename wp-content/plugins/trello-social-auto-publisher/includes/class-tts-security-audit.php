@@ -67,7 +67,7 @@ class TTS_Security_Audit {
      */
     public function init_security_monitoring() {
         // Monitor failed nonce verifications
-        add_action( 'wp_die_handler', array( $this, 'monitor_nonce_failures' ) );
+        add_action( 'wp_die', array( $this, 'monitor_nonce_failures' ), 10, 3 );
         
         // Monitor file access attempts
         add_action( 'wp_loaded', array( $this, 'monitor_file_access' ) );
@@ -410,10 +410,10 @@ class TTS_Security_Audit {
     /**
      * Monitor nonce failures
      */
-    public function monitor_nonce_failures() {
+    public function monitor_nonce_failures( $message = '', $title = '', $args = array() ) {
         // Check for nonce verification failures - use $_POST instead of $_REQUEST for security
         if ( ( isset( $_POST['_wpnonce'] ) || isset( $_POST['_ajax_nonce'] ) ) &&
-             ( ! wp_verify_nonce( $_POST['_wpnonce'] ?? '', 'wp_rest' ) && 
+             ( ! wp_verify_nonce( $_POST['_wpnonce'] ?? '', 'wp_rest' ) &&
                ! check_ajax_referer( $_POST['_ajax_nonce'] ?? '', false, false ) ) ) {
             $this->log_security_event(
                 self::EVENT_PERMISSION_VIOLATION,
@@ -425,6 +425,8 @@ class TTS_Security_Audit {
                 )
             );
         }
+
+        return $message;
     }
 
     /**
