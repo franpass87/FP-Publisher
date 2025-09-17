@@ -50,7 +50,7 @@ class TTS_Analytics {
                 $method = 'fetch_' . $ch . '_metrics';
                 if ( method_exists( __CLASS__, $method ) ) {
                     $creds  = isset( $tokens[ $ch ] ) ? $tokens[ $ch ] : '';
-                    $result = self::$method( $post_id, $creds );
+                    $result = call_user_func( array( __CLASS__, $method ), $post_id, $creds );
                     if ( ! is_wp_error( $result ) ) {
                         $metrics[ $ch ] = self::count_interactions( (array) $result );
                     }
