@@ -547,27 +547,89 @@ class TTS_Error_Recovery {
      * Retry API upload operation
      */
     private function retry_api_upload( $context ) {
-        $platform = $context['platform'] ?? '';
+        $platform   = isset( $context['platform'] ) ? strtolower( (string) $context['platform'] ) : '';
         $media_path = $context['media_path'] ?? '';
-        
-        if ( ! $platform || ! $media_path ) {
+
+        if ( empty( $platform ) || empty( $media_path ) ) {
             return array(
                 'success' => false,
-                'error' => 'Missing platform or media path'
+                'error'   => 'Missing platform or media path',
             );
         }
-        
-        // Attempt to re-upload media
-        $publisher_class = 'TTS_Publisher_' . ucfirst( $platform );
-        if ( class_exists( $publisher_class ) ) {
-            $publisher = new $publisher_class();
-            return $publisher->upload_media( $media_path );
-        }
-        
-        return array(
-            'success' => false,
-            'error' => 'Publisher not found: ' . $publisher_class
+
+        $class_map = array(
+            'facebook'        => 'TTS_Publisher_Facebook',
+            'facebook_story'  => 'TTS_Publisher_Facebook_Story',
+            'facebook-story'  => 'TTS_Publisher_Facebook_Story',
+            'instagram'       => 'TTS_Publisher_Instagram',
+            'instagram_story' => 'TTS_Publisher_Instagram_Story',
+            'instagram-story' => 'TTS_Publisher_Instagram_Story',
+            'tiktok'          => 'TTS_Publisher_TikTok',
+            'youtube'         => 'TTS_Publisher_YouTube',
         );
+
+        if ( isset( $class_map[ $platform ] ) ) {
+            $publisher_class = $class_map[ $platform ];
+        } else {
+            $normalized      = str_replace( array( '-', ' ' ), '_', $platform );
+            $parts           = array_map( 'ucfirst', explode( '_', $normalized ) );
+            $publisher_class = 'TTS_Publisher_' . implode( '_', $parts );
+        }
+
+        if ( ! class_exists( $publisher_class ) ) {
+            return array(
+                'success' => false,
+                'error'   => 'Publisher not found: ' . $publisher_class,
+            );
+        }
+
+        $publisher      = new $publisher_class();
+        $upload_context = array();
+        $allowed_keys   = array(
+            'post_id',
+            'credentials',
+            'media_type',
+            'message',
+            'token',
+            'page_id',
+            'ig_user_id',
+            'client_id',
+            'lat',
+            'lng',
+            'title',
+            'media_id',
+            'creds',
+        );
+
+        foreach ( $allowed_keys as $key ) {
+            if ( array_key_exists( $key, $context ) ) {
+                $upload_context[ $key ] = $context[ $key ];
+            }
+        }
+
+        if ( ! isset( $upload_context['message'] ) && isset( $context['caption'] ) ) {
+            $upload_context['message'] = $context['caption'];
+        }
+
+        $result = $publisher->upload_media( $media_path, $upload_context );
+
+        if ( is_wp_error( $result ) ) {
+            return array(
+                'success'    => false,
+                'error'      => $result->get_error_message(),
+                'error_code' => $result->get_error_code(),
+                'error_data' => $result->get_error_data(),
+            );
+        }
+
+        if ( ! is_array( $result ) || ! array_key_exists( 'success', $result ) ) {
+            return array(
+                'success' => false,
+                'error'   => 'Invalid upload response',
+            );
+        }
+
+        return $result;
     }
 
     /**

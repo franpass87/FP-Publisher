@@ -29,6 +29,174 @@ class TTS_Publisher_Instagram {
     private $post_id = 0;
 
     /**
+     * Upload a single media item to Instagram.
+     *
+     * @param string $media_path Remote URL of the media item.
+     * @param array  $context    Additional context such as post ID and credentials.
+     * @return array Result data with success flag.
+     */
+    public function upload_media( $media_path, array $context = array() ) {
+        $post_id     = isset( $context['post_id'] ) ? absint( $context['post_id'] ) : 0;
+        $credentials = $context['credentials'] ?? '';
+        $ig_user_id  = $context['ig_user_id'] ?? '';
+        $token       = $context['token'] ?? '';
+
+        if ( ( empty( $ig_user_id ) || empty( $token ) ) && ! empty( $credentials ) ) {
+            list( $cred_user_id, $cred_token ) = array_pad( explode( '|', $credentials, 2 ), 2, '' );
+            if ( empty( $ig_user_id ) ) {
+                $ig_user_id = $cred_user_id;
+            }
+            if ( empty( $token ) ) {
+                $token = $cred_token;
+            }
+        }
+
+        if ( empty( $ig_user_id ) || empty( $token ) ) {
+            $error = __( 'Invalid Instagram credentials', 'trello-social-auto-publisher' );
+            tts_log_event( $post_id, 'instagram', 'error', $error, '' );
+
+            return array(
+                'success'    => false,
+                'error'      => $error,
+                'error_code' => 'instagram_bad_credentials',
+            );
+        }
+
+        if ( empty( $media_path ) ) {
+            $error = __( 'No image or video to publish', 'trello-social-auto-publisher' );
+            tts_log_event( $post_id, 'instagram', 'error', $error, '' );
+
+            return array(
+                'success'    => false,
+                'error'      => $error,
+                'error_code' => 'instagram_no_media',
+            );
+        }
+
+        $message    = $context['message'] ?? '';
+        $lat        = $context['lat'] ?? ( $post_id ? get_post_meta( $post_id, '_tts_lat', true ) : '' );
+        $lng        = $context['lng'] ?? ( $post_id ? get_post_meta( $post_id, '_tts_lng', true ) : '' );
+        $media_type = strtoupper( $context['media_type'] ?? '' );
+
+        if ( ! $media_type ) {
+            $filetype = wp_check_filetype( $media_path );
+            if ( ! empty( $filetype['type'] ) && 0 === strpos( $filetype['type'], 'video/' ) ) {
+                $media_type = 'VIDEO';
+            } else {
+                $media_type = 'IMAGE';
+            }
+        }
+
+        if ( ! in_array( $media_type, array( 'IMAGE', 'VIDEO' ), true ) ) {
+            $media_type = 'IMAGE';
+        }
+
+        $endpoint = sprintf( 'https://graph.facebook.com/%s/media', $ig_user_id );
+        $body     = array(
+            'caption'      => $message,
+            'access_token' => $token,
+        );
+
+        if ( $lat && $lng ) {
+            $body['location'] = array(
+                'latitude'  => $lat,
+                'longitude' => $lng,
+            );
+        }
+
+        if ( 'IMAGE' === $media_type ) {
+            $body['image_url'] = $media_path;
+        } else {
+            $body['media_type'] = 'VIDEO';
+            $body['video_url']  = $media_path;
+        }
+
+        $result = wp_remote_post(
+            $endpoint,
+            array(
+                'body'    => $body,
+                'timeout' => 20,
+            )
+        );
+
+        if ( is_wp_error( $result ) ) {
+            $error = $result->get_error_message();
+            tts_log_event( $post_id, 'instagram', 'error', $error, '' );
+
+            return array(
+                'success'    => false,
+                'error'      => $error,
+                'error_code' => 'instagram_request_error',
+            );
+        }
+
+        $code = wp_remote_retrieve_response_code( $result );
+        $data = json_decode( wp_remote_retrieve_body( $result ), true );
+
+        if ( 200 !== $code || empty( $data['id'] ) ) {
+            $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            tts_log_event( $post_id, 'instagram', 'error', $error, $data );
+
+            return array(
+                'success'    => false,
+                'error'      => $error,
+                'error_code' => 'instagram_error',
+                'error_data' => $data,
+            );
+        }
+
+        $publish_endpoint = sprintf( 'https://graph.facebook.com/%s/media_publish', $ig_user_id );
+        $publish_body     = array(
+            'creation_id'  => $data['id'],
+            'access_token' => $token,
+        );
+
+        $publish_result = wp_remote_post(
+            $publish_endpoint,
+            array(
+                'body'    => $publish_body,
+                'timeout' => 20,
+            )
+        );
+
+        if ( is_wp_error( $publish_result ) ) {
+            $error = $publish_result->get_error_message();
+            tts_log_event( $post_id, 'instagram', 'error', $error, '' );
+
+            return array(
+                'success'    => false,
+                'error'      => $error,
+                'error_code' => 'instagram_publish_request_error',
+            );
+        }
+
+        $publish_code = wp_remote_retrieve_response_code( $publish_result );
+        $publish_data = json_decode( wp_remote_retrieve_body( $publish_result ), true );
+
+        if ( 200 !== $publish_code || empty( $publish_data['id'] ) ) {
+            $error = isset( $publish_data['error']['message'] ) ? $publish_data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            tts_log_event( $post_id, 'instagram', 'error', $error, $publish_data );
+
+            return array(
+                'success'    => false,
+                'error'      => $error,
+                'error_code' => 'instagram_error',
+                'error_data' => $publish_data,
+            );
+        }
+
+        $this->post_id = $post_id ?: $this->post_id;
+        $this->token   = $token;
+
+        return array(
+            'success'      => true,
+            'data'         => $publish_data,
+            'creation_id'  => $data['id'],
+            'media_type'   => $media_type,
+        );
+    }
+
+    /**
      * Publish the post to Instagram.
      *
      * Credentials must be provided in the form `{ig-user-id}|{access-token}` where `ig-user-id` is
@@ -107,72 +275,31 @@ class TTS_Publisher_Instagram {
         }
         $first_media_id = '';
         foreach ( $media_items as $index => $item ) {
-            $endpoint = sprintf( 'https://graph.facebook.com/%s/media', $ig_user_id );
-            $body     = array(
-                'caption'      => 0 === $index ? $message : '',
-                'access_token' => $token,
-            );
-            if ( $lat && $lng ) {
-                $body['location'] = array(
-                    'latitude'  => $lat,
-                    'longitude' => $lng,
-                );
-            }
-            if ( 'IMAGE' === $item['type'] ) {
-                $body['image_url'] = $item['url'];
-            } else {
-                $body['media_type'] = 'VIDEO';
-                $body['video_url']  = $item['url'];
-            }
-            $result = wp_remote_post(
-                $endpoint,
+            $upload_result = $this->upload_media(
+                $item['url'],
                 array(
-                    'body'    => $body,
-                    'timeout' => 20,
+                    'post_id'     => $post_id,
+                    'credentials' => $credentials,
+                    'ig_user_id'  => $ig_user_id,
+                    'token'       => $token,
+                    'media_type'  => $item['type'],
+                    'message'     => 0 === $index ? $message : '',
+                    'lat'         => $lat,
+                    'lng'         => $lng,
                 )
             );
-            if ( is_wp_error( $result ) ) {
-                $error = $result->get_error_message();
-                tts_log_event( $post_id, 'instagram', 'error', $error, '' );
+
+            if ( empty( $upload_result['success'] ) ) {
                 tts_notify_publication( $post_id, 'error', 'instagram' );
-                return $result;
+                $error_code = $upload_result['error_code'] ?? 'instagram_error';
+                $error_data = $upload_result['error_data'] ?? array();
+                $error_msg  = $upload_result['error'] ?? __( 'Unknown error', 'trello-social-auto-publisher' );
+
+                return new \WP_Error( $error_code, $error_msg, $error_data );
             }
-            $code = wp_remote_retrieve_response_code( $result );
-            $data = json_decode( wp_remote_retrieve_body( $result ), true );
-            if ( 200 !== $code || empty( $data['id'] ) ) {
-                $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
-                tts_log_event( $post_id, 'instagram', 'error', $error, $data );
-                tts_notify_publication( $post_id, 'error', 'instagram' );
-                return new \WP_Error( 'instagram_error', $error, $data );
-            }
-            $publish_endpoint = sprintf( 'https://graph.facebook.com/%s/media_publish', $ig_user_id );
-            $publish_body     = array(
-                'creation_id'  => $data['id'],
-                'access_token' => $token,
-            );
-            $publish_result   = wp_remote_post(
-                $publish_endpoint,
-                array(
-                    'body'    => $publish_body,
-                    'timeout' => 20,
-                )
-            );
-            if ( is_wp_error( $publish_result ) ) {
-                $error = $publish_result->get_error_message();
-                tts_log_event( $post_id, 'instagram', 'error', $error, '' );
-                tts_notify_publication( $post_id, 'error', 'instagram' );
-                return $publish_result;
-            }
-            $publish_code = wp_remote_retrieve_response_code( $publish_result );
-            $publish_data = json_decode( wp_remote_retrieve_body( $publish_result ), true );
-            if ( 200 !== $publish_code || empty( $publish_data['id'] ) ) {
-                $error = isset( $publish_data['error']['message'] ) ? $publish_data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
-                tts_log_event( $post_id, 'instagram', 'error', $error, $publish_data );
-                tts_notify_publication( $post_id, 'error', 'instagram' );
-                return new \WP_Error( 'instagram_error', $error, $publish_data );
-            }
+
             if ( '' === $first_media_id ) {
-                $first_media_id = $publish_data['id'];
+                $first_media_id = $upload_result['data']['id'] ?? '';
             }
         }
         $response = array(
