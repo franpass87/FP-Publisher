@@ -106,7 +106,7 @@ class TTS_Advanced_Utils {
             if ( $options['logs'] ) {
                 global $wpdb;
                 $logs = $wpdb->get_results( $wpdb->prepare( "
-                    SELECT post_id, event_type, status, message, created_at
+                    SELECT post_id, channel AS event_type, status, message, created_at
                     FROM {$wpdb->prefix}tts_logs
                     WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)
                     ORDER BY created_at DESC
