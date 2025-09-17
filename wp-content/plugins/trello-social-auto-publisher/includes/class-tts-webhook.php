@@ -22,6 +22,143 @@ class TTS_Webhook {
     }
 
     /**
+     * Check Trello webhook connectivity for the configured clients.
+     *
+     * @return bool|WP_Error True when at least one client responds correctly, WP_Error otherwise.
+     */
+    public static function check_connection() {
+        static $cached_result = null;
+
+        if ( null !== $cached_result ) {
+            return $cached_result;
+        }
+
+        $clients = get_posts(
+            array(
+                'post_type'      => 'tts_client',
+                'post_status'    => 'any',
+                'posts_per_page' => -1,
+                'fields'         => 'ids',
+            )
+        );
+
+        if ( empty( $clients ) ) {
+            $cached_result = new WP_Error( 'tts_webhook_no_clients', __( 'Nessun client Trello configurato.', 'trello-social-auto-publisher' ) );
+            return $cached_result;
+        }
+
+        $errors = array();
+
+        foreach ( $clients as $client_id ) {
+            $title = get_the_title( $client_id );
+            if ( '' === $title ) {
+                $title = sprintf( __( 'Client #%d', 'trello-social-auto-publisher' ), (int) $client_id );
+            }
+
+            $key   = trim( (string) get_post_meta( $client_id, '_tts_trello_key', true ) );
+            $token = trim( (string) get_post_meta( $client_id, '_tts_trello_token', true ) );
+
+            if ( empty( $key ) || empty( $token ) ) {
+                $errors[] = sprintf(
+                    /* translators: %s: client name. */
+                    __( '%s: credenziali Trello mancanti.', 'trello-social-auto-publisher' ),
+                    $title
+                );
+                continue;
+            }
+
+            $url = add_query_arg(
+                array(
+                    'key'   => $key,
+                    'token' => $token,
+                ),
+                'https://api.trello.com/1/webhooks'
+            );
+
+            $response = wp_remote_get(
+                $url,
+                array(
+                    'timeout' => 10,
+                )
+            );
+
+            if ( is_wp_error( $response ) ) {
+                $errors[] = sprintf(
+                    /* translators: 1: client name. 2: error message. */
+                    __( '%1$s: %2$s', 'trello-social-auto-publisher' ),
+                    $title,
+                    $response->get_error_message()
+                );
+                continue;
+            }
+
+            $code = (int) wp_remote_retrieve_response_code( $response );
+
+            if ( 200 === $code ) {
+                $cached_result = true;
+                return $cached_result;
+            }
+
+            $body_message = '';
+            $body         = wp_remote_retrieve_body( $response );
+
+            if ( ! empty( $body ) ) {
+                $decoded_body = json_decode( $body, true );
+
+                if ( is_array( $decoded_body ) ) {
+                    if ( ! empty( $decoded_body['message'] ) && is_string( $decoded_body['message'] ) ) {
+                        $body_message = $decoded_body['message'];
+                    } elseif ( ! empty( $decoded_body['error'] ) && is_string( $decoded_body['error'] ) ) {
+                        $body_message = $decoded_body['error'];
+                    }
+                }
+
+                if ( empty( $body_message ) ) {
+                    $body_message = wp_strip_all_tags( $body );
+                }
+            }
+
+            if ( empty( $body_message ) ) {
+                $body_message = wp_remote_retrieve_response_message( $response );
+            }
+
+            if ( empty( $body_message ) ) {
+                if ( 429 === $code ) {
+                    $body_message = __( 'Limite di richieste Trello raggiunto. Riprovare più tardi.', 'trello-social-auto-publisher' );
+                } elseif ( 401 === $code || 403 === $code ) {
+                    $body_message = __( 'Credenziali Trello non valide o insufficienti.', 'trello-social-auto-publisher' );
+                } else {
+                    $body_message = __( 'Risposta inattesa dal servizio Trello.', 'trello-social-auto-publisher' );
+                }
+            }
+
+            $body_message = trim( $body_message );
+
+            if ( function_exists( 'mb_strlen' ) && mb_strlen( $body_message ) > 200 ) {
+                $body_message = mb_substr( $body_message, 0, 197 ) . '…';
+            } elseif ( strlen( $body_message ) > 200 ) {
+                $body_message = substr( $body_message, 0, 197 ) . '…';
+            }
+
+            $errors[] = sprintf(
+                /* translators: 1: client name. 2: error message. 3: HTTP status code. */
+                __( '%1$s: %2$s (HTTP %3$d)', 'trello-social-auto-publisher' ),
+                $title,
+                $body_message,
+                $code
+            );
+        }
+
+        if ( empty( $errors ) ) {
+            $errors[] = __( 'Impossibile verificare la connessione al webhook Trello.', 'trello-social-auto-publisher' );
+        }
+
+        $cached_result = new WP_Error( 'tts_webhook_connection_failed', implode( ' ', array_unique( $errors ) ) );
+
+        return $cached_result;
+    }
+
+    /**
      * Register REST API routes.
      */
     public function register_routes() {
