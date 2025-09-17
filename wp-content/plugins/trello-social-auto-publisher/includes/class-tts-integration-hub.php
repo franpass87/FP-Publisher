@@ -158,6 +158,7 @@ class TTS_Integration_Hub {
         // Schedule sync operations
         add_action( 'init', array( $this, 'schedule_integration_sync' ) );
         add_action( 'tts_integration_sync', array( $this, 'run_integration_sync' ) );
+        add_action( 'tts_integration_sync_single', array( $this, 'run_single_integration_sync' ), 10, 1 );
     }
 
     /**
@@ -1289,6 +1290,54 @@ class TTS_Integration_Hub {
     public function schedule_integration_sync() {
         if ( ! wp_next_scheduled( 'tts_integration_sync' ) ) {
             wp_schedule_event( time(), 'hourly', 'tts_integration_sync' );
+        }
+    }
+
+    /**
+     * Run single integration sync event.
+     *
+     * @param int $integration_id Integration ID.
+     */
+    public function run_single_integration_sync( int $integration_id ) {
+        $integration_id = absint( $integration_id );
+
+        if ( empty( $integration_id ) ) {
+            $message = 'TTS: Invalid integration ID provided for single sync event.';
+            error_log( $message );
+
+            if ( class_exists( 'TTS_Logger' ) ) {
+                TTS_Logger::log(
+                    $message,
+                    'warning',
+                    array(
+                        'integration_id' => $integration_id,
+                    )
+                );
+            }
+
+            $timestamp = wp_next_scheduled( 'tts_integration_sync_single', array( $integration_id ) );
+            if ( $timestamp ) {
+                wp_unschedule_event( $timestamp, 'tts_integration_sync_single', array( $integration_id ) );
+            }
+
+            return;
+        }
+
+        try {
+            $this->sync_integration_data( $integration_id, 'all' );
+        } catch ( Exception $e ) {
+            $message = sprintf( 'TTS: Single integration sync failed for ID %d: %s', $integration_id, $e->getMessage() );
+            error_log( $message );
+
+            if ( class_exists( 'TTS_Logger' ) ) {
+                TTS_Logger::log(
+                    $message,
+                    'error',
+                    array(
+                        'integration_id' => $integration_id,
+                    )
+                );
+            }
         }
     }
 
