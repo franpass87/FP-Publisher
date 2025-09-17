@@ -1575,8 +1575,8 @@ class TTS_Admin {
             echo '<div class="tts-connection-quick-status">';
             foreach ( $clients as $client ) {
                 $title = get_the_title( $client->ID );
-                $facebook_token = get_post_meta( $client->ID, '_tts_facebook_token', true );
-                $instagram_token = get_post_meta( $client->ID, '_tts_instagram_token', true );
+                $facebook_token = get_post_meta( $client->ID, '_tts_fb_token', true );
+                $instagram_token = get_post_meta( $client->ID, '_tts_ig_token', true );
                 $connected_count = 0;
                 
                 if ( $facebook_token ) $connected_count++;
@@ -4333,10 +4333,10 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         // Get client tokens and settings
         $trello_key = get_post_meta( $client_id, '_tts_trello_key', true );
         $trello_token = get_post_meta( $client_id, '_tts_trello_token', true );
-        $facebook_token = get_post_meta( $client_id, '_tts_facebook_token', true );
-        $instagram_token = get_post_meta( $client_id, '_tts_instagram_token', true );
-        $youtube_token = get_post_meta( $client_id, '_tts_youtube_token', true );
-        $tiktok_token = get_post_meta( $client_id, '_tts_tiktok_token', true );
+        $facebook_token = get_post_meta( $client_id, '_tts_fb_token', true );
+        $instagram_token = get_post_meta( $client_id, '_tts_ig_token', true );
+        $youtube_token = get_post_meta( $client_id, '_tts_yt_token', true );
+        $tiktok_token = get_post_meta( $client_id, '_tts_tt_token', true );
         
         echo '<div class="tts-client-card" data-client-id="' . esc_attr( $client_id ) . '">';
         echo '<h3>' . esc_html( $client_title ) . '</h3>';
@@ -4619,7 +4619,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         }
         
         // Test Facebook connection
-        $facebook_token = get_post_meta( $client_id, '_tts_facebook_token', true );
+        $facebook_token = get_post_meta( $client_id, '_tts_fb_token', true );
         if ( $facebook_token ) {
             $facebook_result = $this->test_facebook_client_connection( $facebook_token );
             $results['Facebook'] = $facebook_result;
@@ -4631,7 +4631,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         }
         
         // Test Instagram connection
-        $instagram_token = get_post_meta( $client_id, '_tts_instagram_token', true );
+        $instagram_token = get_post_meta( $client_id, '_tts_ig_token', true );
         if ( $instagram_token ) {
             $instagram_result = $this->test_instagram_client_connection( $instagram_token );
             $results['Instagram'] = $instagram_result;
@@ -4643,7 +4643,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         }
         
         // Test YouTube connection
-        $youtube_token = get_post_meta( $client_id, '_tts_youtube_token', true );
+        $youtube_token = get_post_meta( $client_id, '_tts_yt_token', true );
         if ( $youtube_token ) {
             $youtube_result = $this->test_youtube_client_connection( $youtube_token );
             $results['YouTube'] = $youtube_result;
@@ -4655,7 +4655,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         }
         
         // Test TikTok connection
-        $tiktok_token = get_post_meta( $client_id, '_tts_tiktok_token', true );
+        $tiktok_token = get_post_meta( $client_id, '_tts_tt_token', true );
         if ( $tiktok_token ) {
             $tiktok_result = $this->test_tiktok_client_connection( $tiktok_token );
             $results['TikTok'] = $tiktok_result;
