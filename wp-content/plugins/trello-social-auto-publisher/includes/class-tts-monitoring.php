@@ -438,9 +438,38 @@ class TTS_Monitoring {
      */
     private static function get_daily_stats() {
         global $wpdb;
-        
+
         $today = current_time( 'Y-m-d' );
-        
+        $api_channels = array(
+            'facebook',
+            'instagram',
+            'youtube',
+            'tiktok',
+            'blog',
+            'facebook_story',
+            'instagram_story',
+            'trello',
+            'webhook',
+        );
+
+        $api_calls = 0;
+
+        if ( ! empty( $api_channels ) ) {
+            $placeholders = implode( ', ', array_fill( 0, count( $api_channels ), '%s' ) );
+            $query_args   = array_merge( $api_channels, array( $today ) );
+
+            $api_calls = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "
+                        SELECT COUNT(*) FROM {$wpdb->prefix}tts_logs
+                        WHERE channel IN ($placeholders)
+                        AND DATE(created_at) = %s
+                    ",
+                    $query_args
+                )
+            );
+        }
+
         return array(
             'posts_created' => $wpdb->get_var( $wpdb->prepare( "
                 SELECT COUNT(*) FROM {$wpdb->posts}
@@ -458,11 +487,7 @@ class TTS_Monitoring {
                 WHERE status = 'error'
                 AND DATE(created_at) = %s
             ", $today ) ),
-            'api_calls' => $wpdb->get_var( $wpdb->prepare( "
-                SELECT COUNT(*) FROM {$wpdb->prefix}tts_logs
-                WHERE event_type LIKE '%api%'
-                AND DATE(created_at) = %s
-            ", $today ) )
+            'api_calls' => $api_calls,
         );
     }
     

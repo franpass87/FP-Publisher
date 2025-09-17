@@ -1230,7 +1230,7 @@ class TTS_Admin {
         
         // Get recent activity logs
         $recent_logs = $wpdb->get_results( $wpdb->prepare( "
-            SELECT event_type, status, message, created_at
+            SELECT channel, status, message, created_at
             FROM {$wpdb->prefix}tts_logs
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d HOUR)
             ORDER BY created_at DESC
@@ -1249,10 +1249,12 @@ class TTS_Admin {
                 $status_icon = $log['status'] === 'success' ? '✅' : 
                               ( $log['status'] === 'error' ? '❌' : '⚠️' );
                 
+                $channel = ! empty( $log['channel'] ) ? $log['channel'] : __( 'Unknown channel', 'trello-social-auto-publisher' );
+
                 echo '<div class="tts-timeline-item">';
                 echo '<div class="tts-timeline-icon">' . $status_icon . '</div>';
                 echo '<div class="tts-timeline-content">';
-                echo '<div class="tts-timeline-event">' . esc_html( $log['event_type'] ) . '</div>';
+                echo '<div class="tts-timeline-event">' . esc_html( $channel ) . '</div>';
                 echo '<div class="tts-timeline-message">' . esc_html( wp_trim_words( $log['message'], 10 ) ) . '</div>';
                 echo '<div class="tts-timeline-time">' . esc_html( human_time_diff( strtotime( $log['created_at'] ) ) ) . ' ago</div>';
                 echo '</div>';
