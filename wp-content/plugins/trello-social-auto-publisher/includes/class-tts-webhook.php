@@ -389,7 +389,7 @@ class TTS_Webhook {
                 update_post_meta( $post_id, '_tts_publish_at', $publish_at );
                 $timestamp = strtotime( $publish_at );
                 if ( $timestamp ) {
-                    as_schedule_single_action( $timestamp, 'tts_publish_social_post', array( 'post_id' => $post_id ) );
+                    as_schedule_single_action( $timestamp, 'tts_publish_social_post', array( $post_id ) );
                     tts_log_event(
                         $post_id,
                         'webhook',
