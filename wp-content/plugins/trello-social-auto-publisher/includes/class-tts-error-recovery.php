@@ -410,19 +410,137 @@ class TTS_Error_Recovery {
      * Retry API publish operation
      */
     private function retry_api_publish( $context ) {
-        $client_id = $context['client_id'] ?? 0;
-        $post_data = $context['post_data'] ?? array();
-        
-        if ( ! $client_id || empty( $post_data ) ) {
+        $post_id = 0;
+
+        $possible_ids = array(
+            $context['post_id'] ?? 0,
+            $context['social_post_id'] ?? 0,
+        );
+
+        if ( isset( $context['post_data'] ) ) {
+            $post_data = $context['post_data'];
+
+            if ( is_array( $post_data ) ) {
+                $possible_ids[] = $post_data['post_id'] ?? 0;
+                $possible_ids[] = $post_data['ID'] ?? 0;
+            } elseif ( is_numeric( $post_data ) ) {
+                $possible_ids[] = $post_data;
+            }
+        }
+
+        foreach ( $possible_ids as $candidate ) {
+            if ( is_numeric( $candidate ) ) {
+                $candidate = absint( $candidate );
+                if ( $candidate ) {
+                    $post_id = $candidate;
+                    break;
+                }
+            }
+        }
+
+        if ( ! $post_id ) {
             return array(
                 'success' => false,
-                'error' => 'Missing required context data'
+                'error' => 'Missing social post ID in retry context'
             );
         }
-        
-        // Attempt to republish
-        $client = new TTS_Client( $client_id );
-        return $client->publish_post( $post_data );
+
+        $channel = '';
+        $channel_candidates = array();
+
+        if ( isset( $context['channel'] ) ) {
+            $channel_candidates = array_merge( $channel_candidates, (array) $context['channel'] );
+        }
+
+        if ( isset( $context['channels'] ) && is_array( $context['channels'] ) ) {
+            $channel_candidates = array_merge( $channel_candidates, $context['channels'] );
+        }
+
+        if ( isset( $context['post_data'] ) && is_array( $context['post_data'] ) ) {
+            if ( isset( $context['post_data']['channel'] ) ) {
+                $channel_candidates[] = $context['post_data']['channel'];
+            }
+            if ( isset( $context['post_data']['social_channel'] ) ) {
+                $channel_candidates[] = $context['post_data']['social_channel'];
+            }
+        }
+
+        foreach ( $channel_candidates as $candidate_channel ) {
+            if ( is_string( $candidate_channel ) && '' !== $candidate_channel ) {
+                $sanitized = sanitize_key( $candidate_channel );
+                if ( '' !== $sanitized ) {
+                    $channel = $sanitized;
+                    break;
+                }
+            }
+        }
+
+        if ( ! has_action( 'tts_publish_social_post' ) ) {
+            return array(
+                'success' => false,
+                'error' => 'Publish pipeline is not registered'
+            );
+        }
+
+        $args = array( 'post_id' => $post_id );
+        if ( $channel ) {
+            $args['channel'] = $channel;
+        }
+
+        $previous_status = get_post_meta( $post_id, '_published_status', true );
+
+        try {
+            do_action( 'tts_publish_social_post', $args );
+        } catch ( Throwable $throwable ) {
+            return array(
+                'success' => false,
+                'error' => $throwable->getMessage()
+            );
+        }
+
+        $status_after = get_post_meta( $post_id, '_published_status', true );
+        $retry_after = get_post_meta( $post_id, '_tts_retry_count', true );
+        $retry_after = is_numeric( $retry_after ) ? (int) $retry_after : 0;
+
+        if ( 'published' === $status_after && 0 === $retry_after ) {
+            $response = array(
+                'success' => true,
+                'post_id' => $post_id
+            );
+
+            if ( $channel ) {
+                $response['channel'] = $channel;
+            }
+
+            return $response;
+        }
+
+        if ( 'published' === $previous_status && 0 === $retry_after ) {
+            $response = array(
+                'success' => true,
+                'post_id' => $post_id,
+                'message' => 'Post already marked as published'
+            );
+
+            if ( $channel ) {
+                $response['channel'] = $channel;
+            }
+
+            return $response;
+        }
+
+        if ( $retry_after > 0 ) {
+            return array(
+                'success' => false,
+                'error' => 'Publishing pipeline scheduled another retry',
+                'retry_count' => $retry_after
+            );
+        }
+
+        return array(
+            'success' => false,
+            'error' => 'Publishing pipeline did not complete successfully'
+        );
     }
 
     /**
