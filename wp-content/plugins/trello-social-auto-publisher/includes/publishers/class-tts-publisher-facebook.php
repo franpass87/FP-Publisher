@@ -15,6 +15,136 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Publisher_Facebook {
 
     /**
+     * Upload a single media item to Facebook.
+     *
+     * @param string $media_path Remote URL to the media item.
+     * @param array  $context    Additional context (post_id, credentials, message, etc.).
+     * @return array Result data with success flag.
+     */
+    public function upload_media( $media_path, array $context = array() ) {
+        $post_id     = isset( $context['post_id'] ) ? absint( $context['post_id'] ) : 0;
+        $credentials = $context['credentials'] ?? '';
+
+        list( $page_id, $token ) = $this->resolve_credentials( $credentials, $post_id, $context );
+
+        if ( empty( $page_id ) || empty( $token ) ) {
+            $error = __( 'Invalid Facebook credentials', 'trello-social-auto-publisher' );
+            tts_log_event( $post_id, 'facebook', 'error', $error, '' );
+
+            return array(
+                'success'    => false,
+                'error'      => $error,
+                'error_code' => 'facebook_bad_credentials',
+            );
+        }
+
+        if ( empty( $media_path ) ) {
+            $error = __( 'Missing media path for Facebook upload', 'trello-social-auto-publisher' );
+            tts_log_event( $post_id, 'facebook', 'error', $error, '' );
+
+            return array(
+                'success'    => false,
+                'error'      => $error,
+                'error_code' => 'facebook_missing_media',
+            );
+        }
+
+        $media_type = strtolower( $context['media_type'] ?? '' );
+        if ( ! $media_type ) {
+            $filetype = wp_check_filetype( $media_path );
+            if ( ! empty( $filetype['type'] ) ) {
+                if ( 0 === strpos( $filetype['type'], 'video/' ) ) {
+                    $media_type = 'video';
+                } elseif ( 0 === strpos( $filetype['type'], 'image/' ) ) {
+                    $media_type = 'image';
+                }
+            }
+        }
+
+        if ( 'photo' === $media_type ) {
+            $media_type = 'image';
+        }
+
+        if ( ! in_array( $media_type, array( 'video', 'image' ), true ) ) {
+            $media_type = 'image';
+        }
+
+        $message = $context['message'] ?? '';
+        $lat     = $context['lat'] ?? ( $post_id ? get_post_meta( $post_id, '_tts_lat', true ) : '' );
+        $lng     = $context['lng'] ?? ( $post_id ? get_post_meta( $post_id, '_tts_lng', true ) : '' );
+
+        if ( 'video' === $media_type ) {
+            $endpoint = sprintf( 'https://graph.facebook.com/%s/videos', $page_id );
+            $body     = array(
+                'access_token' => $token,
+                'file_url'     => $media_path,
+            );
+
+            if ( '' !== $message ) {
+                $body['description'] = $message;
+            }
+        } else {
+            $endpoint = sprintf( 'https://graph.facebook.com/%s/photos', $page_id );
+            $body     = array(
+                'access_token' => $token,
+                'source'       => $media_path,
+            );
+
+            if ( '' !== $message ) {
+                $body['message'] = $message;
+            }
+        }
+
+        if ( $lat && $lng ) {
+            $body['location'] = array(
+                'latitude'  => $lat,
+                'longitude' => $lng,
+            );
+        }
+
+        $result = wp_remote_post(
+            $endpoint,
+            array(
+                'body'    => $body,
+                'timeout' => 20,
+            )
+        );
+
+        if ( is_wp_error( $result ) ) {
+            $error = $result->get_error_message();
+            tts_log_event( $post_id, 'facebook', 'error', $error, '' );
+
+            return array(
+                'success'    => false,
+                'error'      => $error,
+                'error_code' => 'facebook_request_error',
+            );
+        }
+
+        $code = wp_remote_retrieve_response_code( $result );
+        $data = json_decode( wp_remote_retrieve_body( $result ), true );
+
+        if ( 200 !== $code || empty( $data['id'] ) ) {
+            $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            tts_log_event( $post_id, 'facebook', 'error', $error, $data );
+
+            return array(
+                'success'    => false,
+                'error'      => $error,
+                'error_code' => 'facebook_error',
+                'error_data' => $data,
+            );
+        }
+
+        return array(
+            'success'    => true,
+            'data'       => $data,
+            'media_type' => $media_type,
+            'endpoint'   => $endpoint,
+        );
+    }
+
+    /**
      * Publish the post to Facebook.
      *
      * Requires the `pages_manage_posts` permission to publish and
@@ -124,85 +254,107 @@ class TTS_Publisher_Facebook {
             return new \WP_Error( 'facebook_error', $error, $data );
         }
 
+        $last_response  = array();
+        $common_context = array(
+            'post_id'     => $post_id,
+            'credentials' => $credentials,
+            'token'       => $token,
+            'page_id'     => $page_id,
+            'lat'         => $lat,
+            'lng'         => $lng,
+        );
+
         foreach ( $videos as $index => $video_id ) {
-            $endpoint   = sprintf( 'https://graph.facebook.com/%s/videos', $page_id );
-            $video_body = array(
-                'access_token' => $token,
-                'file_url'     => wp_get_attachment_url( $video_id ),
-            );
-            if ( 0 === $index ) {
-                $video_body['description'] = $message;
-            }
-            if ( $lat && $lng ) {
-                $video_body['location'] = array(
-                    'latitude'  => $lat,
-                    'longitude' => $lng,
-                );
-            }
-            $result = wp_remote_post(
-                $endpoint,
-                array(
-                    'body'    => $video_body,
-                    'timeout' => 20,
+            $video_url    = wp_get_attachment_url( $video_id );
+            $video_result = $this->upload_media(
+                $video_url,
+                array_merge(
+                    $common_context,
+                    array(
+                        'media_type' => 'video',
+                        'message'    => 0 === $index ? $message : '',
+                        'media_id'   => $video_id,
+                    )
                 )
             );
-            if ( is_wp_error( $result ) ) {
-                $error = $result->get_error_message();
-                tts_log_event( $post_id, 'facebook', 'error', $error, '' );
+
+            if ( empty( $video_result['success'] ) ) {
                 tts_notify_publication( $post_id, 'error', 'facebook' );
-                return $result;
+                $error_code = $video_result['error_code'] ?? 'facebook_error';
+                $error_data = $video_result['error_data'] ?? array();
+                $error_msg  = $video_result['error'] ?? __( 'Unknown error', 'trello-social-auto-publisher' );
+
+                return new \WP_Error( $error_code, $error_msg, $error_data );
             }
-            $code = wp_remote_retrieve_response_code( $result );
-            $data = json_decode( wp_remote_retrieve_body( $result ), true );
-            if ( 200 !== $code || empty( $data['id'] ) ) {
-                $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
-                tts_log_event( $post_id, 'facebook', 'error', $error, $data );
-                tts_notify_publication( $post_id, 'error', 'facebook' );
-                return new \WP_Error( 'facebook_error', $error, $data );
-            }
+
+            $last_response = $video_result['data'];
         }
 
         foreach ( $images as $image_id => $image_url ) {
-            $endpoint  = sprintf( 'https://graph.facebook.com/%s/photos', $page_id );
-            $img_body  = array(
-                'access_token' => $token,
-                'source'       => $image_url,
-            );
-            if ( empty( $videos ) && $image_id === array_key_first( $images ) ) {
-                $img_body['message'] = $message;
-            }
-            if ( $lat && $lng ) {
-                $img_body['location'] = array(
-                    'latitude'  => $lat,
-                    'longitude' => $lng,
-                );
-            }
-            $result = wp_remote_post(
-                $endpoint,
-                array(
-                    'body'    => $img_body,
-                    'timeout' => 20,
+            $image_result = $this->upload_media(
+                $image_url,
+                array_merge(
+                    $common_context,
+                    array(
+                        'media_type' => 'image',
+                        'message'    => ( empty( $videos ) && $image_id === array_key_first( $images ) ) ? $message : '',
+                        'media_id'   => $image_id,
+                    )
                 )
             );
-            if ( is_wp_error( $result ) ) {
-                $error = $result->get_error_message();
-                tts_log_event( $post_id, 'facebook', 'error', $error, '' );
+
+            if ( empty( $image_result['success'] ) ) {
                 tts_notify_publication( $post_id, 'error', 'facebook' );
-                return $result;
+                $error_code = $image_result['error_code'] ?? 'facebook_error';
+                $error_data = $image_result['error_data'] ?? array();
+                $error_msg  = $image_result['error'] ?? __( 'Unknown error', 'trello-social-auto-publisher' );
+
+                return new \WP_Error( $error_code, $error_msg, $error_data );
             }
-            $code = wp_remote_retrieve_response_code( $result );
-            $data = json_decode( wp_remote_retrieve_body( $result ), true );
-            if ( 200 !== $code || empty( $data['id'] ) ) {
-                $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
-                tts_log_event( $post_id, 'facebook', 'error', $error, $data );
-                tts_notify_publication( $post_id, 'error', 'facebook' );
-                return new \WP_Error( 'facebook_error', $error, $data );
-            }
+
+            $last_response = $image_result['data'];
         }
 
         $response = __( 'Published to Facebook', 'trello-social-auto-publisher' );
-        tts_log_event( $post_id, 'facebook', 'success', $response, $data );
+        tts_log_event( $post_id, 'facebook', 'success', $response, $last_response );
         tts_notify_publication( $post_id, 'success', 'facebook' );
         return $response;
+    }
+
+    /**
+     * Resolve Facebook page credentials.
+     *
+     * @param string $credentials Raw credentials string.
+     * @param int    $post_id     Related post ID.
+     * @param array  $context     Additional context.
+     * @return array Array with page ID and token.
+     */
+    private function resolve_credentials( $credentials, $post_id, array $context = array() ) {
+        $page_id = $context['page_id'] ?? '';
+        $token   = $context['token'] ?? '';
+
+        if ( empty( $page_id ) || empty( $token ) ) {
+            if ( ! empty( $credentials ) ) {
+                if ( false !== strpos( $credentials, '|' ) ) {
+                    list( $cred_page_id, $cred_token ) = array_pad( explode( '|', $credentials, 2 ), 2, '' );
+                    if ( empty( $page_id ) ) {
+                        $page_id = $cred_page_id;
+                    }
+                    if ( empty( $token ) ) {
+                        $token = $cred_token;
+                    }
+                } else {
+                    if ( empty( $token ) ) {
+                        $token = $credentials;
+                    }
+                }
+            }
+        }
+
+        if ( empty( $page_id ) && $post_id ) {
+            $page_id = get_post_meta( $post_id, '_tts_fb_page_id', true );
+        }
+
+        return array( $page_id, $token );
     }
 }
