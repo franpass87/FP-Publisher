@@ -257,7 +257,7 @@ class TTS_Performance {
      *
      * @return int Health score (0-100).
      */
-    private static function get_system_health_score() {
+    public static function get_system_health_score() {
         $score = 100;
         $checks = array();
         
