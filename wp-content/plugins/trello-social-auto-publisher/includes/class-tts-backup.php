@@ -192,7 +192,7 @@ class TTS_Backup {
         global $wpdb;
         
         $table_name = $wpdb->prefix . 'tts_logs';
-        return $wpdb->get_results( "SELECT * FROM {$table_name} ORDER BY timestamp DESC LIMIT 1000", ARRAY_A );
+        return $wpdb->get_results( "SELECT * FROM {$table_name} ORDER BY created_at DESC LIMIT 1000", ARRAY_A );
     }
 
     /**
