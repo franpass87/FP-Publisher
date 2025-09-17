@@ -68,8 +68,8 @@ class TTS_REST {
     public function publish( WP_REST_Request $request ) {
         $id = intval( $request['id'] );
 
-        // Trigger publish via scheduler.
-        TTS_Scheduler::publish_social_post( array( 'post_id' => $id ) );
+        // Trigger publish via scheduler using the registered action hook.
+        do_action( 'tts_publish_social_post', array( 'post_id' => $id ) );
 
         return rest_ensure_response( array( 'post_id' => $id ) );
     }
