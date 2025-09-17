@@ -43,19 +43,18 @@ class TTS_Security_Audit {
      * Initialize security audit system
      */
     public function __construct() {
+        $this->ensure_audit_table_exists();
+
         add_action( 'init', array( $this, 'init_security_monitoring' ) );
         add_action( 'wp_ajax_tts_get_security_audit', array( $this, 'ajax_get_security_audit' ) );
         add_action( 'wp_ajax_tts_get_security_stats', array( $this, 'ajax_get_security_stats' ) );
         add_action( 'wp_ajax_tts_clear_audit_logs', array( $this, 'ajax_clear_audit_logs' ) );
-        
+
         // Hook into WordPress security events
         add_action( 'wp_login', array( $this, 'log_login_success' ), 10, 2 );
         add_action( 'wp_login_failed', array( $this, 'log_login_failure' ) );
         add_action( 'user_register', array( $this, 'log_user_registration' ) );
-        
-        // Create audit table on activation
-        register_activation_hook( __FILE__, array( $this, 'create_audit_table' ) );
-        
+
         // Schedule cleanup
         add_action( 'tts_daily_security_cleanup', array( $this, 'cleanup_old_logs' ) );
         if ( ! wp_next_scheduled( 'tts_daily_security_cleanup' ) ) {
@@ -85,9 +84,9 @@ class TTS_Security_Audit {
      */
     public function create_audit_table() {
         global $wpdb;
-        
+
         $table_name = $wpdb->prefix . $this->audit_table;
-        
+
         $charset_collate = $wpdb->get_charset_collate();
         
         $sql = "CREATE TABLE $table_name (
@@ -112,6 +111,26 @@ class TTS_Security_Audit {
         
         require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
         dbDelta( $sql );
+    }
+
+    /**
+     * Ensure the audit table exists before the logger is used.
+     */
+    private function ensure_audit_table_exists() {
+        global $wpdb;
+
+        if ( ! isset( $wpdb ) || empty( $wpdb->prefix ) ) {
+            return;
+        }
+
+        $table_name = $wpdb->prefix . $this->audit_table;
+        $table_exists = $wpdb->get_var(
+            $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) )
+        );
+
+        if ( $table_name !== $table_exists ) {
+            $this->create_audit_table();
+        }
     }
 
     /**
@@ -720,7 +739,7 @@ class TTS_Security_Audit {
      */
     public function log_user_registration( $user_id ) {
         $user = get_user_by( 'id', $user_id );
-        
+
         $this->log_security_event(
             self::EVENT_DATA_MODIFICATION,
             sprintf( 'New user registered: %s', $user->user_login ),
@@ -732,7 +751,12 @@ class TTS_Security_Audit {
             )
         );
     }
-}
 
-// Initialize security audit system
-new TTS_Security_Audit();
+    /**
+     * Handle plugin activation by ensuring the audit table exists.
+     */
+    public static function activate() {
+        $instance = new self();
+        $instance->create_audit_table();
+    }
+}

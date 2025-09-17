@@ -20,6 +20,25 @@ if ( ! defined( 'TSAP_PLUGIN_DIR' ) ) {
     define( 'TSAP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 }
 
+register_activation_hook( __FILE__, 'tsap_plugin_activate' );
+
+/**
+ * Handle plugin activation tasks.
+ */
+function tsap_plugin_activate() {
+    require_once TSAP_PLUGIN_DIR . 'includes/tts-logger.php';
+
+    if ( function_exists( 'tts_create_logs_table' ) ) {
+        tts_create_logs_table();
+    }
+
+    require_once TSAP_PLUGIN_DIR . 'includes/class-tts-security-audit.php';
+
+    if ( class_exists( 'TTS_Security_Audit' ) ) {
+        TTS_Security_Audit::activate();
+    }
+}
+
 add_action( 'plugins_loaded', function () {
     if ( ! function_exists( 'as_schedule_single_action' ) ) {
         add_action( 'admin_notices', function () {
@@ -82,8 +101,10 @@ add_action( 'plugins_loaded', function () {
 
     // Load REST API endpoints after other includes.
     require_once TSAP_PLUGIN_DIR . 'includes/class-tts-rest.php';
-    // Register activation hook.
-    register_activation_hook( __FILE__, 'tts_create_logs_table' );
+
+    if ( class_exists( 'TTS_Security_Audit' ) && ! isset( $GLOBALS['tts_security_audit'] ) ) {
+        $GLOBALS['tts_security_audit'] = new TTS_Security_Audit();
+    }
 
     // Load admin files when in the dashboard.
     if ( is_admin() ) {
