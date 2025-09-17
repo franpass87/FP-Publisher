@@ -406,6 +406,302 @@ class TTS_Client {
     }
 
     /**
+     * Check the validity of the saved social tokens for a client.
+     *
+     * @param int $client_id Client post ID.
+     * @return bool|WP_Error True when at least one token is valid, WP_Error otherwise.
+     */
+    public static function check_token( $client_id ) {
+        $client_id = absint( $client_id );
+
+        if ( ! $client_id ) {
+            return new WP_Error( 'invalid_client', __( 'ID client non valido.', 'trello-social-auto-publisher' ) );
+        }
+
+        if ( 'tts_client' !== get_post_type( $client_id ) ) {
+            return new WP_Error( 'invalid_client', __( 'Il post indicato non è un client valido.', 'trello-social-auto-publisher' ) );
+        }
+
+        $channels = array(
+            'facebook'  => array(
+                'meta'  => '_tts_fb_token',
+                'label' => __( 'Facebook', 'trello-social-auto-publisher' ),
+            ),
+            'instagram' => array(
+                'meta'  => '_tts_ig_token',
+                'label' => __( 'Instagram', 'trello-social-auto-publisher' ),
+            ),
+            'youtube'   => array(
+                'meta'  => '_tts_yt_token',
+                'label' => __( 'YouTube', 'trello-social-auto-publisher' ),
+            ),
+            'tiktok'    => array(
+                'meta'  => '_tts_tt_token',
+                'label' => __( 'TikTok', 'trello-social-auto-publisher' ),
+            ),
+        );
+
+        $valid_tokens   = array();
+        $missing_tokens = array();
+        $errors         = array();
+        $token_found    = false;
+
+        foreach ( $channels as $channel => $data ) {
+            $token = get_post_meta( $client_id, $data['meta'], true );
+
+            if ( empty( $token ) ) {
+                $missing_tokens[] = $data['label'];
+                continue;
+            }
+
+            $token_found = true;
+
+            $validation = self::validate_channel_token( $channel, $token );
+
+            if ( is_wp_error( $validation ) ) {
+                $errors[] = $validation->get_error_message();
+                continue;
+            }
+
+            if ( true === $validation ) {
+                $valid_tokens[] = $data['label'];
+            }
+        }
+
+        if ( ! empty( $valid_tokens ) ) {
+            return true;
+        }
+
+        $messages = array();
+
+        if ( ! empty( $errors ) ) {
+            $messages[] = implode( ' ', array_unique( $errors ) );
+        }
+
+        if ( ! $token_found ) {
+            if ( ! empty( $missing_tokens ) ) {
+                $messages[] = sprintf(
+                    /* translators: %s: comma separated list of channels. */
+                    __( 'Token mancanti per: %s.', 'trello-social-auto-publisher' ),
+                    implode( ', ', $missing_tokens )
+                );
+            } else {
+                $messages[] = __( 'Nessun token configurato per questo client.', 'trello-social-auto-publisher' );
+            }
+
+            return new WP_Error( 'missing_tokens', implode( ' ', $messages ) );
+        }
+
+        if ( ! empty( $missing_tokens ) ) {
+            $messages[] = sprintf(
+                /* translators: %s: comma separated list of channels. */
+                __( 'Token mancanti per: %s.', 'trello-social-auto-publisher' ),
+                implode( ', ', $missing_tokens )
+            );
+        }
+
+        if ( empty( $messages ) ) {
+            $messages[] = __( 'Impossibile verificare i token del client.', 'trello-social-auto-publisher' );
+        }
+
+        return new WP_Error( 'invalid_tokens', implode( ' ', $messages ) );
+    }
+
+    /**
+     * Validate a single token by channel.
+     *
+     * @param string $channel Channel slug.
+     * @param string $token   Access token value.
+     * @return bool|WP_Error True when valid, WP_Error otherwise.
+     */
+    protected static function validate_channel_token( $channel, $token ) {
+        switch ( $channel ) {
+            case 'facebook':
+                return self::validate_facebook_token( $token );
+            case 'instagram':
+                return self::validate_instagram_token( $token );
+            case 'youtube':
+                return self::validate_youtube_token( $token );
+            case 'tiktok':
+                return self::validate_tiktok_token( $token );
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate a Facebook token.
+     *
+     * @param string $token Access token.
+     * @return bool|WP_Error
+     */
+    protected static function validate_facebook_token( $token ) {
+        $url = add_query_arg(
+            array(
+                'fields'       => 'id',
+                'access_token' => $token,
+            ),
+            'https://graph.facebook.com/v18.0/me'
+        );
+
+        $response = wp_remote_get(
+            $url,
+            array(
+                'timeout' => 5,
+            )
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error(
+                'fb_request_failed',
+                sprintf(
+                    __( 'Facebook: %s', 'trello-social-auto-publisher' ),
+                    $response->get_error_message()
+                )
+            );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( 200 !== $code || empty( $body['id'] ) ) {
+            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'token non valido.', 'trello-social-auto-publisher' );
+
+            return new WP_Error(
+                'fb_invalid_token',
+                sprintf(
+                    __( 'Facebook: %s', 'trello-social-auto-publisher' ),
+                    $message
+                )
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate an Instagram token.
+     *
+     * @param string $token Access token.
+     * @return bool|WP_Error
+     */
+    protected static function validate_instagram_token( $token ) {
+        $url = add_query_arg(
+            array(
+                'fields'       => 'id',
+                'access_token' => $token,
+            ),
+            'https://graph.instagram.com/me'
+        );
+
+        $response = wp_remote_get(
+            $url,
+            array(
+                'timeout' => 5,
+            )
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error(
+                'ig_request_failed',
+                sprintf(
+                    __( 'Instagram: %s', 'trello-social-auto-publisher' ),
+                    $response->get_error_message()
+                )
+            );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( 200 !== $code || empty( $body['id'] ) ) {
+            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'token non valido.', 'trello-social-auto-publisher' );
+
+            return new WP_Error(
+                'ig_invalid_token',
+                sprintf(
+                    __( 'Instagram: %s', 'trello-social-auto-publisher' ),
+                    $message
+                )
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate a YouTube token.
+     *
+     * @param string $token Access token.
+     * @return bool|WP_Error
+     */
+    protected static function validate_youtube_token( $token ) {
+        $url = add_query_arg(
+            array(
+                'access_token' => $token,
+            ),
+            'https://oauth2.googleapis.com/tokeninfo'
+        );
+
+        $response = wp_remote_get(
+            $url,
+            array(
+                'timeout' => 5,
+            )
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error(
+                'yt_request_failed',
+                sprintf(
+                    __( 'YouTube: %s', 'trello-social-auto-publisher' ),
+                    $response->get_error_message()
+                )
+            );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( 200 !== $code ) {
+            $message = '';
+            if ( isset( $body['error_description'] ) ) {
+                $message = $body['error_description'];
+            } elseif ( isset( $body['error'] ) ) {
+                $message = $body['error'];
+            } else {
+                $message = __( 'token non valido.', 'trello-social-auto-publisher' );
+            }
+
+            return new WP_Error(
+                'yt_invalid_token',
+                sprintf(
+                    __( 'YouTube: %s', 'trello-social-auto-publisher' ),
+                    $message
+                )
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate a TikTok token.
+     *
+     * @param string $token Access token.
+     * @return bool|WP_Error
+     */
+    protected static function validate_tiktok_token( $token ) {
+        if ( empty( $token ) ) {
+            return new WP_Error( 'tt_invalid_token', __( 'TikTok: token non valido.', 'trello-social-auto-publisher' ) );
+        }
+
+        // No lightweight public endpoint is available for validation without additional credentials.
+        // Assume the token is valid when present to avoid unnecessary failures.
+        return true;
+    }
+
+    /**
      * Generic handler for OAuth callbacks.
      *
      * @param string $channel Social channel slug.
