@@ -41,15 +41,13 @@ class TTS_Error_Recovery {
         add_action( 'wp_ajax_tts_get_error_analytics', array( $this, 'ajax_get_error_analytics' ) );
         add_action( 'wp_ajax_tts_clear_retry_queue', array( $this, 'ajax_clear_retry_queue' ) );
         add_action( 'wp_ajax_tts_get_retry_queue', array( $this, 'ajax_get_retry_queue' ) );
-        
-        // Schedule retry processor
-        add_action( 'tts_process_retry_queue', array( $this, 'process_retry_queue' ) );
-        if ( ! wp_next_scheduled( 'tts_process_retry_queue' ) ) {
-            wp_schedule_event( time(), 'every_15_minutes', 'tts_process_retry_queue' );
-        }
-        
-        // Add custom cron schedule
+
+        // Ensure the custom cron schedule is registered before attempting to schedule events.
         add_filter( 'cron_schedules', array( $this, 'add_custom_cron_schedules' ) );
+
+        // Schedule retry processor once WordPress is fully initialized.
+        add_action( 'tts_process_retry_queue', array( $this, 'process_retry_queue' ) );
+        add_action( 'init', array( $this, 'maybe_schedule_retry_queue' ) );
     }
 
     /**
@@ -61,6 +59,15 @@ class TTS_Error_Recovery {
             'display' => __( 'Every 15 minutes', 'trello-social-auto-publisher' )
         );
         return $schedules;
+    }
+
+    /**
+     * Ensure the retry queue cron event is scheduled.
+     */
+    public function maybe_schedule_retry_queue() {
+        if ( ! wp_next_scheduled( 'tts_process_retry_queue' ) ) {
+            wp_schedule_event( time(), 'every_15_minutes', 'tts_process_retry_queue' );
+        }
     }
 
     /**
