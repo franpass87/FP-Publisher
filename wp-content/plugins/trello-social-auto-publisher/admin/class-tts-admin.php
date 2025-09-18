@@ -40,6 +40,7 @@ class TTS_Admin {
         add_action( 'wp_ajax_tts_generate_report', array( $this, 'ajax_generate_report' ) );
         add_action( 'wp_ajax_tts_quick_connection_check', array( $this, 'ajax_quick_connection_check' ) );
         add_action( 'wp_ajax_tts_refresh_health', array( $this, 'ajax_refresh_health' ) );
+        add_action( 'wp_ajax_tts_save_social_settings', array( $this, 'ajax_save_social_settings' ) );
         add_action( 'wp_ajax_tts_show_export_modal', array( $this, 'ajax_show_export_modal' ) );
         add_action( 'wp_ajax_tts_show_import_modal', array( $this, 'ajax_show_import_modal' ) );
         add_action( 'wp_ajax_tts_test_client_connections', array( $this, 'ajax_test_client_connections' ) );
@@ -3229,17 +3230,57 @@ class TTS_Social_Posts_Table extends WP_List_Table {
      */
     public function ajax_check_rate_limits() {
         check_ajax_referer( 'tts_check_rate_limits', 'nonce' );
-        
+
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( __( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
         }
-        
+
         $platform = sanitize_key( $_POST['platform'] );
         $limits = $this->get_platform_rate_limits( $platform );
-        
+
         wp_send_json_success( $limits );
     }
-    
+
+    /**
+     * AJAX handler for saving social media settings.
+     */
+    public function ajax_save_social_settings() {
+        check_ajax_referer( 'tts_ajax_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'fp-publisher' ) ) );
+        }
+
+        $platform = isset( $_POST['platform'] ) ? sanitize_key( wp_unslash( $_POST['platform'] ) ) : '';
+        $credentials = isset( $_POST['credentials'] ) ? wp_unslash( $_POST['credentials'] ) : array();
+
+        if ( empty( $platform ) ) {
+            wp_send_json_error( array( 'message' => __( 'Invalid platform specified.', 'fp-publisher' ) ) );
+        }
+
+        if ( ! is_array( $credentials ) ) {
+            wp_send_json_error( array( 'message' => __( 'Invalid credentials payload.', 'fp-publisher' ) ) );
+        }
+
+        $sanitized_credentials = array();
+
+        foreach ( $credentials as $key => $value ) {
+            $sanitized_key = sanitize_key( $key );
+            $sanitized_credentials[ $sanitized_key ] = sanitize_text_field( $value );
+        }
+
+        $social_apps = get_option( 'tts_social_apps', array() );
+        $social_apps[ $platform ] = $sanitized_credentials;
+
+        $updated = update_option( 'tts_social_apps', $social_apps );
+
+        if ( false === $updated && get_option( 'tts_social_apps', array() ) !== $social_apps ) {
+            wp_send_json_error( array( 'message' => __( 'Unable to save social media credentials. Please try again.', 'fp-publisher' ) ) );
+        }
+
+        wp_send_json_success( array( 'message' => __( 'Social media credentials saved successfully.', 'fp-publisher' ) ) );
+    }
+
     /**
      * Test platform connection.
      *
