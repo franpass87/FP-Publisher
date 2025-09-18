@@ -48,7 +48,7 @@ class TTS_Frequency_Status_Page {
         wp_enqueue_script(
             'tts-frequency-status',
             plugin_dir_url( __FILE__ ) . '../admin/js/tts-frequency-status.js',
-            array( 'jquery' ),
+            array( 'jquery', 'jquery-effects-core', 'jquery-effects-highlight' ),
             '1.0',
             true
         );

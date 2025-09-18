@@ -53,12 +53,20 @@
     background-color: #fffbf0;
 }
 
+.tts-channel-row {
+    transition: background-color 0.4s ease-in-out;
+}
+
 .tts-channel-row.status-urgent {
     background-color: #fff2e8;
 }
 
 .tts-channel-row.status-overdue {
     background-color: #fff1f0;
+}
+
+.tts-highlight-fallback {
+    background-color: #fef2f2 !important;
 }
 
 .tts-progress-bar {
