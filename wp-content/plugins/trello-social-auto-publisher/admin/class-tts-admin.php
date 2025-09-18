@@ -1519,7 +1519,7 @@ class TTS_Admin {
                 echo '</span>';
                 echo '</td>';
                 echo '<td>';
-                echo '<a href="' . esc_url(admin_url('admin.php?page=tts-social-posts&action=log&post=' . $post->ID)) . '" class="tts-btn small secondary">';
+                echo '<a href="' . esc_url(admin_url('admin.php?page=fp-publisher-social-posts&action=log&post=' . $post->ID)) . '" class="tts-btn small secondary">';
                 echo esc_html__('View Log', 'trello-social-auto-publisher');
                 echo '</a>';
                 echo '</td>';
@@ -2377,7 +2377,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         $publish_url = wp_nonce_url(
             add_query_arg(
                 array(
-                    'page'   => 'tts-social-posts',
+                    'page'   => 'fp-publisher-social-posts',
                     'action' => 'publish',
                     'post'   => $item['ID'],
                 ),
@@ -2389,7 +2389,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         $actions = array(
             'publish'  => sprintf( '<a href="%s">%s</a>', esc_url( $publish_url ), __( 'Publish Now', 'trello-social-auto-publisher' ) ),
             'edit'     => sprintf( '<a href="%s">%s</a>', get_edit_post_link( $item['ID'] ), __( 'Edit', 'trello-social-auto-publisher' ) ),
-            'view_log' => sprintf( '<a href="%s">%s</a>', esc_url( add_query_arg( array( 'page' => 'tts-social-posts', 'action' => 'log', 'post' => $item['ID'] ), admin_url( 'admin.php' ) ) ), __( 'View Log', 'trello-social-auto-publisher' ) ),
+            'view_log' => sprintf( '<a href="%s">%s</a>', esc_url( add_query_arg( array( 'page' => 'fp-publisher-social-posts', 'action' => 'log', 'post' => $item['ID'] ), admin_url( 'admin.php' ) ) ), __( 'View Log', 'trello-social-auto-publisher' ) ),
         );
 
         return sprintf( '<strong>%1$s</strong>%2$s', esc_html( $item['title'] ), $this->row_actions( $actions ) );

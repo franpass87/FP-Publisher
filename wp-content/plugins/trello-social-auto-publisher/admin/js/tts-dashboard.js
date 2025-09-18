@@ -152,7 +152,7 @@ const PostList = ({ posts, onRefresh }) => {
                                     createElement(
                                         'a',
                                         {
-                                            href: `admin.php?page=tts-social-posts&action=log&post=${post.id}`,
+                                            href: `admin.php?page=fp-publisher-social-posts&action=log&post=${post.id}`,
                                             className: 'tts-btn small secondary'
                                         },
                                         'View Log'
