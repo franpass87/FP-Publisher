@@ -71,7 +71,7 @@ class TTS_Token_Refresh {
                 $app_secret = isset( $channel_config['app_secret'] ) ? $channel_config['app_secret'] : '';
 
                 if ( empty( $app_id ) || empty( $app_secret ) ) {
-                    $error_message = __( 'Facebook app credentials are missing; cannot refresh token.', 'trello-social-auto-publisher' );
+                    $error_message = __( 'Facebook app credentials are missing; cannot refresh token.', 'fp-publisher' );
                     $error_data    = array(
                         'client_id'       => $client_id,
                         'missing_app_id'  => empty( $app_id ),
@@ -122,7 +122,7 @@ class TTS_Token_Refresh {
             $response = wp_remote_get( $url );
             if ( is_wp_error( $response ) ) {
                 $message = sprintf(
-                    __( '%1$s token refresh request failed: %2$s', 'trello-social-auto-publisher' ),
+                    __( '%1$s token refresh request failed: %2$s', 'fp-publisher' ),
                     ucfirst( $channel ),
                     $response->get_error_message()
                 );
@@ -149,7 +149,7 @@ class TTS_Token_Refresh {
                 $error = new WP_Error(
                     'tts_' . $channel . '_http_status_error',
                     sprintf(
-                        __( '%1$s token refresh returned unexpected HTTP status: %2$d.', 'trello-social-auto-publisher' ),
+                        __( '%1$s token refresh returned unexpected HTTP status: %2$d.', 'fp-publisher' ),
                         ucfirst( $channel ),
                         $response_code
                     ),
@@ -169,7 +169,7 @@ class TTS_Token_Refresh {
             if ( null === $body && JSON_ERROR_NONE !== json_last_error() ) {
                 $error = new WP_Error(
                     'tts_' . $channel . '_invalid_response',
-                    sprintf( __( '%s token refresh returned an invalid response.', 'trello-social-auto-publisher' ), ucfirst( $channel ) ),
+                    sprintf( __( '%s token refresh returned an invalid response.', 'fp-publisher' ), ucfirst( $channel ) ),
                     array(
                         'client_id' => $client_id,
                         'body'      => $body_raw,
@@ -185,7 +185,7 @@ class TTS_Token_Refresh {
             if ( ! is_array( $body ) ) {
                 $error = new WP_Error(
                     'tts_' . $channel . '_unexpected_response_format',
-                    sprintf( __( '%s token refresh response could not be parsed.', 'trello-social-auto-publisher' ), ucfirst( $channel ) ),
+                    sprintf( __( '%s token refresh response could not be parsed.', 'fp-publisher' ), ucfirst( $channel ) ),
                     array(
                         'client_id' => $client_id,
                         'body'      => $body_raw,
@@ -202,7 +202,7 @@ class TTS_Token_Refresh {
                 $error_details = is_scalar( $body['error'] ) ? $body['error'] : wp_json_encode( $body['error'] );
                 $error         = new WP_Error(
                     'tts_' . $channel . '_api_error',
-                    sprintf( __( '%1$s token refresh error: %2$s', 'trello-social-auto-publisher' ), ucfirst( $channel ), $error_details ),
+                    sprintf( __( '%1$s token refresh error: %2$s', 'fp-publisher' ), ucfirst( $channel ), $error_details ),
                     array(
                         'client_id' => $client_id,
                         'response'  => $body,
@@ -218,7 +218,7 @@ class TTS_Token_Refresh {
             if ( empty( $body['access_token'] ) ) {
                 $error = new WP_Error(
                     'tts_' . $channel . '_missing_access_token',
-                    sprintf( __( '%s token refresh response did not include a new access token.', 'trello-social-auto-publisher' ), ucfirst( $channel ) ),
+                    sprintf( __( '%s token refresh response did not include a new access token.', 'fp-publisher' ), ucfirst( $channel ) ),
                     array(
                         'client_id' => $client_id,
                         'response'  => $body,
@@ -244,7 +244,7 @@ class TTS_Token_Refresh {
         if ( ! empty( $errors ) ) {
             return new WP_Error(
                 'tts_token_refresh_failed',
-                __( 'One or more token refresh operations failed.', 'trello-social-auto-publisher' ),
+                __( 'One or more token refresh operations failed.', 'fp-publisher' ),
                 $errors
             );
         }

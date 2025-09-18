@@ -864,7 +864,7 @@ class TTS_Cache_Manager {
         check_ajax_referer( 'tts_cache_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $group = sanitize_text_field( $_POST['group'] ?? '' );
@@ -873,7 +873,7 @@ class TTS_Cache_Manager {
         $cleared = $this->clear_cache( $group ?: null, $pattern ?: null );
         
         wp_send_json_success( array(
-            'message' => sprintf( __( 'Cleared %d cache entries', 'trello-social-auto-publisher' ), $cleared ),
+            'message' => sprintf( __( 'Cleared %d cache entries', 'fp-publisher' ), $cleared ),
             'cleared' => $cleared
         ));
     }
@@ -882,7 +882,7 @@ class TTS_Cache_Manager {
         check_ajax_referer( 'tts_cache_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $stats = $this->get_cache_stats();
@@ -893,13 +893,13 @@ class TTS_Cache_Manager {
         check_ajax_referer( 'tts_cache_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $results = $this->optimize_cache();
         
         wp_send_json_success( array(
-            'message' => __( 'Cache optimization completed', 'trello-social-auto-publisher' ),
+            'message' => __( 'Cache optimization completed', 'fp-publisher' ),
             'results' => $results
         ));
     }

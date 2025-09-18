@@ -465,7 +465,7 @@ class TTS_Rate_Limiter {
         check_ajax_referer( 'tts_rate_limit_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $platforms = array( 'facebook', 'instagram', 'youtube', 'tiktok' );
@@ -485,7 +485,7 @@ class TTS_Rate_Limiter {
         check_ajax_referer( 'tts_rate_limit_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $platform = sanitize_text_field( $_POST['platform'] ?? '' );
@@ -516,7 +516,7 @@ class TTS_Rate_Limiter {
         
         return array(
             'success' => true,
-            'message' => sprintf( __( 'Rate limits reset for %s', 'trello-social-auto-publisher' ), $platform )
+            'message' => sprintf( __( 'Rate limits reset for %s', 'fp-publisher' ), $platform )
         );
     }
 
@@ -527,7 +527,7 @@ class TTS_Rate_Limiter {
         check_ajax_referer( 'tts_rate_limit_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $analytics = $this->get_rate_limit_analytics();

@@ -99,7 +99,7 @@ class TTS_Frequency_Monitor {
                         'type' => 'overdue',
                         'channel' => $channel,
                         'message' => sprintf(
-                            __( 'OVERDUE: %1$s needs %2$d more %3$s posts for the current %4$s period (target: %5$d)', 'trello-social-auto-publisher' ),
+                            __( 'OVERDUE: %1$s needs %2$d more %3$s posts for the current %4$s period (target: %5$d)', 'fp-publisher' ),
                             $client_title,
                             $remaining_needed,
                             ucfirst( $channel ),
@@ -113,7 +113,7 @@ class TTS_Frequency_Monitor {
                         'type' => 'upcoming',
                         'channel' => $channel,
                         'message' => sprintf(
-                            __( 'CONTENT NEEDED: %1$s needs %2$d more %3$s posts in the next %4$d days (target: %5$d per %6$s)', 'trello-social-auto-publisher' ),
+                            __( 'CONTENT NEEDED: %1$s needs %2$d more %3$s posts in the next %4$d days (target: %5$d per %6$s)', 'fp-publisher' ),
                             $client_title,
                             $remaining_needed,
                             ucfirst( $channel ),
@@ -294,8 +294,8 @@ class TTS_Frequency_Monitor {
             $notifier->notify_slack( $message );
             
             $subject = $alert['type'] === 'overdue' 
-                ? __( 'Publishing Schedule Overdue', 'trello-social-auto-publisher' )
-                : __( 'Content Needed Soon', 'trello-social-auto-publisher' );
+                ? __( 'Publishing Schedule Overdue', 'fp-publisher' )
+                : __( 'Content Needed Soon', 'fp-publisher' );
                 
             $notifier->notify_email( $subject, $message );
         }

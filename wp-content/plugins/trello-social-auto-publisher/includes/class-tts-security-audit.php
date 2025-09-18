@@ -631,7 +631,7 @@ class TTS_Security_Audit {
         check_ajax_referer( 'tts_security_audit_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $page = max( 1, intval( $_POST['page'] ?? 1 ) );
@@ -665,7 +665,7 @@ class TTS_Security_Audit {
         check_ajax_referer( 'tts_security_audit_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $days = max( 1, min( 90, intval( $_POST['days'] ?? 7 ) ) );
@@ -681,7 +681,7 @@ class TTS_Security_Audit {
         check_ajax_referer( 'tts_security_audit_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         global $wpdb;
@@ -698,7 +698,7 @@ class TTS_Security_Audit {
         );
         
         wp_send_json_success( array(
-            'message' => sprintf( __( 'Deleted %d old audit log entries', 'trello-social-auto-publisher' ), $deleted ),
+            'message' => sprintf( __( 'Deleted %d old audit log entries', 'fp-publisher' ), $deleted ),
             'deleted_count' => $deleted
         ));
     }

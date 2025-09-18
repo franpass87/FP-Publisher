@@ -38,7 +38,7 @@ class TTS_Publisher_YouTube {
         }
 
         if ( empty( $token ) ) {
-            $error = __( 'Unable to obtain YouTube access token', 'trello-social-auto-publisher' );
+            $error = __( 'Unable to obtain YouTube access token', 'fp-publisher' );
             tts_log_event( $post_id, 'youtube', 'error', $error, '' );
 
             return array(
@@ -77,7 +77,7 @@ class TTS_Publisher_YouTube {
         }
 
         if ( empty( $video_path ) || ! file_exists( $video_path ) ) {
-            $error = __( 'Video file not found', 'trello-social-auto-publisher' );
+            $error = __( 'Video file not found', 'fp-publisher' );
             tts_log_event( $post_id, 'youtube', 'error', $error, '' );
 
             return array(
@@ -151,7 +151,7 @@ class TTS_Publisher_YouTube {
             if ( $cleanup ) {
                 @unlink( $video_path );
             }
-            $error = __( 'Upload URL missing', 'trello-social-auto-publisher' );
+            $error = __( 'Upload URL missing', 'fp-publisher' );
             tts_log_event( $post_id, 'youtube', 'error', $error, '' );
 
             return array(
@@ -167,7 +167,7 @@ class TTS_Publisher_YouTube {
         }
 
         if ( false === $video_body ) {
-            $error = __( 'Unable to read video file', 'trello-social-auto-publisher' );
+            $error = __( 'Unable to read video file', 'fp-publisher' );
             tts_log_event( $post_id, 'youtube', 'error', $error, '' );
 
             return array(
@@ -205,7 +205,7 @@ class TTS_Publisher_YouTube {
         $data = json_decode( wp_remote_retrieve_body( $upload ), true );
 
         if ( 200 !== $code || empty( $data['id'] ) ) {
-            $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'fp-publisher' );
             tts_log_event( $post_id, 'youtube', 'error', $error, $data );
 
             return array(
@@ -232,7 +232,7 @@ class TTS_Publisher_YouTube {
      */
     public function publish( $post_id, $credentials, $message ) {
         if ( empty( $credentials ) ) {
-            $error = __( 'YouTube token missing', 'trello-social-auto-publisher' );
+            $error = __( 'YouTube token missing', 'fp-publisher' );
             tts_log_event( $post_id, 'youtube', 'error', $error, '' );
             tts_notify_publication( $post_id, 'error', 'youtube' );
             return new \WP_Error( 'youtube_no_token', $error );
@@ -241,7 +241,7 @@ class TTS_Publisher_YouTube {
         list( $access_tok, $creds, $client_id ) = $this->resolve_access_token( $credentials, $post_id );
 
         if ( empty( $access_tok ) ) {
-            $error = __( 'Unable to obtain YouTube access token', 'trello-social-auto-publisher' );
+            $error = __( 'Unable to obtain YouTube access token', 'fp-publisher' );
             tts_log_event( $post_id, 'youtube', 'error', $error, '' );
             tts_notify_publication( $post_id, 'error', 'youtube' );
             return new \WP_Error( 'youtube_no_access_token', $error );
@@ -266,7 +266,7 @@ class TTS_Publisher_YouTube {
             }
         }
         if ( empty( $videos ) ) {
-            $error = __( 'No video to publish', 'trello-social-auto-publisher' );
+            $error = __( 'No video to publish', 'fp-publisher' );
             tts_log_event( $post_id, 'youtube', 'error', $error, '' );
             tts_notify_publication( $post_id, 'error', 'youtube' );
             return new \WP_Error( 'youtube_no_video', $error );
@@ -292,12 +292,12 @@ class TTS_Publisher_YouTube {
                 tts_notify_publication( $post_id, 'error', 'youtube' );
                 $error_code = $upload_result['error_code'] ?? 'youtube_error';
                 $error_data = $upload_result['error_data'] ?? array();
-                $error_msg  = $upload_result['error'] ?? __( 'Unknown error', 'trello-social-auto-publisher' );
+                $error_msg  = $upload_result['error'] ?? __( 'Unknown error', 'fp-publisher' );
 
                 return new \WP_Error( $error_code, $error_msg, $error_data );
             }
         }
-        $response = __( 'Published to YouTube', 'trello-social-auto-publisher' );
+        $response = __( 'Published to YouTube', 'fp-publisher' );
         tts_log_event( $post_id, 'youtube', 'success', $response, '' );
         tts_notify_publication( $post_id, 'success', 'youtube' );
         return $response;

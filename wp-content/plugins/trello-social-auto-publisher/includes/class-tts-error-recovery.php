@@ -56,7 +56,7 @@ class TTS_Error_Recovery {
     public function add_custom_cron_schedules( $schedules ) {
         $schedules['every_15_minutes'] = array(
             'interval' => 15 * 60,
-            'display' => __( 'Every 15 minutes', 'trello-social-auto-publisher' )
+            'display' => __( 'Every 15 minutes', 'fp-publisher' )
         );
         return $schedules;
     }
@@ -838,7 +838,7 @@ class TTS_Error_Recovery {
         check_ajax_referer( 'tts_error_recovery_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $operation_id = sanitize_text_field( $_POST['operation_id'] ?? '' );
@@ -880,7 +880,7 @@ class TTS_Error_Recovery {
         check_ajax_referer( 'tts_error_recovery_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $days = intval( $_POST['days'] ?? 7 );
@@ -896,13 +896,13 @@ class TTS_Error_Recovery {
         check_ajax_referer( 'tts_error_recovery_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         delete_option( $this->retry_queue_option );
         
         wp_send_json_success( array(
-            'message' => __( 'Retry queue cleared successfully', 'trello-social-auto-publisher' )
+            'message' => __( 'Retry queue cleared successfully', 'fp-publisher' )
         ));
     }
 
@@ -913,7 +913,7 @@ class TTS_Error_Recovery {
         check_ajax_referer( 'tts_error_recovery_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $queue = get_option( $this->retry_queue_option, array() );

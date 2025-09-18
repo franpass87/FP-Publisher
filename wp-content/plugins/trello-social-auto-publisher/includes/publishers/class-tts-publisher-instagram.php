@@ -52,7 +52,7 @@ class TTS_Publisher_Instagram {
         }
 
         if ( empty( $ig_user_id ) || empty( $token ) ) {
-            $error = __( 'Invalid Instagram credentials', 'trello-social-auto-publisher' );
+            $error = __( 'Invalid Instagram credentials', 'fp-publisher' );
             tts_log_event( $post_id, 'instagram', 'error', $error, '' );
 
             return array(
@@ -63,7 +63,7 @@ class TTS_Publisher_Instagram {
         }
 
         if ( empty( $media_path ) ) {
-            $error = __( 'No image or video to publish', 'trello-social-auto-publisher' );
+            $error = __( 'No image or video to publish', 'fp-publisher' );
             tts_log_event( $post_id, 'instagram', 'error', $error, '' );
 
             return array(
@@ -134,7 +134,7 @@ class TTS_Publisher_Instagram {
         $data = json_decode( wp_remote_retrieve_body( $result ), true );
 
         if ( 200 !== $code || empty( $data['id'] ) ) {
-            $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'fp-publisher' );
             tts_log_event( $post_id, 'instagram', 'error', $error, $data );
 
             return array(
@@ -174,7 +174,7 @@ class TTS_Publisher_Instagram {
         $publish_data = json_decode( wp_remote_retrieve_body( $publish_result ), true );
 
         if ( 200 !== $publish_code || empty( $publish_data['id'] ) ) {
-            $error = isset( $publish_data['error']['message'] ) ? $publish_data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            $error = isset( $publish_data['error']['message'] ) ? $publish_data['error']['message'] : __( 'Unknown error', 'fp-publisher' );
             tts_log_event( $post_id, 'instagram', 'error', $error, $publish_data );
 
             return array(
@@ -211,7 +211,7 @@ class TTS_Publisher_Instagram {
     public function publish( $post_id, $credentials, $message ) {
         $this->post_id = $post_id;
         if ( empty( $credentials ) ) {
-            $message = __( 'Instagram token missing', 'trello-social-auto-publisher' );
+            $message = __( 'Instagram token missing', 'fp-publisher' );
             tts_log_event( $post_id, 'instagram', 'error', $message, '' );
             tts_notify_publication( $post_id, 'error', 'instagram' );
             return new \WP_Error( 'instagram_no_token', $message );
@@ -219,7 +219,7 @@ class TTS_Publisher_Instagram {
 
         list( $ig_user_id, $token ) = array_pad( explode( '|', $credentials, 2 ), 2, '' );
         if ( empty( $ig_user_id ) || empty( $token ) ) {
-            $error = __( 'Invalid Instagram credentials', 'trello-social-auto-publisher' );
+            $error = __( 'Invalid Instagram credentials', 'fp-publisher' );
             tts_log_event( $post_id, 'instagram', 'error', $error, '' );
             tts_notify_publication( $post_id, 'error', 'instagram' );
             return new \WP_Error( 'instagram_bad_credentials', $error );
@@ -268,7 +268,7 @@ class TTS_Publisher_Instagram {
             }
         }
         if ( empty( $media_items ) ) {
-            $error = __( 'No image or video to publish', 'trello-social-auto-publisher' );
+            $error = __( 'No image or video to publish', 'fp-publisher' );
             tts_log_event( $post_id, 'instagram', 'error', $error, '' );
             tts_notify_publication( $post_id, 'error', 'instagram' );
             return new \WP_Error( 'instagram_no_media', $error );
@@ -293,7 +293,7 @@ class TTS_Publisher_Instagram {
                 tts_notify_publication( $post_id, 'error', 'instagram' );
                 $error_code = $upload_result['error_code'] ?? 'instagram_error';
                 $error_data = $upload_result['error_data'] ?? array();
-                $error_msg  = $upload_result['error'] ?? __( 'Unknown error', 'trello-social-auto-publisher' );
+                $error_msg  = $upload_result['error'] ?? __( 'Unknown error', 'fp-publisher' );
 
                 return new \WP_Error( $error_code, $error_msg, $error_data );
             }
@@ -303,7 +303,7 @@ class TTS_Publisher_Instagram {
             }
         }
         $response = array(
-            'message' => __( 'Published to Instagram', 'trello-social-auto-publisher' ),
+            'message' => __( 'Published to Instagram', 'fp-publisher' ),
             'id'      => $first_media_id,
         );
         tts_log_event( $post_id, 'instagram', 'success', $response['message'], '' );
@@ -320,7 +320,7 @@ class TTS_Publisher_Instagram {
      */
     public function post_comment( $media_id, $text ) {
         if ( empty( $this->token ) || empty( $media_id ) || empty( $text ) ) {
-            return new \WP_Error( 'instagram_comment_missing_data', __( 'Missing data for Instagram comment', 'trello-social-auto-publisher' ) );
+            return new \WP_Error( 'instagram_comment_missing_data', __( 'Missing data for Instagram comment', 'fp-publisher' ) );
         }
         $endpoint = sprintf( 'https://graph.facebook.com/%s/comments', $media_id );
         $result   = wp_remote_post(
@@ -341,11 +341,11 @@ class TTS_Publisher_Instagram {
         $code = wp_remote_retrieve_response_code( $result );
         $data = json_decode( wp_remote_retrieve_body( $result ), true );
         if ( 200 !== $code || empty( $data['id'] ) ) {
-            $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'fp-publisher' );
             tts_log_event( $this->post_id, 'instagram', 'error', $error, $data );
             return new \WP_Error( 'instagram_comment_error', $error, $data );
         }
-        $success = __( 'Comment posted to Instagram', 'trello-social-auto-publisher' );
+        $success = __( 'Comment posted to Instagram', 'fp-publisher' );
         tts_log_event( $this->post_id, 'instagram', 'success', $success, $data );
         return $success;
     }

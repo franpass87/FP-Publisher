@@ -26,7 +26,7 @@ class TTS_Publisher_TikTok {
         $token   = $context['token'] ?? ( $context['credentials'] ?? '' );
 
         if ( empty( $token ) ) {
-            $error = __( 'TikTok token missing or lacks video.upload scope', 'trello-social-auto-publisher' );
+            $error = __( 'TikTok token missing or lacks video.upload scope', 'fp-publisher' );
             tts_log_event( $post_id, 'tiktok', 'error', $error, '' );
 
             return array(
@@ -37,7 +37,7 @@ class TTS_Publisher_TikTok {
         }
 
         if ( empty( $media_path ) ) {
-            $error = __( 'Video file not found', 'trello-social-auto-publisher' );
+            $error = __( 'Video file not found', 'fp-publisher' );
             tts_log_event( $post_id, 'tiktok', 'error', $error, '' );
 
             return array(
@@ -77,7 +77,7 @@ class TTS_Publisher_TikTok {
         }
 
         if ( empty( $video_path ) || ! file_exists( $video_path ) ) {
-            $error = __( 'Video file not found', 'trello-social-auto-publisher' );
+            $error = __( 'Video file not found', 'fp-publisher' );
             tts_log_event( $post_id, 'tiktok', 'error', $error, '' );
 
             return array(
@@ -94,7 +94,7 @@ class TTS_Publisher_TikTok {
                 @unlink( $video_path );
             }
 
-            $error = __( 'Unable to read video file', 'trello-social-auto-publisher' );
+            $error = __( 'Unable to read video file', 'fp-publisher' );
             tts_log_event( $post_id, 'tiktok', 'error', $error, '' );
 
             return array(
@@ -135,7 +135,7 @@ class TTS_Publisher_TikTok {
         $upload_data = json_decode( wp_remote_retrieve_body( $upload_result ), true );
 
         if ( 200 !== $upload_code || empty( $upload_data['data']['video_id'] ) ) {
-            $error = isset( $upload_data['error']['message'] ) ? $upload_data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            $error = isset( $upload_data['error']['message'] ) ? $upload_data['error']['message'] : __( 'Unknown error', 'fp-publisher' );
             tts_log_event( $post_id, 'tiktok', 'error', $error, $upload_data );
 
             return array(
@@ -189,7 +189,7 @@ class TTS_Publisher_TikTok {
         $publish_data = json_decode( wp_remote_retrieve_body( $publish_result ), true );
 
         if ( 200 !== $publish_code || empty( $publish_data['data']['video_id'] ) ) {
-            $error = isset( $publish_data['error']['message'] ) ? $publish_data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            $error = isset( $publish_data['error']['message'] ) ? $publish_data['error']['message'] : __( 'Unknown error', 'fp-publisher' );
             tts_log_event( $post_id, 'tiktok', 'error', $error, $publish_data );
 
             return array(
@@ -221,7 +221,7 @@ class TTS_Publisher_TikTok {
      */
     public function publish( $post_id, $token, $message ) {
         if ( empty( $token ) ) {
-            $error = __( 'TikTok token missing or lacks video.upload scope', 'trello-social-auto-publisher' );
+            $error = __( 'TikTok token missing or lacks video.upload scope', 'fp-publisher' );
             tts_log_event( $post_id, 'tiktok', 'error', $error, '' );
             tts_notify_publication( $post_id, 'error', 'tiktok' );
             return new \WP_Error( 'tiktok_no_token', $error );
@@ -246,7 +246,7 @@ class TTS_Publisher_TikTok {
             }
         }
         if ( empty( $videos ) ) {
-            $error = __( 'No video to publish', 'trello-social-auto-publisher' );
+            $error = __( 'No video to publish', 'fp-publisher' );
             tts_log_event( $post_id, 'tiktok', 'error', $error, '' );
             tts_notify_publication( $post_id, 'error', 'tiktok' );
             return new \WP_Error( 'tiktok_no_video', $error );
@@ -269,12 +269,12 @@ class TTS_Publisher_TikTok {
                 tts_notify_publication( $post_id, 'error', 'tiktok' );
                 $error_code = $upload_result['error_code'] ?? 'tiktok_error';
                 $error_data = $upload_result['error_data'] ?? array();
-                $error_msg  = $upload_result['error'] ?? __( 'Unknown error', 'trello-social-auto-publisher' );
+                $error_msg  = $upload_result['error'] ?? __( 'Unknown error', 'fp-publisher' );
 
                 return new \WP_Error( $error_code, $error_msg, $error_data );
             }
         }
-        $response = __( 'Published to TikTok', 'trello-social-auto-publisher' );
+        $response = __( 'Published to TikTok', 'fp-publisher' );
         tts_log_event( $post_id, 'tiktok', 'success', $response, '' );
         tts_notify_publication( $post_id, 'success', 'tiktok' );
         return $response;
