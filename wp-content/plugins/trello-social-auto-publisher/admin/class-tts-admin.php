@@ -1800,7 +1800,7 @@ class TTS_Admin {
             echo '<div class="notice notice-info">';
             echo '<h3>' . esc_html__( 'Social Media Setup Required', 'trello-social-auto-publisher' ) . '</h3>';
             echo '<p>' . esc_html__( 'To connect social media accounts, you must first configure OAuth apps for each platform. Click "Configure App" for platforms that are not set up.', 'trello-social-auto-publisher' ) . '</p>';
-            echo '<p><a href="' . esc_url( admin_url( 'admin.php?page=tts-social-connections' ) ) . '" class="button">' . esc_html__( 'Manage Social Connections', 'trello-social-auto-publisher' ) . '</a> ';
+            echo '<p><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ) . '" class="button">' . esc_html__( 'Manage Social Connections', 'trello-social-auto-publisher' ) . '</a> ';
             echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-help' ) ) . '" target="_blank">' . esc_html__( 'View Setup Guide', 'trello-social-auto-publisher' ) . '</a></p>';
             echo '</div>';
         }
@@ -1898,7 +1898,7 @@ class TTS_Admin {
                 
                 if ( ! $app_configured ) {
                     echo '<br><span style="color: #d63638;">⚠️ ' . esc_html__( 'App not configured', 'trello-social-auto-publisher' ) . '</span>';
-                    echo '<br><a href="' . esc_url( admin_url( 'admin.php?page=tts-social-connections' ) ) . '" class="button">' . esc_html__( 'Configure App', 'trello-social-auto-publisher' ) . '</a>';
+                    echo '<br><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ) . '" class="button">' . esc_html__( 'Configure App', 'trello-social-auto-publisher' ) . '</a>';
                 } elseif ( $connected ) {
                     echo '<br><span style="color: #00a32a;">✅ ' . esc_html__( 'Connected', 'trello-social-auto-publisher' ) . '</span>';
                 } else {
@@ -2917,7 +2917,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
                     </ul>
                     
                     <div class="tts-help-actions">
-                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=tts-social-connections' ) ); ?>" class="button button-primary">
+                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ); ?>" class="button button-primary">
                             <?php esc_html_e( 'Configure Social Apps', 'trello-social-auto-publisher' ); ?>
                         </a>
                         <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-client-wizard' ) ); ?>" class="button">
