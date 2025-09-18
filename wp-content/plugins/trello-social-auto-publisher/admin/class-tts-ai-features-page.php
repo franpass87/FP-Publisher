@@ -37,27 +37,69 @@ class TTS_AI_Features_Page {
 
         wp_enqueue_style(
             'tts-ai-features',
-            plugin_dir_url( __FILE__ ) . '../css/tts-ai-features.css',
+            plugin_dir_url( __FILE__ ) . 'css/tts-ai-features.css',
             array(),
             '1.0.0'
         );
 
         wp_enqueue_script(
             'tts-ai-features',
-            plugin_dir_url( __FILE__ ) . '../js/tts-ai-features.js',
+            plugin_dir_url( __FILE__ ) . 'js/tts-ai-features.js',
             array( 'jquery' ),
             '1.0.0',
             true
         );
 
-        wp_localize_script( 'tts-ai-features', 'ttsAI', array(
-            'ajax_url' => admin_url( 'admin-ajax.php' ),
-            'nonce' => wp_create_nonce( 'tts_ai_nonce' ),
-            'competitor_nonce' => wp_create_nonce( 'tts_competitor_nonce' ),
-            'workflow_nonce' => wp_create_nonce( 'tts_workflow_nonce' ),
-            'media_nonce' => wp_create_nonce( 'tts_media_nonce' ),
-            'integration_nonce' => wp_create_nonce( 'tts_integration_nonce' )
-        ) );
+        wp_localize_script(
+            'tts-ai-features',
+            'ttsAI',
+            array(
+                'ajax_url' => admin_url( 'admin-ajax.php' ),
+                'nonce' => wp_create_nonce( 'tts_ai_nonce' ),
+                'competitor_nonce' => wp_create_nonce( 'tts_competitor_nonce' ),
+                'workflow_nonce' => wp_create_nonce( 'tts_workflow_nonce' ),
+                'media_nonce' => wp_create_nonce( 'tts_media_nonce' ),
+                'integration_nonce' => wp_create_nonce( 'tts_integration_nonce' ),
+                'strings' => array(
+                    'enter_content'                => __( 'Please enter some content first.', 'fp-publisher' ),
+                    'generated_hashtags'           => __( 'Generated Hashtags:', 'fp-publisher' ),
+                    'hashtag_error'                => __( 'Error generating hashtags.', 'fp-publisher' ),
+                    'performance_prediction'       => __( 'Performance Prediction:', 'fp-publisher' ),
+                    'confidence'                   => __( 'Confidence:', 'fp-publisher' ),
+                    'engagement_rate'              => __( 'Engagement Rate:', 'fp-publisher' ),
+                    'predicted_likes'              => __( 'Predicted Likes:', 'fp-publisher' ),
+                    'recommendation'               => __( 'Recommendation:', 'fp-publisher' ),
+                    'performance_error'            => __( 'Error predicting performance.', 'fp-publisher' ),
+                    'content_suggestions'          => __( 'Content Suggestions:', 'fp-publisher' ),
+                    'suggestions_error'            => __( 'Error getting suggestions.', 'fp-publisher' ),
+                    'platform'                     => __( 'Platform:', 'fp-publisher' ),
+                    'estimated_performance'        => __( 'Est. Performance:', 'fp-publisher' ),
+                    'fill_all_fields'              => __( 'Please fill in all fields.', 'fp-publisher' ),
+                    'add_competitor_error'         => __( 'Error adding competitor.', 'fp-publisher' ),
+                    'competitor_report'            => __( 'Competitor Analysis Report:', 'fp-publisher' ),
+                    'total_competitors'            => __( 'Total Competitors:', 'fp-publisher' ),
+                    'avg_engagement'               => __( 'Average Engagement:', 'fp-publisher' ),
+                    'recommendations'              => __( 'Recommendations:', 'fp-publisher' ),
+                    'report_error'                 => __( 'Error generating report.', 'fp-publisher' ),
+                    'team_dashboard'               => __( 'Team Dashboard:', 'fp-publisher' ),
+                    'pending_approvals'            => __( 'Pending Approvals:', 'fp-publisher' ),
+                    'approved_content'             => __( 'Approved Content:', 'fp-publisher' ),
+                    'rejected_content'             => __( 'Rejected Content:', 'fp-publisher' ),
+                    'overdue_items'                => __( 'Overdue Items:', 'fp-publisher' ),
+                    'dashboard_error'              => __( 'Error loading dashboard.', 'fp-publisher' ),
+                    'media_analysis'               => __( 'Media Performance Analysis:', 'fp-publisher' ),
+                    'posts_analyzed'               => __( 'Posts Analyzed:', 'fp-publisher' ),
+                    'optimization_recommendations' => __( 'Optimization Recommendations:', 'fp-publisher' ),
+                    'media_error'                  => __( 'Error analyzing media.', 'fp-publisher' ),
+                    'available_integrations'       => __( 'Available Integrations:', 'fp-publisher' ),
+                    'connected'                    => __( 'Connected:', 'fp-publisher' ),
+                    'total_integrations'           => __( 'Total Available Integrations:', 'fp-publisher' ),
+                    'we_support'                   => __( 'We support', 'fp-publisher' ),
+                    'integration_support_detail'   => __( 'different integrations across CRM, E-commerce, Email Marketing, Design Tools, Analytics, and Productivity platforms.', 'fp-publisher' ),
+                    'integrations_error'           => __( 'Error loading integrations.', 'fp-publisher' ),
+                ),
+            )
+        );
     }
 
     /**
@@ -299,555 +341,6 @@ class TTS_AI_Features_Page {
             
         </div>
         
-        <style>
-        .tts-ai-features-page {
-            max-width: 1200px;
-        }
-        
-        .tts-features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        
-        .tts-feature-card {
-            background: #fff;
-            border: 1px solid #c3c4c7;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        .tts-feature-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        
-        .tts-feature-icon {
-            font-size: 24px;
-            margin-right: 10px;
-        }
-        
-        .tts-feature-header h2 {
-            margin: 0;
-            font-size: 18px;
-            color: #23282d;
-        }
-        
-        .tts-tool, .tts-add-competitor, .tts-media-optimizer {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 6px;
-        }
-        
-        .tts-tool h4, .tts-add-competitor h4, .tts-media-optimizer h4 {
-            margin: 0 0 10px 0;
-            color: #2271b1;
-        }
-        
-        .tts-tool textarea, .tts-tool input, .tts-tool select,
-        .tts-add-competitor input, .tts-add-competitor select {
-            width: 100%;
-            margin-bottom: 10px;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        
-        .tts-tool textarea {
-            height: 80px;
-            resize: vertical;
-        }
-        
-        .tts-results {
-            margin-top: 15px;
-            padding: 15px;
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        
-        .tts-workflow-stats {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 15px;
-        }
-        
-        .stat-item {
-            text-align: center;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 6px;
-            flex: 1;
-        }
-        
-        .stat-number {
-            display: block;
-            font-size: 24px;
-            font-weight: bold;
-            color: #2271b1;
-        }
-        
-        .stat-label {
-            display: block;
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-        
-        .tts-platform-sizes {
-            background: #fff;
-            padding: 15px;
-            border-radius: 4px;
-            margin: 10px 0;
-        }
-        
-        .tts-platform-sizes li {
-            margin-bottom: 8px;
-        }
-        
-        .tts-integrations-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin: 15px 0;
-        }
-        
-        .integration-category {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 6px;
-        }
-        
-        .integration-category h4 {
-            margin: 0 0 10px 0;
-            color: #2271b1;
-        }
-        
-        .integration-category ul {
-            margin: 0;
-            padding-left: 20px;
-        }
-        
-        .integration-category li {
-            margin-bottom: 5px;
-        }
-        
-        .tts-loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            color: white;
-        }
-        
-        .tts-spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #2271b1;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin-bottom: 15px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .hashtag-tag {
-            display: inline-block;
-            background: #2271b1;
-            color: white;
-            padding: 3px 8px;
-            margin: 2px;
-            border-radius: 12px;
-            font-size: 12px;
-        }
-        
-        .performance-meter {
-            background: #e0e0e0;
-            height: 20px;
-            border-radius: 10px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-        
-        .performance-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #ff4444, #ffaa00, #44ff44);
-            transition: width 0.3s ease;
-        }
-        
-        .suggestion-item {
-            padding: 10px;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            margin: 8px 0;
-            background: #fafafa;
-        }
-        
-        .suggestion-title {
-            font-weight: bold;
-            color: #2271b1;
-        }
-        
-        .suggestion-meta {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-        </style>
-        
-        <script>
-        jQuery(document).ready(function($) {
-            
-            function showLoading() {
-                $('#tts-loading-overlay').show();
-            }
-            
-            function hideLoading() {
-                $('#tts-loading-overlay').hide();
-            }
-            
-            // AI Hashtag Generator
-            $('#generate-hashtags').on('click', function() {
-                const content = $('#hashtag-content').val();
-                const platform = $('#hashtag-platform').val();
-                
-                if (!content.trim()) {
-                    alert('<?php esc_js( __( 'Please enter some content first.', 'fp-publisher' ) ); ?>');
-                    return;
-                }
-                
-                showLoading();
-                
-                $.ajax({
-                    url: ttsAI.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'tts_generate_hashtags',
-                        nonce: ttsAI.nonce,
-                        content: content,
-                        platform: platform
-                    },
-                    success: function(response) {
-                        hideLoading();
-                        if (response.success) {
-                            let html = '<h5><?php esc_js( __( 'Generated Hashtags:', 'fp-publisher' ) ); ?></h5>';
-                            response.data.hashtags.forEach(function(hashtag) {
-                                html += '<span class="hashtag-tag">' + hashtag + '</span>';
-                            });
-                            $('#hashtag-results').html(html);
-                        } else {
-                            $('#hashtag-results').html('<p style="color: red;">' + response.data.message + '</p>');
-                        }
-                    },
-                    error: function() {
-                        hideLoading();
-                        $('#hashtag-results').html('<p style="color: red;"><?php esc_js( __( 'Error generating hashtags.', 'fp-publisher' ) ); ?></p>');
-                    }
-                });
-            });
-            
-            // Performance Predictor
-            $('#predict-performance').on('click', function() {
-                const content = $('#predict-content').val();
-                const platform = $('#predict-platform').val();
-                
-                if (!content.trim()) {
-                    alert('<?php esc_js( __( 'Please enter some content first.', 'fp-publisher' ) ); ?>');
-                    return;
-                }
-                
-                showLoading();
-                
-                $.ajax({
-                    url: ttsAI.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'tts_predict_performance',
-                        nonce: ttsAI.nonce,
-                        content: content,
-                        platform: platform
-                    },
-                    success: function(response) {
-                        hideLoading();
-                        if (response.success) {
-                            const pred = response.data.prediction;
-                            let html = '<h5><?php esc_js( __( 'Performance Prediction:', 'fp-publisher' ) ); ?></h5>';
-                            html += '<div class="performance-meter"><div class="performance-fill" style="width: ' + pred.confidence + '%"></div></div>';
-                            html += '<p><strong><?php esc_js( __( 'Confidence:', 'fp-publisher' ) ); ?></strong> ' + pred.confidence + '%</p>';
-                            html += '<p><strong><?php esc_js( __( 'Engagement Rate:', 'fp-publisher' ) ); ?></strong> ' + pred.engagement_rate + '%</p>';
-                            html += '<p><strong><?php esc_js( __( 'Predicted Likes:', 'fp-publisher' ) ); ?></strong> ' + pred.predicted_likes + '</p>';
-                            html += '<p><strong><?php esc_js( __( 'Recommendation:', 'fp-publisher' ) ); ?></strong> ' + pred.recommendation + '</p>';
-                            $('#prediction-results').html(html);
-                        } else {
-                            $('#prediction-results').html('<p style="color: red;">' + response.data.message + '</p>');
-                        }
-                    },
-                    error: function() {
-                        hideLoading();
-                        $('#prediction-results').html('<p style="color: red;"><?php esc_js( __( 'Error predicting performance.', 'fp-publisher' ) ); ?></p>');
-                    }
-                });
-            });
-            
-            // Content Suggestions
-            $('#get-suggestions').on('click', function() {
-                const topic = $('#suggestion-topic').val();
-                const platform = $('#suggestion-platform').val();
-                
-                showLoading();
-                
-                $.ajax({
-                    url: ttsAI.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'tts_suggest_content',
-                        nonce: ttsAI.nonce,
-                        topic: topic,
-                        platform: platform
-                    },
-                    success: function(response) {
-                        hideLoading();
-                        if (response.success) {
-                            let html = '<h5><?php esc_js( __( 'Content Suggestions:', 'fp-publisher' ) ); ?></h5>';
-                            response.data.suggestions.forEach(function(suggestion) {
-                                html += '<div class="suggestion-item">';
-                                html += '<div class="suggestion-title">' + suggestion.title + '</div>';
-                                html += '<div class="suggestion-meta"><?php esc_js( __( 'Platform:', 'fp-publisher' ) ); ?> ' + suggestion.platform + ' | <?php esc_js( __( 'Est. Performance:', 'fp-publisher' ) ); ?> ' + suggestion.estimated_performance + '%</div>';
-                                html += '</div>';
-                            });
-                            $('#suggestion-results').html(html);
-                        } else {
-                            $('#suggestion-results').html('<p style="color: red;">' + response.data.message + '</p>');
-                        }
-                    },
-                    error: function() {
-                        hideLoading();
-                        $('#suggestion-results').html('<p style="color: red;"><?php esc_js( __( 'Error getting suggestions.', 'fp-publisher' ) ); ?></p>');
-                    }
-                });
-            });
-            
-            // Add Competitor
-            $('#add-competitor').on('click', function() {
-                const name = $('#competitor-name').val();
-                const platform = $('#competitor-platform').val();
-                const handle = $('#competitor-handle').val();
-                
-                if (!name || !handle) {
-                    alert('<?php esc_js( __( 'Please fill in all fields.', 'fp-publisher' ) ); ?>');
-                    return;
-                }
-                
-                showLoading();
-                
-                $.ajax({
-                    url: ttsAI.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'tts_add_competitor',
-                        nonce: ttsAI.competitor_nonce,
-                        competitor_name: name,
-                        platform: platform,
-                        handle: handle
-                    },
-                    success: function(response) {
-                        hideLoading();
-                        if (response.success) {
-                            $('#competitor-results').html('<p style="color: green;">' + response.data.message + '</p>');
-                            $('#competitor-name, #competitor-handle').val('');
-                        } else {
-                            $('#competitor-results').html('<p style="color: red;">' + response.data.message + '</p>');
-                        }
-                    },
-                    error: function() {
-                        hideLoading();
-                        $('#competitor-results').html('<p style="color: red;"><?php esc_js( __( 'Error adding competitor.', 'fp-publisher' ) ); ?></p>');
-                    }
-                });
-            });
-            
-            // Generate Competitor Report
-            $('#generate-competitor-report').on('click', function() {
-                showLoading();
-                
-                $.ajax({
-                    url: ttsAI.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'tts_get_competitor_report',
-                        nonce: ttsAI.competitor_nonce
-                    },
-                    success: function(response) {
-                        hideLoading();
-                        if (response.success) {
-                            const report = response.data.report;
-                            let html = '<h5><?php esc_js( __( 'Competitor Analysis Report:', 'fp-publisher' ) ); ?></h5>';
-                            html += '<p><strong><?php esc_js( __( 'Total Competitors:', 'fp-publisher' ) ); ?></strong> ' + report.summary.total_competitors + '</p>';
-                            html += '<p><strong><?php esc_js( __( 'Average Engagement:', 'fp-publisher' ) ); ?></strong> ' + report.summary.avg_engagement_rate + '%</p>';
-                            
-                            if (report.recommendations && report.recommendations.length > 0) {
-                                html += '<h6><?php esc_js( __( 'Recommendations:', 'fp-publisher' ) ); ?></h6>';
-                                report.recommendations.forEach(function(rec) {
-                                    html += '<div style="margin: 8px 0;"><strong>' + rec.category + ':</strong> ' + rec.recommendation + '</div>';
-                                });
-                            }
-                            
-                            $('#competitor-results').html(html);
-                        } else {
-                            $('#competitor-results').html('<p style="color: red;">' + response.data.message + '</p>');
-                        }
-                    },
-                    error: function() {
-                        hideLoading();
-                        $('#competitor-results').html('<p style="color: red;"><?php esc_js( __( 'Error generating report.', 'fp-publisher' ) ); ?></p>');
-                    }
-                });
-            });
-            
-            // Team Dashboard
-            $('#get-team-dashboard').on('click', function() {
-                showLoading();
-                
-                $.ajax({
-                    url: ttsAI.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'tts_get_team_dashboard',
-                        nonce: ttsAI.workflow_nonce
-                    },
-                    success: function(response) {
-                        hideLoading();
-                        if (response.success) {
-                            const dashboard = response.data.dashboard;
-                            const stats = dashboard.statistics;
-                            
-                            $('#pending-approvals').text(stats.pending_approval || 0);
-                            $('#approved-content').text(stats.approved || 0);
-                            $('#team-members').text(dashboard.team_performance ? dashboard.team_performance.length : 0);
-                            
-                            let html = '<h5><?php esc_js( __( 'Team Dashboard:', 'fp-publisher' ) ); ?></h5>';
-                            html += '<p><strong><?php esc_js( __( 'Pending Approvals:', 'fp-publisher' ) ); ?></strong> ' + (stats.pending_approval || 0) + '</p>';
-                            html += '<p><strong><?php esc_js( __( 'Approved Content:', 'fp-publisher' ) ); ?></strong> ' + (stats.approved || 0) + '</p>';
-                            html += '<p><strong><?php esc_js( __( 'Rejected Content:', 'fp-publisher' ) ); ?></strong> ' + (stats.rejected || 0) + '</p>';
-                            html += '<p><strong><?php esc_js( __( 'Overdue Items:', 'fp-publisher' ) ); ?></strong> ' + (stats.overdue || 0) + '</p>';
-                            
-                            $('#workflow-results').html(html);
-                        } else {
-                            $('#workflow-results').html('<p style="color: red;">' + response.data.message + '</p>');
-                        }
-                    },
-                    error: function() {
-                        hideLoading();
-                        $('#workflow-results').html('<p style="color: red;"><?php esc_js( __( 'Error loading dashboard.', 'fp-publisher' ) ); ?></p>');
-                    }
-                });
-            });
-            
-            // Media Performance Analysis
-            $('#analyze-media-performance').on('click', function() {
-                showLoading();
-                
-                $.ajax({
-                    url: ttsAI.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'tts_analyze_media_performance',
-                        nonce: ttsAI.media_nonce
-                    },
-                    success: function(response) {
-                        hideLoading();
-                        if (response.success) {
-                            const analysis = response.data.analysis;
-                            let html = '<h5><?php esc_js( __( 'Media Performance Analysis:', 'fp-publisher' ) ); ?></h5>';
-                            html += '<p><strong><?php esc_js( __( 'Posts Analyzed:', 'fp-publisher' ) ); ?></strong> ' + analysis.total_posts_analyzed + '</p>';
-                            
-                            if (analysis.recommendations && analysis.recommendations.length > 0) {
-                                html += '<h6><?php esc_js( __( 'Optimization Recommendations:', 'fp-publisher' ) ); ?></h6>';
-                                analysis.recommendations.forEach(function(rec) {
-                                    html += '<div style="margin: 8px 0;"><strong>' + rec.category + ':</strong> ' + rec.recommendation + ' <span style="color: #666;">(Impact: ' + rec.impact + ', Effort: ' + rec.effort + ')</span></div>';
-                                });
-                            }
-                            
-                            $('#media-results').html(html);
-                        } else {
-                            $('#media-results').html('<p style="color: red;">' + response.data.message + '</p>');
-                        }
-                    },
-                    error: function() {
-                        hideLoading();
-                        $('#media-results').html('<p style="color: red;"><?php esc_js( __( 'Error analyzing media.', 'fp-publisher' ) ); ?></p>');
-                    }
-                });
-            });
-            
-            // View Integrations
-            $('#view-integrations').on('click', function() {
-                showLoading();
-                
-                $.ajax({
-                    url: ttsAI.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'tts_get_available_integrations',
-                        nonce: ttsAI.integration_nonce
-                    },
-                    success: function(response) {
-                        hideLoading();
-                        if (response.success) {
-                            const integrations = response.data.integrations;
-                            const connected = response.data.connected;
-                            
-                            let html = '<h5><?php esc_js( __( 'Available Integrations:', 'fp-publisher' ) ); ?></h5>';
-                            
-                            if (connected && connected.length > 0) {
-                                html += '<h6><?php esc_js( __( 'Connected:', 'fp-publisher' ) ); ?></h6>';
-                                connected.forEach(function(conn) {
-                                    html += '<div style="color: green; margin: 5px 0;">✓ ' + conn.integration_name + ' (' + conn.integration_type + ')</div>';
-                                });
-                            }
-                            
-                            html += '<h6><?php esc_js( __( 'Total Available Integrations:', 'fp-publisher' ) ); ?></h6>';
-                            
-                            let totalCount = 0;
-                            Object.keys(integrations).forEach(function(category) {
-                                totalCount += Object.keys(integrations[category]).length;
-                            });
-                            
-                            html += '<p><?php esc_js( __( 'We support', 'fp-publisher' ) ); ?> <strong>' + totalCount + '</strong> <?php esc_js( __( 'different integrations across CRM, E-commerce, Email Marketing, Design Tools, Analytics, and Productivity platforms.', 'fp-publisher' ) ); ?></p>';
-                            
-                            $('#integration-results').html(html);
-                        } else {
-                            $('#integration-results').html('<p style="color: red;">' + response.data.message + '</p>');
-                        }
-                    },
-                    error: function() {
-                        hideLoading();
-                        $('#integration-results').html('<p style="color: red;"><?php esc_js( __( 'Error loading integrations.', 'fp-publisher' ) ); ?></p>');
-                    }
-                });
-            });
-            
-        });
-        </script>
         <?php
     }
 }
