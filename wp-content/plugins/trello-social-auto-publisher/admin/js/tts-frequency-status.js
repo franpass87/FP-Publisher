@@ -170,9 +170,27 @@ jQuery(document).ready(function($) {
      * Highlight urgent rows
      */
     function highlightUrgentRows() {
-        $('.tts-channel-row.status-urgent, .tts-channel-row.status-overdue').each(function() {
-            $(this).effect('highlight', {color: '#fef2f2'}, 1000);
-        });
+        var $rows = $('.tts-channel-row.status-urgent, .tts-channel-row.status-overdue');
+
+        if (!$rows.length) {
+            return;
+        }
+
+        if (typeof $.fn.effect === 'function') {
+            $rows.each(function() {
+                $(this).effect('highlight', { color: '#fef2f2' }, 1000);
+            });
+        } else {
+            $rows.each(function() {
+                var $row = $(this);
+
+                $row.addClass('tts-highlight-fallback');
+
+                setTimeout(function() {
+                    $row.removeClass('tts-highlight-fallback');
+                }, 1200);
+            });
+        }
     }
 
     // Initial highlight
