@@ -66,6 +66,7 @@ class TTS_Analytics_Page {
         $channel = isset( $_GET['channel'] ) ? sanitize_text_field( wp_unslash( $_GET['channel'] ) ) : '';
         $start   = isset( $_GET['start'] ) ? sanitize_text_field( wp_unslash( $_GET['start'] ) ) : '';
         $end     = isset( $_GET['end'] ) ? sanitize_text_field( wp_unslash( $_GET['end'] ) ) : '';
+        $page    = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : 'fp-publisher-analytics';
 
         $data = $this->get_metrics_data( $channel, $start, $end );
 
@@ -93,7 +94,7 @@ class TTS_Analytics_Page {
         echo '<div class="tts-analytics-content">';
         echo '<div class="tts-analytics-filters-section">';
         echo '<form method="get" class="tts-analytics-filters">';
-        echo '<input type="hidden" name="page" value="tts-analytics" />';
+        printf( '<input type="hidden" name="page" value="%s" />', esc_attr( $page ) );
 
         echo '<div class="filter-group">';
         echo '<label for="channel">' . esc_html__( 'Channel', 'fp-publisher' ) . '</label>';
@@ -118,7 +119,22 @@ class TTS_Analytics_Page {
         echo '<div class="filter-actions">';
         submit_button( __( 'Filter', 'fp-publisher' ), 'primary', '', false );
 
-        $export_url = add_query_arg( array_merge( $_GET, array( 'export' => 'csv' ) ) );
+        $export_args = array(
+            'page'    => $page,
+            'channel' => $channel,
+            'start'   => $start,
+            'end'     => $end,
+            'export'  => 'csv',
+        );
+
+        $export_args = array_filter(
+            $export_args,
+            static function ( $value ) {
+                return '' !== $value && null !== $value;
+            }
+        );
+
+        $export_url = add_query_arg( $export_args, admin_url( 'admin.php' ) );
         echo ' <a href="' . esc_url( $export_url ) . '" class="button">' . esc_html__( 'Export CSV', 'fp-publisher' ) . '</a>';
         echo '</div>';
 
