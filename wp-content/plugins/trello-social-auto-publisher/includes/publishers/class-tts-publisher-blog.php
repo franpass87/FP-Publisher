@@ -193,19 +193,28 @@ class TTS_Publisher_Blog {
      * @param int $source_post_id Source post ID.
      */
     private function set_featured_image( $blog_post_id, $source_post_id ) {
-        // Get attachments from source post
-        $attachment_ids = get_post_meta( $source_post_id, '_tts_attachments', true );
-        
-        if ( empty( $attachment_ids ) || ! is_array( $attachment_ids ) ) {
-            // Try manual media
-            $manual_id = get_post_meta( $source_post_id, '_tts_manual_media', true );
+        // Get attachments from source post using the current attachment meta.
+        $attachment_ids = $this->normalize_attachment_ids(
+            get_post_meta( $source_post_id, '_tts_attachment_ids', true )
+        );
+
+        // Fall back to the legacy attachments meta for backward compatibility.
+        if ( empty( $attachment_ids ) ) {
+            $attachment_ids = $this->normalize_attachment_ids(
+                get_post_meta( $source_post_id, '_tts_attachments', true )
+            );
+        }
+
+        if ( empty( $attachment_ids ) ) {
+            // Try manual media.
+            $manual_id = (int) get_post_meta( $source_post_id, '_tts_manual_media', true );
             if ( $manual_id ) {
                 $attachment_ids = array( $manual_id );
             }
         }
-        
+
         if ( ! empty( $attachment_ids ) && is_array( $attachment_ids ) ) {
-            // Use first image as featured image
+            // Use first image as featured image.
             foreach ( $attachment_ids as $att_id ) {
                 $mime = get_post_mime_type( $att_id );
                 if ( $mime && 0 === strpos( $mime, 'image/' ) ) {
@@ -214,6 +223,34 @@ class TTS_Publisher_Blog {
                 }
             }
         }
+    }
+
+    /**
+     * Normalize attachment IDs retrieved from post meta.
+     *
+     * @param mixed $ids Attachment IDs from post meta.
+     * @return array Array of attachment IDs.
+     */
+    private function normalize_attachment_ids( $ids ) {
+        if ( empty( $ids ) ) {
+            return array();
+        }
+
+        if ( is_array( $ids ) ) {
+            return array_values( array_filter( array_map( 'intval', $ids ) ) );
+        }
+
+        if ( is_string( $ids ) ) {
+            $parts = array_map( 'trim', explode( ',', $ids ) );
+            return array_values( array_filter( array_map( 'intval', $parts ) ) );
+        }
+
+        if ( is_numeric( $ids ) ) {
+            $id = (int) $ids;
+            return $id > 0 ? array( $id ) : array();
+        }
+
+        return array();
     }
 
     /**
