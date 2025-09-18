@@ -1299,7 +1299,8 @@ class TTS_Integration_Hub {
      * @param int $integration_id Integration ID.
      */
     public function run_single_integration_sync( int $integration_id ) {
-        $integration_id = absint( $integration_id );
+        $original_integration_id = $integration_id;
+        $integration_id          = absint( $integration_id );
 
         if ( empty( $integration_id ) ) {
             $message = 'TTS: Invalid integration ID provided for single sync event.';
@@ -1310,14 +1311,15 @@ class TTS_Integration_Hub {
                     $message,
                     'warning',
                     array(
-                        'integration_id' => $integration_id,
+                        'integration_id'          => $integration_id,
+                        'provided_integration_id' => $original_integration_id,
                     )
                 );
             }
 
-            $timestamp = wp_next_scheduled( 'tts_integration_sync_single', array( $integration_id ) );
+            $timestamp = wp_next_scheduled( 'tts_integration_sync_single', array( $original_integration_id ) );
             if ( $timestamp ) {
-                wp_unschedule_event( $timestamp, 'tts_integration_sync_single', array( $integration_id ) );
+                wp_unschedule_event( $timestamp, 'tts_integration_sync_single', array( $original_integration_id ) );
             }
 
             return;
@@ -1325,8 +1327,8 @@ class TTS_Integration_Hub {
 
         try {
             $this->sync_integration_data( $integration_id, 'all' );
-        } catch ( Exception $e ) {
-            $message = sprintf( 'TTS: Single integration sync failed for ID %d: %s', $integration_id, $e->getMessage() );
+        } catch ( \Throwable $exception ) {
+            $message = sprintf( 'TTS: Single integration sync failed for ID %d: %s', $integration_id, $exception->getMessage() );
             error_log( $message );
 
             if ( class_exists( 'TTS_Logger' ) ) {
@@ -1335,6 +1337,12 @@ class TTS_Integration_Hub {
                     'error',
                     array(
                         'integration_id' => $integration_id,
+                        'exception'      => array(
+                            'code'    => $exception->getCode(),
+                            'message' => $exception->getMessage(),
+                            'file'    => $exception->getFile(),
+                            'line'    => $exception->getLine(),
+                        ),
                     )
                 );
             }
