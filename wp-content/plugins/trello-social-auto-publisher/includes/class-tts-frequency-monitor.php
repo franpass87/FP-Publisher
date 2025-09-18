@@ -15,12 +15,32 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Frequency_Monitor {
 
     /**
+     * Singleton instance of the frequency monitor.
+     *
+     * @var TTS_Frequency_Monitor|null
+     */
+    private static $instance = null;
+
+    /**
      * Constructor.
      */
-    public function __construct() {
+    private function __construct() {
         add_action( 'init', array( $this, 'schedule_frequency_check' ) );
         add_action( 'tts_check_publishing_frequencies', array( $this, 'check_all_clients' ) );
         add_action( 'tts_publish_social_post', array( $this, 'record_publication' ), 20, 2 );
+    }
+
+    /**
+     * Retrieve the singleton instance of the monitor.
+     *
+     * @return TTS_Frequency_Monitor
+     */
+    public static function get_instance() {
+        if ( null === self::$instance ) {
+            self::$instance = new self();
+        }
+
+        return self::$instance;
     }
 
     /**
@@ -368,4 +388,4 @@ class TTS_Frequency_Monitor {
     }
 }
 
-new TTS_Frequency_Monitor();
+TTS_Frequency_Monitor::get_instance();

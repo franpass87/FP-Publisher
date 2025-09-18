@@ -40,7 +40,7 @@ class TTS_Frequency_Dashboard_Widget {
      * Render the widget content.
      */
     public function render_widget() {
-        $monitor = new TTS_Frequency_Monitor();
+        $monitor = TTS_Frequency_Monitor::get_instance();
         $clients = get_posts( array(
             'post_type' => 'tts_client',
             'post_status' => 'publish',
@@ -316,7 +316,7 @@ class TTS_Frequency_Dashboard_Widget {
         }
 
         // Trigger a quick frequency check
-        $monitor = new TTS_Frequency_Monitor();
+        $monitor = TTS_Frequency_Monitor::get_instance();
         $monitor->check_all_clients();
 
         wp_send_json_success();
