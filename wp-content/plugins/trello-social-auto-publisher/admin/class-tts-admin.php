@@ -298,6 +298,16 @@ class TTS_Admin {
         );
         wp_enqueue_script( 'tts-notifications' );
 
+        $admin_utils_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-admin-utils.js' );
+        wp_register_script(
+            'tts-admin-utils',
+            plugin_dir_url( __FILE__ ) . 'js/tts-admin-utils.js',
+            array( 'tts-notifications', 'wp-util' ),
+            $admin_utils_version,
+            true
+        );
+        wp_enqueue_script( 'tts-admin-utils' );
+
         // Essential JavaScript with optimized dependencies
         $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-core.js' );
         wp_enqueue_script(
@@ -432,7 +442,7 @@ class TTS_Admin {
         wp_enqueue_script(
             'tts-advanced-features',
             plugin_dir_url( __FILE__ ) . 'js/tts-advanced-features.js',
-            array( 'tts-core', 'tts-notifications' ),
+            array( 'tts-core', 'tts-notifications', 'tts-admin-utils' ),
             $js_version,
             true
         );
