@@ -359,21 +359,18 @@ class TTS_Admin {
             $css_version
         );
 
+        if ( ! $this->dashboard_needs_react_components() ) {
+            return;
+        }
+
         $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-dashboard.js' );
         wp_enqueue_script(
             'tts-dashboard',
             plugin_dir_url( __FILE__ ) . 'js/tts-dashboard.js',
-            array( 'tts-core', 'tts-notifications' ),
+            array( 'tts-core', 'tts-notifications', 'wp-element', 'wp-components', 'wp-api-fetch' ),
             $js_version,
             true
         );
-
-        // Conditional loading of React components only if needed
-        if ( $this->dashboard_needs_react_components() ) {
-            wp_enqueue_script( 'wp-element' );
-            wp_enqueue_script( 'wp-components' );
-            wp_enqueue_script( 'wp-api-fetch' );
-        }
     }
 
     /**
