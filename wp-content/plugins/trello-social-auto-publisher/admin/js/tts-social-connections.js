@@ -333,7 +333,8 @@
                 $platformConfig.addClass('success');
                 
                 // Update connection status
-                this.updateConnectionStatus(platform, 'connected');
+                const statusMessage = response && response.data ? response.data.message : '';
+                this.updateConnectionStatus(platform, 'connected', statusMessage);
                 
                 setTimeout(() => $platformConfig.removeClass('success'), 2000);
             } else {
@@ -381,10 +382,43 @@
         /**
          * Update connection status
          */
-        updateConnectionStatus: function(platform, status) {
-            const $statusElement = $(`.tts-connection-status[data-platform="${platform}"] .tts-status-${status}`);
-            $statusElement.siblings().hide();
-            $statusElement.show();
+        updateConnectionStatus: function(platform, status, message = '') {
+            if (!platform || !status) {
+                return;
+            }
+
+            const normalizedStatus = String(status).replace(/_/g, '-');
+            const $container = $(`.tts-connection-status[data-platform="${platform}"]`);
+
+            if (!$container.length) {
+                return;
+            }
+
+            const $statusElement = $container.find('.tts-status-message');
+
+            if (!$statusElement.length) {
+                return;
+            }
+
+            const statusMessages = {
+                'not-configured': 'App credentials not configured',
+                'configured': 'Ready to connect accounts',
+                'connected': 'Account connected',
+                'error': 'Connection error. Please try again.'
+            };
+
+            const knownStatuses = Object.keys(statusMessages);
+            const safeStatus = knownStatuses.includes(normalizedStatus) ? normalizedStatus : 'error';
+            const fallbackMessage = statusMessages[safeStatus] || statusMessages['error'];
+            const textToShow = message || fallbackMessage;
+            const statusClassPrefix = 'tts-status-';
+            const statusClasses = knownStatuses.map(state => `${statusClassPrefix}${state}`).join(' ');
+
+            $statusElement
+                .removeClass(statusClasses)
+                .addClass(`${statusClassPrefix}${safeStatus}`)
+                .text(textToShow)
+                .show();
         },
 
         /**
@@ -436,8 +470,13 @@
                 nonce: TTS.Core.config.nonce
             })
             .done((response) => {
-                if (response.success) {
-                    this.updateConnectionStatus(platform, response.data.status);
+                if (response.success && response.data) {
+                    const statusMessage = response.data.message || '';
+                    const status = response.data.status || '';
+
+                    if (status) {
+                        this.updateConnectionStatus(platform, status, statusMessage);
+                    }
                 }
             });
         }
