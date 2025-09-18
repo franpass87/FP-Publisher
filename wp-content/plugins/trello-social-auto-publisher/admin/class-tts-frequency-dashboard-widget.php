@@ -131,7 +131,7 @@ class TTS_Frequency_Dashboard_Widget {
                 </div>
 
                 <div class="tts-widget-actions">
-                    <a href="<?php echo admin_url( 'admin.php?page=tts-frequency-status' ); ?>" class="button button-primary">
+                    <a href="<?php echo admin_url( 'admin.php?page=fp-publisher-frequency-status' ); ?>" class="button button-primary">
                         <?php esc_html_e( 'View Full Status', 'trello-social-auto-publisher' ); ?>
                     </a>
                     <button type="button" class="button button-secondary" id="tts-widget-refresh">
