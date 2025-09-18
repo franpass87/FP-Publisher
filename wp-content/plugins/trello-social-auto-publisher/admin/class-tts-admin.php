@@ -1744,7 +1744,7 @@ class TTS_Admin {
         }
         
         echo '<div style="margin-top: 15px;">';
-        echo '<a href="' . admin_url('admin.php?page=tts-health') . '" class="tts-btn small">View Detailed Status</a>';
+        echo '<a href="' . admin_url('admin.php?page=fp-publisher-health') . '" class="tts-btn small">View Detailed Status</a>';
         echo '</div>';
         
         echo '</div>';
