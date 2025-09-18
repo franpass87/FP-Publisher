@@ -1646,7 +1646,7 @@ class TTS_Admin {
             array(
                 'title' => __('View Logs', 'trello-social-auto-publisher'),
                 'description' => __('Check system logs and debugging info', 'trello-social-auto-publisher'),
-                'url' => admin_url('admin.php?page=tts-log'),
+                'url' => admin_url('admin.php?page=fp-publisher-log'),
                 'icon' => 'dashicons-list-view',
                 'color' => '#64748b'
             )

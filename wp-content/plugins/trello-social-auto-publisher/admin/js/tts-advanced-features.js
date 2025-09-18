@@ -23,7 +23,7 @@ class TTSAdvancedFeatures {
         this.shortcuts.set('ctrl+shift+c', () => this.navigateTo('tts-calendar'));
         this.shortcuts.set('ctrl+shift+a', () => this.navigateTo('tts-analytics'));
         this.shortcuts.set('ctrl+shift+h', () => this.navigateTo('tts-health'));
-        this.shortcuts.set('ctrl+shift+l', () => this.navigateTo('tts-log'));
+        this.shortcuts.set('ctrl+shift+l', () => this.navigateTo('fp-publisher-log'));
         this.shortcuts.set('ctrl+shift+n', () => this.navigateTo('fp-publisher-client-wizard'));
         this.shortcuts.set('ctrl+shift+r', () => this.refreshCurrentPage());
         this.shortcuts.set('ctrl+shift+e', () => this.openExportModal());
@@ -1035,7 +1035,7 @@ class TTSAdvancedFeatures {
                 case 'tts-health':
                     helpContent = this.getHealthHelp();
                     break;
-                case 'tts-log':
+                case 'fp-publisher-log':
                     helpContent = this.getLogHelp();
                     break;
                 default:

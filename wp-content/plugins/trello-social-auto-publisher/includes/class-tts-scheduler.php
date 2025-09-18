@@ -309,7 +309,7 @@ class TTS_Scheduler {
         if ( $error ) {
             if ( $attempt >= $max_attempts ) {
                 tts_log_event( $post_id, 'scheduler', 'error', __( 'Maximum retry attempts reached', 'trello-social-auto-publisher' ), '' );
-                $log_url = admin_url( 'admin.php?page=tts-log&post_id=' . $post_id );
+                $log_url = admin_url( 'admin.php?page=fp-publisher-log&post_id=' . $post_id );
                 $message = sprintf( __( 'Publishing failed for post %1$s. Log: %2$s', 'trello-social-auto-publisher' ), get_the_title( $post_id ), $log_url );
                 $notifier->notify_slack( $message );
                 $notifier->notify_email( __( 'Social publishing failed', 'trello-social-auto-publisher' ), $message );
@@ -412,7 +412,7 @@ class TTS_Scheduler {
 
         tts_log_event( $post_id, 'scheduler', 'complete', __( 'Publish process completed', 'trello-social-auto-publisher' ), $log );
 
-        $log_url = admin_url( 'admin.php?page=tts-log&post_id=' . $post_id );
+        $log_url = admin_url( 'admin.php?page=fp-publisher-log&post_id=' . $post_id );
         $message = sprintf( __( 'Publishing completed for post %1$s. Log: %2$s', 'trello-social-auto-publisher' ), get_the_title( $post_id ), $log_url );
         $notifier->notify_slack( $message );
         $notifier->notify_email( __( 'Social publishing completed', 'trello-social-auto-publisher' ), $message );
