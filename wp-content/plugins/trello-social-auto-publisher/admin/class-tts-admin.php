@@ -287,12 +287,22 @@ class TTS_Admin {
             $css_version
         );
 
+        $notifications_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-notifications.js' );
+        wp_register_script(
+            'tts-notifications',
+            plugin_dir_url( __FILE__ ) . 'js/tts-notifications.js',
+            array(),
+            $notifications_version,
+            true
+        );
+        wp_enqueue_script( 'tts-notifications' );
+
         // Essential JavaScript with optimized dependencies
         $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-core.js' );
         wp_enqueue_script(
             'tts-core',
             plugin_dir_url( __FILE__ ) . 'js/tts-core.js',
-            array( 'jquery' ),
+            array( 'jquery', 'tts-notifications' ),
             $js_version,
             true
         );
@@ -352,7 +362,7 @@ class TTS_Admin {
         wp_enqueue_script(
             'tts-dashboard',
             plugin_dir_url( __FILE__ ) . 'js/tts-dashboard.js',
-            array( 'tts-core' ),
+            array( 'tts-core', 'tts-notifications' ),
             $js_version,
             true
         );
@@ -424,7 +434,7 @@ class TTS_Admin {
         wp_enqueue_script(
             'tts-advanced-features',
             plugin_dir_url( __FILE__ ) . 'js/tts-advanced-features.js',
-            array( 'tts-core' ),
+            array( 'tts-core', 'tts-notifications' ),
             $js_version,
             true
         );
