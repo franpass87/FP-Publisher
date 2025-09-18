@@ -20,9 +20,9 @@ class TTSAdvancedFeatures {
     setupKeyboardShortcuts() {
         // Define keyboard shortcuts
         this.shortcuts.set('ctrl+shift+d', () => this.navigateTo('fp-publisher-main'));
-        this.shortcuts.set('ctrl+shift+c', () => this.navigateTo('tts-calendar'));
-        this.shortcuts.set('ctrl+shift+a', () => this.navigateTo('tts-analytics'));
-        this.shortcuts.set('ctrl+shift+h', () => this.navigateTo('tts-health'));
+        this.shortcuts.set('ctrl+shift+c', () => this.navigateTo('fp-publisher-calendar'));
+        this.shortcuts.set('ctrl+shift+a', () => this.navigateTo('fp-publisher-analytics'));
+        this.shortcuts.set('ctrl+shift+h', () => this.navigateTo('fp-publisher-health'));
         this.shortcuts.set('ctrl+shift+l', () => this.navigateTo('fp-publisher-log'));
         this.shortcuts.set('ctrl+shift+n', () => this.navigateTo('fp-publisher-client-wizard'));
         this.shortcuts.set('ctrl+shift+r', () => this.refreshCurrentPage());
@@ -138,7 +138,7 @@ class TTSAdvancedFeatures {
 
     addKeyboardShortcutIndicator() {
         const adminBar = document.getElementById('wp-admin-bar-root');
-        if (adminBar && window.location.href.includes('page=tts-')) {
+        if (adminBar && window.location.href.includes('page=fp-publisher-')) {
             const shortcutItem = document.createElement('li');
             shortcutItem.id = 'wp-admin-bar-tts-shortcuts';
             shortcutItem.innerHTML = `
@@ -524,7 +524,7 @@ class TTSAdvancedFeatures {
         document.head.appendChild(controlStyles);
 
         // Add to page if on plugin pages
-        if (window.location.href.includes('page=tts-')) {
+        if (window.location.href.includes('page=fp-publisher-')) {
             document.body.appendChild(controlPanel);
             this.bindControlEvents(controlPanel);
         }
@@ -1026,13 +1026,13 @@ class TTSAdvancedFeatures {
                 case 'fp-publisher-main':
                     helpContent = this.getDashboardHelp();
                     break;
-                case 'tts-calendar':
+                case 'fp-publisher-calendar':
                     helpContent = this.getCalendarHelp();
                     break;
-                case 'tts-analytics':
+                case 'fp-publisher-analytics':
                     helpContent = this.getAnalyticsHelp();
                     break;
-                case 'tts-health':
+                case 'fp-publisher-health':
                     helpContent = this.getHealthHelp();
                     break;
                 case 'fp-publisher-log':
@@ -1153,7 +1153,7 @@ class TTSAdvancedFeatures {
 
 // Initialize advanced features
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.href.includes('page=tts-')) {
+    if (window.location.href.includes('page=fp-publisher-')) {
         window.TTSAdvancedFeatures = new TTSAdvancedFeatures();
     }
 });
