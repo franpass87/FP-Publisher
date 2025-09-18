@@ -36,7 +36,7 @@ class TTS_Log_Page {
         echo '<div class="wrap">';
         echo '<h1>' . esc_html__( 'Log', 'trello-social-auto-publisher' ) . '</h1>';
         echo '<form method="get">';
-        echo '<input type="hidden" name="page" value="tts-log" />';
+        echo '<input type="hidden" name="page" value="fp-publisher-log" />';
         $table->display();
         echo '</form>';
         echo '</div>';
