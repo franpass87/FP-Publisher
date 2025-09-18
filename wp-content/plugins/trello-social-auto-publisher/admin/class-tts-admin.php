@@ -2575,7 +2575,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
                             ?>
                             <div class="tts-connection-status" data-platform="<?php echo esc_attr( $platform ); ?>">
                                 <strong><?php esc_html_e( 'Status:', 'fp-publisher' ); ?></strong>
-                                <span class="tts-status-<?php echo esc_attr( $connection_status['status'] ); ?>">
+                                <span class="tts-status-message tts-status-<?php echo esc_attr( $connection_status['status'] ); ?>">
                                     <?php echo esc_html( $connection_status['message'] ); ?>
                                 </span>
                                 
@@ -2710,6 +2710,9 @@ class TTS_Social_Posts_Table extends WP_List_Table {
             }
             .tts-status-connected {
                 color: #00a32a;
+            }
+            .tts-status-error {
+                color: #d63638;
             }
             .tts-platform-actions {
                 display: flex;
@@ -3639,24 +3642,46 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         
         $platform = sanitize_text_field( $_POST['platform'] );
         $social_apps = get_option( 'tts_social_apps', array() );
-        
+
+        $status_messages = array(
+            'not-configured' => __( 'App credentials not configured', 'fp-publisher' ),
+            'configured' => __( 'Ready to connect accounts', 'fp-publisher' ),
+            'connected' => __( 'Account connected', 'fp-publisher' ),
+            'error' => __( 'Connection error. Please try again.', 'fp-publisher' ),
+        );
+
         if ( ! isset( $social_apps[$platform] ) ) {
-            wp_send_json_success( array( 'status' => 'not_configured' ) );
+            wp_send_json_success(
+                array(
+                    'status'  => 'not-configured',
+                    'message' => $status_messages['not-configured'],
+                )
+            );
             return;
         }
-        
+
         $settings = $social_apps[$platform];
         $required_fields = $this->get_required_platform_fields( $platform );
-        
+
         foreach ( $required_fields as $field ) {
             if ( empty( $settings[$field] ) ) {
-                wp_send_json_success( array( 'status' => 'not_configured' ) );
+                wp_send_json_success(
+                    array(
+                        'status'  => 'not-configured',
+                        'message' => $status_messages['not-configured'],
+                    )
+                );
                 return;
             }
         }
-        
+
         // Quick validation - just check if credentials are present
-        wp_send_json_success( array( 'status' => 'configured' ) );
+        wp_send_json_success(
+            array(
+                'status'  => 'configured',
+                'message' => $status_messages['configured'],
+            )
+        );
     }
     
     /**
