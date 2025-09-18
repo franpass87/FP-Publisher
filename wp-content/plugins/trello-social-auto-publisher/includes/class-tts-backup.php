@@ -38,7 +38,7 @@ class TTS_Backup {
         check_ajax_referer( 'tts_backup_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $backup_type = sanitize_text_field( $_POST['backup_type'] ?? 'full' );
@@ -89,7 +89,7 @@ class TTS_Backup {
             // Save backup to file
             $backup_json = wp_json_encode( $backup_data, JSON_PRETTY_PRINT );
             if ( false === file_put_contents( $backup_path, $backup_json ) ) {
-                throw new Exception( __( 'Failed to save backup file', 'trello-social-auto-publisher' ) );
+                throw new Exception( __( 'Failed to save backup file', 'fp-publisher' ) );
             }
             
             // Compress backup
@@ -103,7 +103,7 @@ class TTS_Backup {
             
             return array(
                 'success' => true,
-                'message' => __( 'Backup created successfully', 'trello-social-auto-publisher' ),
+                'message' => __( 'Backup created successfully', 'fp-publisher' ),
                 'filename' => basename( $compressed_path ),
                 'size' => $this->format_file_size( filesize( $compressed_path ) ),
                 'timestamp' => current_time( 'mysql' )
@@ -114,7 +114,7 @@ class TTS_Backup {
             
             return array(
                 'success' => false,
-                'message' => __( 'Backup creation failed: ', 'trello-social-auto-publisher' ) . $e->getMessage()
+                'message' => __( 'Backup creation failed: ', 'fp-publisher' ) . $e->getMessage()
             );
         }
     }
@@ -237,7 +237,7 @@ class TTS_Backup {
         check_ajax_referer( 'tts_backup_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $backup_filename = sanitize_file_name( $_POST['backup_filename'] ?? '' );
@@ -259,7 +259,7 @@ class TTS_Backup {
             $backup_path = $this->get_backup_directory() . $filename;
             
             if ( ! file_exists( $backup_path ) ) {
-                throw new Exception( __( 'Backup file not found', 'trello-social-auto-publisher' ) );
+                throw new Exception( __( 'Backup file not found', 'fp-publisher' ) );
             }
             
             // Decompress backup
@@ -268,17 +268,17 @@ class TTS_Backup {
             // Load backup data
             $backup_content = file_get_contents( $decompressed_path );
             if ( false === $backup_content ) {
-                throw new Exception( __( 'Failed to read backup file', 'trello-social-auto-publisher' ) );
+                throw new Exception( __( 'Failed to read backup file', 'fp-publisher' ) );
             }
             
             $backup_data = json_decode( $backup_content, true );
             
             if ( json_last_error() !== JSON_ERROR_NONE ) {
-                throw new Exception( __( 'Backup file contains invalid JSON', 'trello-social-auto-publisher' ) );
+                throw new Exception( __( 'Backup file contains invalid JSON', 'fp-publisher' ) );
             }
             
             if ( ! $backup_data ) {
-                throw new Exception( __( 'Invalid backup file format', 'trello-social-auto-publisher' ) );
+                throw new Exception( __( 'Invalid backup file format', 'fp-publisher' ) );
             }
             
             // Perform restore based on type
@@ -301,7 +301,7 @@ class TTS_Backup {
             
             return array(
                 'success' => true,
-                'message' => __( 'Backup restored successfully', 'trello-social-auto-publisher' )
+                'message' => __( 'Backup restored successfully', 'fp-publisher' )
             );
             
         } catch ( Exception $e ) {
@@ -309,7 +309,7 @@ class TTS_Backup {
             
             return array(
                 'success' => false,
-                'message' => __( 'Backup restore failed: ', 'trello-social-auto-publisher' ) . $e->getMessage()
+                'message' => __( 'Backup restore failed: ', 'fp-publisher' ) . $e->getMessage()
             );
         }
     }
@@ -367,7 +367,7 @@ class TTS_Backup {
         check_ajax_referer( 'tts_backup_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $backups = $this->list_backups();
@@ -415,7 +415,7 @@ class TTS_Backup {
         check_ajax_referer( 'tts_backup_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $filename = sanitize_file_name( $_POST['filename'] ?? '' );
@@ -433,13 +433,13 @@ class TTS_Backup {
         if ( file_exists( $backup_path ) && unlink( $backup_path ) ) {
             return array(
                 'success' => true,
-                'message' => __( 'Backup deleted successfully', 'trello-social-auto-publisher' )
+                'message' => __( 'Backup deleted successfully', 'fp-publisher' )
             );
         }
         
         return array(
             'success' => false,
-            'message' => __( 'Failed to delete backup', 'trello-social-auto-publisher' )
+            'message' => __( 'Failed to delete backup', 'fp-publisher' )
         );
     }
 
@@ -450,7 +450,7 @@ class TTS_Backup {
         check_ajax_referer( 'tts_backup_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $filename = sanitize_file_name( $_GET['filename'] ?? '' );
@@ -464,7 +464,7 @@ class TTS_Backup {
         $backup_path = $this->get_backup_directory() . $filename;
         
         if ( ! file_exists( $backup_path ) ) {
-            wp_die( esc_html__( 'Backup file not found', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Backup file not found', 'fp-publisher' ) );
         }
         
         header( 'Content-Type: application/octet-stream' );
@@ -521,7 +521,7 @@ class TTS_Backup {
         if ( false === $fp_out || false === $fp_in ) {
             if ( $fp_in ) fclose( $fp_in );
             if ( $fp_out ) gzclose( $fp_out );
-            throw new Exception( __( 'Failed to compress backup file', 'trello-social-auto-publisher' ) );
+            throw new Exception( __( 'Failed to compress backup file', 'fp-publisher' ) );
         }
         
         while ( ! feof( $fp_in ) ) {
@@ -546,7 +546,7 @@ class TTS_Backup {
         if ( false === $fp_out || false === $fp_in ) {
             if ( $fp_out ) fclose( $fp_out );
             if ( $fp_in ) gzclose( $fp_in );
-            throw new Exception( __( 'Failed to decompress backup file', 'trello-social-auto-publisher' ) );
+            throw new Exception( __( 'Failed to decompress backup file', 'fp-publisher' ) );
         }
         
         while ( ! gzeof( $fp_in ) ) {

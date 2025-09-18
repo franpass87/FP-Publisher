@@ -38,7 +38,7 @@ class TTS_Publisher_Instagram_Story {
         }
 
         if ( empty( $ig_user_id ) || empty( $token ) || empty( $media_path ) ) {
-            $error = __( 'Missing credentials or media for Instagram Story', 'trello-social-auto-publisher' );
+            $error = __( 'Missing credentials or media for Instagram Story', 'fp-publisher' );
             tts_log_event( $post_id, 'instagram_story', 'error', $error, '' );
 
             return array(
@@ -84,7 +84,7 @@ class TTS_Publisher_Instagram_Story {
         $code = wp_remote_retrieve_response_code( $result );
 
         if ( 200 !== $code || empty( $data['id'] ) ) {
-            $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            $error = isset( $data['error']['message'] ) ? $data['error']['message'] : __( 'Unknown error', 'fp-publisher' );
             tts_log_event( $post_id, 'instagram_story', 'error', $error, $data );
 
             return array(
@@ -122,7 +122,7 @@ class TTS_Publisher_Instagram_Story {
         $publish_code = wp_remote_retrieve_response_code( $publish_result );
 
         if ( 200 !== $publish_code || empty( $publish_data['id'] ) ) {
-            $error = isset( $publish_data['error']['message'] ) ? $publish_data['error']['message'] : __( 'Unknown error', 'trello-social-auto-publisher' );
+            $error = isset( $publish_data['error']['message'] ) ? $publish_data['error']['message'] : __( 'Unknown error', 'fp-publisher' );
             tts_log_event( $post_id, 'instagram_story', 'error', $error, $publish_data );
 
             return array(
@@ -160,14 +160,14 @@ class TTS_Publisher_Instagram_Story {
             tts_notify_publication( $post_id, 'error', 'instagram_story' );
             $error_code = $result['error_code'] ?? 'instagram_story_error';
             $error_data = $result['error_data'] ?? array();
-            $error_msg  = $result['error'] ?? __( 'Unknown error', 'trello-social-auto-publisher' );
+            $error_msg  = $result['error'] ?? __( 'Unknown error', 'fp-publisher' );
 
             return new \WP_Error( $error_code, $error_msg, $error_data );
         }
 
         $data     = $result['data'] ?? array();
         $response = array(
-            'message' => __( 'Published Instagram Story', 'trello-social-auto-publisher' ),
+            'message' => __( 'Published Instagram Story', 'fp-publisher' ),
             'id'      => $data['id'] ?? '',
         );
 

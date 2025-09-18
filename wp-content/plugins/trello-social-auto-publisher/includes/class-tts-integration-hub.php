@@ -218,18 +218,18 @@ class TTS_Integration_Hub {
         check_ajax_referer( 'tts_integration_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'You do not have sufficient permissions.', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'You do not have sufficient permissions.', 'fp-publisher' ) );
         }
 
         try {
             wp_send_json_success( array(
                 'integrations' => $this->available_integrations,
                 'connected' => $this->get_connected_integrations(),
-                'message' => __( 'Available integrations retrieved successfully!', 'trello-social-auto-publisher' )
+                'message' => __( 'Available integrations retrieved successfully!', 'fp-publisher' )
             ) );
         } catch ( Exception $e ) {
             error_log( 'TTS Get Integrations Error: ' . $e->getMessage() );
-            wp_send_json_error( array( 'message' => __( 'Failed to retrieve integrations. Please try again.', 'trello-social-auto-publisher' ) ) );
+            wp_send_json_error( array( 'message' => __( 'Failed to retrieve integrations. Please try again.', 'fp-publisher' ) ) );
         }
     }
 
@@ -240,7 +240,7 @@ class TTS_Integration_Hub {
         check_ajax_referer( 'tts_integration_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'You do not have sufficient permissions.', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'You do not have sufficient permissions.', 'fp-publisher' ) );
         }
 
         $integration_type = sanitize_text_field( wp_unslash( $_POST['integration_type'] ?? '' ) );
@@ -249,7 +249,7 @@ class TTS_Integration_Hub {
         $settings = array_map( 'sanitize_text_field', wp_unslash( $_POST['settings'] ?? array() ) );
 
         if ( empty( $integration_type ) || empty( $integration_name ) ) {
-            wp_send_json_error( array( 'message' => __( 'Integration type and name are required.', 'trello-social-auto-publisher' ) ) );
+            wp_send_json_error( array( 'message' => __( 'Integration type and name are required.', 'fp-publisher' ) ) );
         }
 
         try {
@@ -257,11 +257,11 @@ class TTS_Integration_Hub {
             
             wp_send_json_success( array(
                 'integration_id' => $integration_id,
-                'message' => __( 'Integration connected successfully!', 'trello-social-auto-publisher' )
+                'message' => __( 'Integration connected successfully!', 'fp-publisher' )
             ) );
         } catch ( Exception $e ) {
             error_log( 'TTS Integration Connection Error: ' . $e->getMessage() );
-            wp_send_json_error( array( 'message' => __( 'Failed to connect integration. Please check your credentials and try again.', 'trello-social-auto-publisher' ) ) );
+            wp_send_json_error( array( 'message' => __( 'Failed to connect integration. Please check your credentials and try again.', 'fp-publisher' ) ) );
         }
     }
 
@@ -619,24 +619,24 @@ class TTS_Integration_Hub {
         check_ajax_referer( 'tts_integration_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'You do not have sufficient permissions.', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'You do not have sufficient permissions.', 'fp-publisher' ) );
         }
 
         $integration_id = intval( $_POST['integration_id'] ?? 0 );
 
         if ( empty( $integration_id ) ) {
-            wp_send_json_error( array( 'message' => __( 'Integration ID is required.', 'trello-social-auto-publisher' ) ) );
+            wp_send_json_error( array( 'message' => __( 'Integration ID is required.', 'fp-publisher' ) ) );
         }
 
         try {
             $this->disconnect_integration( $integration_id );
             
             wp_send_json_success( array(
-                'message' => __( 'Integration disconnected successfully!', 'trello-social-auto-publisher' )
+                'message' => __( 'Integration disconnected successfully!', 'fp-publisher' )
             ) );
         } catch ( Exception $e ) {
             error_log( 'TTS Integration Disconnection Error: ' . $e->getMessage() );
-            wp_send_json_error( array( 'message' => __( 'Failed to disconnect integration. Please try again.', 'trello-social-auto-publisher' ) ) );
+            wp_send_json_error( array( 'message' => __( 'Failed to disconnect integration. Please try again.', 'fp-publisher' ) ) );
         }
     }
 
@@ -670,13 +670,13 @@ class TTS_Integration_Hub {
         check_ajax_referer( 'tts_integration_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'You do not have sufficient permissions.', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'You do not have sufficient permissions.', 'fp-publisher' ) );
         }
 
         $integration_id = intval( $_POST['integration_id'] ?? 0 );
 
         if ( empty( $integration_id ) ) {
-            wp_send_json_error( array( 'message' => __( 'Integration ID is required.', 'trello-social-auto-publisher' ) ) );
+            wp_send_json_error( array( 'message' => __( 'Integration ID is required.', 'fp-publisher' ) ) );
         }
 
         try {
@@ -684,11 +684,11 @@ class TTS_Integration_Hub {
             
             wp_send_json_success( array(
                 'test_result' => $test_result,
-                'message' => __( 'Integration tested successfully!', 'trello-social-auto-publisher' )
+                'message' => __( 'Integration tested successfully!', 'fp-publisher' )
             ) );
         } catch ( Exception $e ) {
             error_log( 'TTS Integration Test Error: ' . $e->getMessage() );
-            wp_send_json_error( array( 'message' => __( 'Failed to test integration. Please try again.', 'trello-social-auto-publisher' ) ) );
+            wp_send_json_error( array( 'message' => __( 'Failed to test integration. Please try again.', 'fp-publisher' ) ) );
         }
     }
 
@@ -728,14 +728,14 @@ class TTS_Integration_Hub {
         check_ajax_referer( 'tts_integration_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'You do not have sufficient permissions.', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'You do not have sufficient permissions.', 'fp-publisher' ) );
         }
 
         $integration_id = intval( $_POST['integration_id'] ?? 0 );
         $data_type = sanitize_text_field( wp_unslash( $_POST['data_type'] ?? 'all' ) );
 
         if ( empty( $integration_id ) ) {
-            wp_send_json_error( array( 'message' => __( 'Integration ID is required.', 'trello-social-auto-publisher' ) ) );
+            wp_send_json_error( array( 'message' => __( 'Integration ID is required.', 'fp-publisher' ) ) );
         }
 
         try {
@@ -743,11 +743,11 @@ class TTS_Integration_Hub {
             
             wp_send_json_success( array(
                 'sync_result' => $sync_result,
-                'message' => __( 'Integration data synced successfully!', 'trello-social-auto-publisher' )
+                'message' => __( 'Integration data synced successfully!', 'fp-publisher' )
             ) );
         } catch ( Exception $e ) {
             error_log( 'TTS Integration Sync Error: ' . $e->getMessage() );
-            wp_send_json_error( array( 'message' => __( 'Failed to sync integration data. Please try again.', 'trello-social-auto-publisher' ) ) );
+            wp_send_json_error( array( 'message' => __( 'Failed to sync integration data. Please try again.', 'fp-publisher' ) ) );
         }
     }
 

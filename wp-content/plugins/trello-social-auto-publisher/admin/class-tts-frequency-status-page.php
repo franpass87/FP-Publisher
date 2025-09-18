@@ -60,8 +60,8 @@ class TTS_Frequency_Status_Page {
                 'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                 'nonce'   => wp_create_nonce( 'tts_frequency_status' ),
                 'strings' => array(
-                    'refreshing' => __( 'Refreshing...', 'trello-social-auto-publisher' ),
-                    'error'      => __( 'Error refreshing status', 'trello-social-auto-publisher' ),
+                    'refreshing' => __( 'Refreshing...', 'fp-publisher' ),
+                    'error'      => __( 'Error refreshing status', 'fp-publisher' ),
                 )
             )
         );
@@ -82,20 +82,20 @@ class TTS_Frequency_Status_Page {
 
         ?>
         <div class="wrap">
-            <h1><?php esc_html_e( 'Publishing Frequency Status', 'trello-social-auto-publisher' ); ?></h1>
+            <h1><?php esc_html_e( 'Publishing Frequency Status', 'fp-publisher' ); ?></h1>
             
             <div class="tts-frequency-header">
-                <p><?php esc_html_e( 'Monitor publishing frequency compliance for all clients. This page shows progress towards publishing goals and alerts for upcoming content needs.', 'trello-social-auto-publisher' ); ?></p>
+                <p><?php esc_html_e( 'Monitor publishing frequency compliance for all clients. This page shows progress towards publishing goals and alerts for upcoming content needs.', 'fp-publisher' ); ?></p>
                 
                 <div class="tts-frequency-actions">
                     <button type="button" id="tts-refresh-status" class="button button-secondary">
-                        <?php esc_html_e( 'Refresh Status', 'trello-social-auto-publisher' ); ?>
+                        <?php esc_html_e( 'Refresh Status', 'fp-publisher' ); ?>
                     </button>
                     <button type="button" id="tts-check-now" class="button button-primary">
-                        <?php esc_html_e( 'Check All Clients Now', 'trello-social-auto-publisher' ); ?>
+                        <?php esc_html_e( 'Check All Clients Now', 'fp-publisher' ); ?>
                     </button>
                     <button type="button" id="tts-test-alerts" class="button button-secondary">
-                        <?php esc_html_e( 'Test Alert System', 'trello-social-auto-publisher' ); ?>
+                        <?php esc_html_e( 'Test Alert System', 'fp-publisher' ); ?>
                     </button>
                 </div>
             </div>
@@ -105,13 +105,13 @@ class TTS_Frequency_Status_Page {
             </div>
 
             <div class="tts-frequency-legend">
-                <h3><?php esc_html_e( 'Status Legend', 'trello-social-auto-publisher' ); ?></h3>
+                <h3><?php esc_html_e( 'Status Legend', 'fp-publisher' ); ?></h3>
                 <div class="tts-legend-items">
-                    <span class="tts-status-badge status-completed"><?php esc_html_e( 'Completed', 'trello-social-auto-publisher' ); ?></span>
-                    <span class="tts-status-badge status-on_track"><?php esc_html_e( 'On Track', 'trello-social-auto-publisher' ); ?></span>
-                    <span class="tts-status-badge status-warning"><?php esc_html_e( 'Warning (≤5 days)', 'trello-social-auto-publisher' ); ?></span>
-                    <span class="tts-status-badge status-urgent"><?php esc_html_e( 'Urgent (≤2 days)', 'trello-social-auto-publisher' ); ?></span>
-                    <span class="tts-status-badge status-overdue"><?php esc_html_e( 'Overdue', 'trello-social-auto-publisher' ); ?></span>
+                    <span class="tts-status-badge status-completed"><?php esc_html_e( 'Completed', 'fp-publisher' ); ?></span>
+                    <span class="tts-status-badge status-on_track"><?php esc_html_e( 'On Track', 'fp-publisher' ); ?></span>
+                    <span class="tts-status-badge status-warning"><?php esc_html_e( 'Warning (≤5 days)', 'fp-publisher' ); ?></span>
+                    <span class="tts-status-badge status-urgent"><?php esc_html_e( 'Urgent (≤2 days)', 'fp-publisher' ); ?></span>
+                    <span class="tts-status-badge status-overdue"><?php esc_html_e( 'Overdue', 'fp-publisher' ); ?></span>
                 </div>
             </div>
         </div>
@@ -126,7 +126,7 @@ class TTS_Frequency_Status_Page {
      */
     private function render_status_tables( $clients, $monitor ) {
         if ( empty( $clients ) ) {
-            echo '<div class="notice notice-info"><p>' . esc_html__( 'No clients found.', 'trello-social-auto-publisher' ) . '</p></div>';
+            echo '<div class="notice notice-info"><p>' . esc_html__( 'No clients found.', 'fp-publisher' ) . '</p></div>';
             return;
         }
 
@@ -156,13 +156,13 @@ class TTS_Frequency_Status_Page {
                 <table class="wp-list-table widefat fixed striped">
                     <thead>
                         <tr>
-                            <th><?php esc_html_e( 'Channel', 'trello-social-auto-publisher' ); ?></th>
-                            <th><?php esc_html_e( 'Target', 'trello-social-auto-publisher' ); ?></th>
-                            <th><?php esc_html_e( 'Published', 'trello-social-auto-publisher' ); ?></th>
-                            <th><?php esc_html_e( 'Remaining', 'trello-social-auto-publisher' ); ?></th>
-                            <th><?php esc_html_e( 'Days Left', 'trello-social-auto-publisher' ); ?></th>
-                            <th><?php esc_html_e( 'Progress', 'trello-social-auto-publisher' ); ?></th>
-                            <th><?php esc_html_e( 'Status', 'trello-social-auto-publisher' ); ?></th>
+                            <th><?php esc_html_e( 'Channel', 'fp-publisher' ); ?></th>
+                            <th><?php esc_html_e( 'Target', 'fp-publisher' ); ?></th>
+                            <th><?php esc_html_e( 'Published', 'fp-publisher' ); ?></th>
+                            <th><?php esc_html_e( 'Remaining', 'fp-publisher' ); ?></th>
+                            <th><?php esc_html_e( 'Days Left', 'fp-publisher' ); ?></th>
+                            <th><?php esc_html_e( 'Progress', 'fp-publisher' ); ?></th>
+                            <th><?php esc_html_e( 'Status', 'fp-publisher' ); ?></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -204,11 +204,11 @@ class TTS_Frequency_Status_Page {
      */
     private function get_status_label( $status ) {
         $labels = array(
-            'completed' => __( 'Completed', 'trello-social-auto-publisher' ),
-            'on_track'  => __( 'On Track', 'trello-social-auto-publisher' ),
-            'warning'   => __( 'Warning', 'trello-social-auto-publisher' ),
-            'urgent'    => __( 'Urgent', 'trello-social-auto-publisher' ),
-            'overdue'   => __( 'Overdue', 'trello-social-auto-publisher' ),
+            'completed' => __( 'Completed', 'fp-publisher' ),
+            'on_track'  => __( 'On Track', 'fp-publisher' ),
+            'warning'   => __( 'Warning', 'fp-publisher' ),
+            'urgent'    => __( 'Urgent', 'fp-publisher' ),
+            'overdue'   => __( 'Overdue', 'fp-publisher' ),
         );
 
         return isset( $labels[ $status ] ) ? $labels[ $status ] : ucfirst( $status );
@@ -221,7 +221,7 @@ class TTS_Frequency_Status_Page {
         check_ajax_referer( 'tts_frequency_status', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( __( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( __( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $monitor = new TTS_Frequency_Monitor();
@@ -247,13 +247,13 @@ class TTS_Frequency_Status_Page {
         check_ajax_referer( 'tts_frequency_status', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( __( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( __( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $monitor = new TTS_Frequency_Monitor();
         $monitor->check_all_clients();
 
-        wp_send_json_success( array( 'message' => __( 'Frequency check completed', 'trello-social-auto-publisher' ) ) );
+        wp_send_json_success( array( 'message' => __( 'Frequency check completed', 'fp-publisher' ) ) );
     }
 
     /**
@@ -263,24 +263,24 @@ class TTS_Frequency_Status_Page {
         check_ajax_referer( 'tts_frequency_status', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( __( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( __( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         $notifier = new TTS_Notifier();
         
         // Send test notifications
-        $test_message = __( 'TEST ALERT: Publishing frequency monitoring system is working correctly. This is a test message.', 'trello-social-auto-publisher' );
+        $test_message = __( 'TEST ALERT: Publishing frequency monitoring system is working correctly. This is a test message.', 'fp-publisher' );
         
         $notifier->notify_slack( $test_message );
         $notifier->notify_email( 
-            __( 'Test Alert - Publishing Frequency System', 'trello-social-auto-publisher' ), 
+            __( 'Test Alert - Publishing Frequency System', 'fp-publisher' ), 
             $test_message 
         );
 
         // Log the test
         tts_log_event( 0, 'frequency_monitor', 'test', $test_message, array() );
 
-        wp_send_json_success( array( 'message' => __( 'Test alerts sent successfully', 'trello-social-auto-publisher' ) ) );
+        wp_send_json_success( array( 'message' => __( 'Test alerts sent successfully', 'fp-publisher' ) ) );
     }
 }
 

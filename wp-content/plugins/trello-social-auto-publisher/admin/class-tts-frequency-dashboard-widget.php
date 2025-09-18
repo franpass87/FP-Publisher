@@ -29,7 +29,7 @@ class TTS_Frequency_Dashboard_Widget {
         if ( current_user_can( 'manage_options' ) ) {
             wp_add_dashboard_widget(
                 'tts_frequency_status_widget',
-                __( 'Publishing Frequency Status', 'trello-social-auto-publisher' ),
+                __( 'Publishing Frequency Status', 'fp-publisher' ),
                 array( $this, 'render_widget' ),
                 array( $this, 'render_widget_config' )
             );
@@ -57,9 +57,9 @@ class TTS_Frequency_Dashboard_Widget {
         ?>
         <div class="tts-frequency-widget">
             <?php if ( empty( $clients ) ) : ?>
-                <p><?php esc_html_e( 'No clients with frequency settings found.', 'trello-social-auto-publisher' ); ?></p>
+                <p><?php esc_html_e( 'No clients with frequency settings found.', 'fp-publisher' ); ?></p>
                 <p><a href="<?php echo admin_url( 'edit.php?post_type=tts_client' ); ?>" class="button">
-                    <?php esc_html_e( 'Configure Clients', 'trello-social-auto-publisher' ); ?>
+                    <?php esc_html_e( 'Configure Clients', 'fp-publisher' ); ?>
                 </a></p>
             <?php else : ?>
                 <div class="tts-widget-summary">
@@ -100,15 +100,15 @@ class TTS_Frequency_Dashboard_Widget {
                     <div class="tts-summary-stats">
                         <div class="tts-stat urgent">
                             <span class="count"><?php echo esc_html( $urgent_count ); ?></span>
-                            <span class="label"><?php esc_html_e( 'Urgent', 'trello-social-auto-publisher' ); ?></span>
+                            <span class="label"><?php esc_html_e( 'Urgent', 'fp-publisher' ); ?></span>
                         </div>
                         <div class="tts-stat warning">
                             <span class="count"><?php echo esc_html( $warning_count ); ?></span>
-                            <span class="label"><?php esc_html_e( 'Warning', 'trello-social-auto-publisher' ); ?></span>
+                            <span class="label"><?php esc_html_e( 'Warning', 'fp-publisher' ); ?></span>
                         </div>
                         <div class="tts-stat completed">
                             <span class="count"><?php echo esc_html( $completed_count ); ?></span>
-                            <span class="label"><?php esc_html_e( 'On Track', 'trello-social-auto-publisher' ); ?></span>
+                            <span class="label"><?php esc_html_e( 'On Track', 'fp-publisher' ); ?></span>
                         </div>
                     </div>
                 </div>
@@ -132,10 +132,10 @@ class TTS_Frequency_Dashboard_Widget {
 
                 <div class="tts-widget-actions">
                     <a href="<?php echo admin_url( 'admin.php?page=fp-publisher-frequency-status' ); ?>" class="button button-primary">
-                        <?php esc_html_e( 'View Full Status', 'trello-social-auto-publisher' ); ?>
+                        <?php esc_html_e( 'View Full Status', 'fp-publisher' ); ?>
                     </a>
                     <button type="button" class="button button-secondary" id="tts-widget-refresh">
-                        <?php esc_html_e( 'Refresh', 'trello-social-auto-publisher' ); ?>
+                        <?php esc_html_e( 'Refresh', 'fp-publisher' ); ?>
                     </button>
                 </div>
             <?php endif; ?>
@@ -289,7 +289,7 @@ class TTS_Frequency_Dashboard_Widget {
                         <strong><?php echo esc_html( ucfirst( $channel ) ); ?>:</strong>
                         <?php echo esc_html( $data['published'] ); ?>/<?php echo esc_html( $data['target'] ); ?>
                         <?php if ( $data['remaining'] > 0 ) : ?>
-                            (<?php echo esc_html( $data['remaining'] ); ?> <?php esc_html_e( 'left', 'trello-social-auto-publisher' ); ?>)
+                            (<?php echo esc_html( $data['remaining'] ); ?> <?php esc_html_e( 'left', 'fp-publisher' ); ?>)
                         <?php endif; ?>
                     </span>
                 <?php endforeach; ?>
@@ -312,7 +312,7 @@ class TTS_Frequency_Dashboard_Widget {
         check_ajax_referer( 'tts_frequency_widget', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( __( 'Insufficient permissions', 'trello-social-auto-publisher' ) );
+            wp_die( __( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
         // Trigger a quick frequency check

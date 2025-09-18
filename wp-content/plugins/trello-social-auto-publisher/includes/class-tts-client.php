@@ -57,7 +57,7 @@ class TTS_Client {
     public function add_credentials_metabox() {
         add_meta_box(
             'tts_client_credentials',
-            __( 'Client Credentials', 'trello-social-auto-publisher' ),
+            __( 'Client Credentials', 'fp-publisher' ),
             array( $this, 'render_credentials_metabox' ),
             'tts_client'
         );
@@ -98,13 +98,13 @@ class TTS_Client {
             $publish_freq = array();
         }
 
-        echo '<p><label for="tts_trello_key">' . esc_html__( 'Trello API Key', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_trello_key">' . esc_html__( 'Trello API Key', 'fp-publisher' ) . '</label>';
         echo '<input type="text" id="tts_trello_key" name="tts_trello_key" value="' . esc_attr( $trello_key ) . '" class="widefat" /></p>';
 
-        echo '<p><label for="tts_trello_token">' . esc_html__( 'Trello API Token', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_trello_token">' . esc_html__( 'Trello API Token', 'fp-publisher' ) . '</label>';
         echo '<input type="text" id="tts_trello_token" name="tts_trello_token" value="' . esc_attr( $trello_token ) . '" class="widefat" /></p>';
 
-        echo '<p><label for="tts_trello_secret">' . esc_html__( 'Trello API Secret', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_trello_secret">' . esc_html__( 'Trello API Secret', 'fp-publisher' ) . '</label>';
         echo '<input type="text" id="tts_trello_secret" name="tts_trello_secret" value="' . esc_attr( $trello_secret ) . '" class="widefat" /></p>';
 
         ?>
@@ -114,60 +114,60 @@ class TTS_Client {
             foreach ( $board_ids as $board ) :
                 ?>
                 <p class="tts-trello-board-row">
-                    <input type="text" name="tts_trello_boards[<?php echo $index; ?>]" value="<?php echo esc_attr( $board ); ?>" placeholder="<?php esc_attr_e( 'Trello Board ID', 'trello-social-auto-publisher' ); ?>" />
+                    <input type="text" name="tts_trello_boards[<?php echo $index; ?>]" value="<?php echo esc_attr( $board ); ?>" placeholder="<?php esc_attr_e( 'Trello Board ID', 'fp-publisher' ); ?>" />
                 </p>
                 <?php
                 $index++;
             endforeach;
             ?>
             <p class="tts-trello-board-row">
-                <input type="text" name="tts_trello_boards[<?php echo $index; ?>]" placeholder="<?php esc_attr_e( 'Trello Board ID', 'trello-social-auto-publisher' ); ?>" />
+                <input type="text" name="tts_trello_boards[<?php echo $index; ?>]" placeholder="<?php esc_attr_e( 'Trello Board ID', 'fp-publisher' ); ?>" />
             </p>
         </div>
-        <p><button type="button" class="button" id="add-tts-trello-board"><?php esc_html_e( 'Add Board', 'trello-social-auto-publisher' ); ?></button></p>
+        <p><button type="button" class="button" id="add-tts-trello-board"><?php esc_html_e( 'Add Board', 'fp-publisher' ); ?></button></p>
         <script type="text/javascript">
         jQuery(document).ready(function($){
             $('#add-tts-trello-board').on('click', function(e){
                 e.preventDefault();
                 var index = $('#tts_trello_boards .tts-trello-board-row').length;
                 var safeIndex = String(parseInt(index, 10));
-                var row = '<p class="tts-trello-board-row"><input type="text" name="tts_trello_boards[' + safeIndex + ']" placeholder="<?php echo esc_js( __( 'Trello Board ID', 'trello-social-auto-publisher' ) ); ?>" /></p>';
+                var row = '<p class="tts-trello-board-row"><input type="text" name="tts_trello_boards[' + safeIndex + ']" placeholder="<?php echo esc_js( __( 'Trello Board ID', 'fp-publisher' ) ); ?>" /></p>';
                 $('#tts_trello_boards').append(row);
             });
         });
         </script>
         <?php
 
-        echo '<p><label for="tts_trello_published_list">' . esc_html__( 'Trello Published List ID', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_trello_published_list">' . esc_html__( 'Trello Published List ID', 'fp-publisher' ) . '</label>';
         echo '<input type="text" id="tts_trello_published_list" name="tts_trello_published_list" value="' . esc_attr( $published_list ) . '" class="widefat" /></p>';
 
-        echo '<p><label for="tts_fb_token">' . esc_html__( 'Facebook Access Token', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_fb_token">' . esc_html__( 'Facebook Access Token', 'fp-publisher' ) . '</label>';
         echo '<input type="text" id="tts_fb_token" name="tts_fb_token" value="' . esc_attr( $fb_token ) . '" class="widefat" /></p>';
-        echo '<p><label for="tts_default_hashtags_facebook">' . esc_html__( 'Facebook Default Hashtags', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_default_hashtags_facebook">' . esc_html__( 'Facebook Default Hashtags', 'fp-publisher' ) . '</label>';
         echo '<textarea id="tts_default_hashtags_facebook" name="tts_default_hashtags_facebook" class="widefat" rows="3">' . esc_textarea( $fb_hashtags ) . '</textarea></p>';
 
-        echo '<p><label for="tts_ig_token">' . esc_html__( 'Instagram Access Token', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_ig_token">' . esc_html__( 'Instagram Access Token', 'fp-publisher' ) . '</label>';
         echo '<input type="text" id="tts_ig_token" name="tts_ig_token" value="' . esc_attr( $ig_token ) . '" class="widefat" /></p>';
-        echo '<p><label for="tts_default_hashtags_instagram">' . esc_html__( 'Instagram Default Hashtags', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_default_hashtags_instagram">' . esc_html__( 'Instagram Default Hashtags', 'fp-publisher' ) . '</label>';
         echo '<textarea id="tts_default_hashtags_instagram" name="tts_default_hashtags_instagram" class="widefat" rows="3">' . esc_textarea( $ig_hashtags ) . '</textarea></p>';
 
-        echo '<p><label for="tts_yt_token">' . esc_html__( 'YouTube Access Token', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_yt_token">' . esc_html__( 'YouTube Access Token', 'fp-publisher' ) . '</label>';
         echo '<input type="text" id="tts_yt_token" name="tts_yt_token" value="' . esc_attr( $yt_token ) . '" class="widefat" /></p>';
-        echo '<p><label for="tts_default_hashtags_youtube">' . esc_html__( 'YouTube Default Hashtags', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_default_hashtags_youtube">' . esc_html__( 'YouTube Default Hashtags', 'fp-publisher' ) . '</label>';
         echo '<textarea id="tts_default_hashtags_youtube" name="tts_default_hashtags_youtube" class="widefat" rows="3">' . esc_textarea( $yt_hashtags ) . '</textarea></p>';
 
-        echo '<p><label for="tts_tt_token">' . esc_html__( 'TikTok Access Token', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_tt_token">' . esc_html__( 'TikTok Access Token', 'fp-publisher' ) . '</label>';
         echo '<input type="text" id="tts_tt_token" name="tts_tt_token" value="' . esc_attr( $tt_token ) . '" class="widefat" /></p>';
-        echo '<p><label for="tts_default_hashtags_tiktok">' . esc_html__( 'TikTok Default Hashtags', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<p><label for="tts_default_hashtags_tiktok">' . esc_html__( 'TikTok Default Hashtags', 'fp-publisher' ) . '</label>';
         echo '<textarea id="tts_default_hashtags_tiktok" name="tts_default_hashtags_tiktok" class="widefat" rows="3">' . esc_textarea( $tt_hashtags ) . '</textarea></p>';
 
-        echo '<h3>' . esc_html__( 'Blog Publishing Settings', 'trello-social-auto-publisher' ) . '</h3>';
-        echo '<p><label for="tts_blog_settings">' . esc_html__( 'Blog Settings', 'trello-social-auto-publisher' ) . '</label>';
+        echo '<h3>' . esc_html__( 'Blog Publishing Settings', 'fp-publisher' ) . '</h3>';
+        echo '<p><label for="tts_blog_settings">' . esc_html__( 'Blog Settings', 'fp-publisher' ) . '</label>';
         echo '<textarea id="tts_blog_settings" name="tts_blog_settings" class="widefat" rows="4" placeholder="post_type:post|post_status:draft|author_id:1|category_id:1|language:it|keywords:keyword1:url1|keyword2:url2">' . esc_textarea( $blog_settings ) . '</textarea>';
-        echo '<small>' . esc_html__( 'Format: post_type:post|post_status:draft|author_id:1|category_id:1|language:it|keywords:keyword1:url1|keyword2:url2', 'trello-social-auto-publisher' ) . '</small></p>';
+        echo '<small>' . esc_html__( 'Format: post_type:post|post_status:draft|author_id:1|category_id:1|language:it|keywords:keyword1:url1|keyword2:url2', 'fp-publisher' ) . '</small></p>';
 
-        echo '<h3>' . esc_html__( 'Trello List Mapping', 'trello-social-auto-publisher' ) . '</h3>';
-        echo '<p>' . esc_html__( 'Map Trello lists to social channels. Supported channels: facebook, instagram, youtube, tiktok, blog', 'trello-social-auto-publisher' ) . '</p>';
+        echo '<h3>' . esc_html__( 'Trello List Mapping', 'fp-publisher' ) . '</h3>';
+        echo '<p>' . esc_html__( 'Map Trello lists to social channels. Supported channels: facebook, instagram, youtube, tiktok, blog', 'fp-publisher' ) . '</p>';
 
         ?>
         <div id="tts_trello_map">
@@ -178,19 +178,19 @@ class TTS_Client {
                 $social  = isset( $row['canale_social'] ) ? esc_attr( $row['canale_social'] ) : '';
                 ?>
                 <p class="tts-trello-map-row">
-                    <input type="text" name="tts_trello_map[<?php echo $index; ?>][idList]" value="<?php echo $id_list; ?>" placeholder="<?php esc_attr_e( 'Trello List ID', 'trello-social-auto-publisher' ); ?>" />
-                    <input type="text" name="tts_trello_map[<?php echo $index; ?>][canale_social]" value="<?php echo $social; ?>" placeholder="<?php esc_attr_e( 'Canale Social', 'trello-social-auto-publisher' ); ?>" />
+                    <input type="text" name="tts_trello_map[<?php echo $index; ?>][idList]" value="<?php echo $id_list; ?>" placeholder="<?php esc_attr_e( 'Trello List ID', 'fp-publisher' ); ?>" />
+                    <input type="text" name="tts_trello_map[<?php echo $index; ?>][canale_social]" value="<?php echo $social; ?>" placeholder="<?php esc_attr_e( 'Canale Social', 'fp-publisher' ); ?>" />
                 </p>
                 <?php
                 $index++;
             endforeach;
             ?>
             <p class="tts-trello-map-row">
-                <input type="text" name="tts_trello_map[<?php echo $index; ?>][idList]" placeholder="<?php esc_attr_e( 'Trello List ID', 'trello-social-auto-publisher' ); ?>" />
-                <input type="text" name="tts_trello_map[<?php echo $index; ?>][canale_social]" placeholder="<?php esc_attr_e( 'Canale Social', 'trello-social-auto-publisher' ); ?>" />
+                <input type="text" name="tts_trello_map[<?php echo $index; ?>][idList]" placeholder="<?php esc_attr_e( 'Trello List ID', 'fp-publisher' ); ?>" />
+                <input type="text" name="tts_trello_map[<?php echo $index; ?>][canale_social]" placeholder="<?php esc_attr_e( 'Canale Social', 'fp-publisher' ); ?>" />
             </p>
         </div>
-        <p><button type="button" class="button" id="add-tts-trello-map"><?php esc_html_e( 'Add Mapping', 'trello-social-auto-publisher' ); ?></button></p>
+        <p><button type="button" class="button" id="add-tts-trello-map"><?php esc_html_e( 'Add Mapping', 'fp-publisher' ); ?></button></p>
         <script type="text/javascript">
         jQuery(document).ready(function($){
             $('#add-tts-trello-map').on('click', function(e){
@@ -198,16 +198,16 @@ class TTS_Client {
                 var index = $('#tts_trello_map .tts-trello-map-row').length;
                 var safeIndex = String(parseInt(index, 10));
                 var row = '<p class="tts-trello-map-row">' +
-                    '<input type="text" name="tts_trello_map[' + safeIndex + '][idList]" placeholder="<?php echo esc_js( __( 'Trello List ID', 'trello-social-auto-publisher' ) ); ?>" />' +
-                    '<input type="text" name="tts_trello_map[' + safeIndex + '][canale_social]" placeholder="<?php echo esc_js( __( 'Canale Social', 'trello-social-auto-publisher' ) ); ?>" />' +
+                    '<input type="text" name="tts_trello_map[' + safeIndex + '][idList]" placeholder="<?php echo esc_js( __( 'Trello List ID', 'fp-publisher' ) ); ?>" />' +
+                    '<input type="text" name="tts_trello_map[' + safeIndex + '][canale_social]" placeholder="<?php echo esc_js( __( 'Canale Social', 'fp-publisher' ) ); ?>" />' +
                 '</p>';
                 $('#tts_trello_map').append(row);
             });
         });
         </script>
         
-        <h3><?php esc_html_e( 'Publishing Frequency Settings', 'trello-social-auto-publisher' ); ?></h3>
-        <p><?php esc_html_e( 'Configure how often content should be published for this client on each channel.', 'trello-social-auto-publisher' ); ?></p>
+        <h3><?php esc_html_e( 'Publishing Frequency Settings', 'fp-publisher' ); ?></h3>
+        <p><?php esc_html_e( 'Configure how often content should be published for this client on each channel.', 'fp-publisher' ); ?></p>
         
         <?php
         $channels = array(
@@ -219,9 +219,9 @@ class TTS_Client {
         );
         
         $periods = array(
-            'daily' => __( 'Daily', 'trello-social-auto-publisher' ),
-            'weekly' => __( 'Weekly', 'trello-social-auto-publisher' ),
-            'monthly' => __( 'Monthly', 'trello-social-auto-publisher' )
+            'daily' => __( 'Daily', 'fp-publisher' ),
+            'weekly' => __( 'Weekly', 'fp-publisher' ),
+            'monthly' => __( 'Monthly', 'fp-publisher' )
         );
         ?>
         
@@ -247,19 +247,19 @@ class TTS_Client {
                         <?php endforeach; ?>
                     </select>
                     <small style="color: #666; margin-left: 10px;">
-                        <?php esc_html_e( 'Leave count empty or 0 to disable frequency tracking for this channel', 'trello-social-auto-publisher' ); ?>
+                        <?php esc_html_e( 'Leave count empty or 0 to disable frequency tracking for this channel', 'fp-publisher' ); ?>
                     </small>
                 </p>
             <?php endforeach; ?>
         </div>
         
-        <h4><?php esc_html_e( 'Alert Settings', 'trello-social-auto-publisher' ); ?></h4>
+        <h4><?php esc_html_e( 'Alert Settings', 'fp-publisher' ); ?></h4>
         <?php
         $alert_days = get_post_meta( $post->ID, '_tts_alert_days_ahead', true );
         $alert_days = $alert_days ? $alert_days : 3;
         ?>
         <p>
-            <label for="tts_alert_days_ahead"><?php esc_html_e( 'Days ahead to alert for content needs:', 'trello-social-auto-publisher' ); ?></label>
+            <label for="tts_alert_days_ahead"><?php esc_html_e( 'Days ahead to alert for content needs:', 'fp-publisher' ); ?></label>
             <input type="number" 
                    id="tts_alert_days_ahead" 
                    name="tts_alert_days_ahead" 
@@ -268,7 +268,7 @@ class TTS_Client {
                    max="30" 
                    style="width: 60px;" />
             <small style="color: #666; margin-left: 10px;">
-                <?php esc_html_e( 'Send alerts this many days before content is needed', 'trello-social-auto-publisher' ); ?>
+                <?php esc_html_e( 'Send alerts this many days before content is needed', 'fp-publisher' ); ?>
             </small>
         </p>
         <?php
@@ -415,29 +415,29 @@ class TTS_Client {
         $client_id = absint( $client_id );
 
         if ( ! $client_id ) {
-            return new WP_Error( 'invalid_client', __( 'ID client non valido.', 'trello-social-auto-publisher' ) );
+            return new WP_Error( 'invalid_client', __( 'ID client non valido.', 'fp-publisher' ) );
         }
 
         if ( 'tts_client' !== get_post_type( $client_id ) ) {
-            return new WP_Error( 'invalid_client', __( 'Il post indicato non è un client valido.', 'trello-social-auto-publisher' ) );
+            return new WP_Error( 'invalid_client', __( 'Il post indicato non è un client valido.', 'fp-publisher' ) );
         }
 
         $channels = array(
             'facebook'  => array(
                 'meta'  => '_tts_fb_token',
-                'label' => __( 'Facebook', 'trello-social-auto-publisher' ),
+                'label' => __( 'Facebook', 'fp-publisher' ),
             ),
             'instagram' => array(
                 'meta'  => '_tts_ig_token',
-                'label' => __( 'Instagram', 'trello-social-auto-publisher' ),
+                'label' => __( 'Instagram', 'fp-publisher' ),
             ),
             'youtube'   => array(
                 'meta'  => '_tts_yt_token',
-                'label' => __( 'YouTube', 'trello-social-auto-publisher' ),
+                'label' => __( 'YouTube', 'fp-publisher' ),
             ),
             'tiktok'    => array(
                 'meta'  => '_tts_tt_token',
-                'label' => __( 'TikTok', 'trello-social-auto-publisher' ),
+                'label' => __( 'TikTok', 'fp-publisher' ),
             ),
         );
 
@@ -482,11 +482,11 @@ class TTS_Client {
             if ( ! empty( $missing_tokens ) ) {
                 $messages[] = sprintf(
                     /* translators: %s: comma separated list of channels. */
-                    __( 'Token mancanti per: %s.', 'trello-social-auto-publisher' ),
+                    __( 'Token mancanti per: %s.', 'fp-publisher' ),
                     implode( ', ', $missing_tokens )
                 );
             } else {
-                $messages[] = __( 'Nessun token configurato per questo client.', 'trello-social-auto-publisher' );
+                $messages[] = __( 'Nessun token configurato per questo client.', 'fp-publisher' );
             }
 
             return new WP_Error( 'missing_tokens', implode( ' ', $messages ) );
@@ -495,13 +495,13 @@ class TTS_Client {
         if ( ! empty( $missing_tokens ) ) {
             $messages[] = sprintf(
                 /* translators: %s: comma separated list of channels. */
-                __( 'Token mancanti per: %s.', 'trello-social-auto-publisher' ),
+                __( 'Token mancanti per: %s.', 'fp-publisher' ),
                 implode( ', ', $missing_tokens )
             );
         }
 
         if ( empty( $messages ) ) {
-            $messages[] = __( 'Impossibile verificare i token del client.', 'trello-social-auto-publisher' );
+            $messages[] = __( 'Impossibile verificare i token del client.', 'fp-publisher' );
         }
 
         return new WP_Error( 'invalid_tokens', implode( ' ', $messages ) );
@@ -555,7 +555,7 @@ class TTS_Client {
             return new WP_Error(
                 'fb_request_failed',
                 sprintf(
-                    __( 'Facebook: %s', 'trello-social-auto-publisher' ),
+                    __( 'Facebook: %s', 'fp-publisher' ),
                     $response->get_error_message()
                 )
             );
@@ -565,12 +565,12 @@ class TTS_Client {
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
 
         if ( 200 !== $code || empty( $body['id'] ) ) {
-            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'token non valido.', 'trello-social-auto-publisher' );
+            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'token non valido.', 'fp-publisher' );
 
             return new WP_Error(
                 'fb_invalid_token',
                 sprintf(
-                    __( 'Facebook: %s', 'trello-social-auto-publisher' ),
+                    __( 'Facebook: %s', 'fp-publisher' ),
                     $message
                 )
             );
@@ -605,7 +605,7 @@ class TTS_Client {
             return new WP_Error(
                 'ig_request_failed',
                 sprintf(
-                    __( 'Instagram: %s', 'trello-social-auto-publisher' ),
+                    __( 'Instagram: %s', 'fp-publisher' ),
                     $response->get_error_message()
                 )
             );
@@ -615,12 +615,12 @@ class TTS_Client {
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
 
         if ( 200 !== $code || empty( $body['id'] ) ) {
-            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'token non valido.', 'trello-social-auto-publisher' );
+            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'token non valido.', 'fp-publisher' );
 
             return new WP_Error(
                 'ig_invalid_token',
                 sprintf(
-                    __( 'Instagram: %s', 'trello-social-auto-publisher' ),
+                    __( 'Instagram: %s', 'fp-publisher' ),
                     $message
                 )
             );
@@ -654,7 +654,7 @@ class TTS_Client {
             return new WP_Error(
                 'yt_request_failed',
                 sprintf(
-                    __( 'YouTube: %s', 'trello-social-auto-publisher' ),
+                    __( 'YouTube: %s', 'fp-publisher' ),
                     $response->get_error_message()
                 )
             );
@@ -670,13 +670,13 @@ class TTS_Client {
             } elseif ( isset( $body['error'] ) ) {
                 $message = $body['error'];
             } else {
-                $message = __( 'token non valido.', 'trello-social-auto-publisher' );
+                $message = __( 'token non valido.', 'fp-publisher' );
             }
 
             return new WP_Error(
                 'yt_invalid_token',
                 sprintf(
-                    __( 'YouTube: %s', 'trello-social-auto-publisher' ),
+                    __( 'YouTube: %s', 'fp-publisher' ),
                     $message
                 )
             );
@@ -693,7 +693,7 @@ class TTS_Client {
      */
     protected static function validate_tiktok_token( $token ) {
         if ( empty( $token ) ) {
-            return new WP_Error( 'tt_invalid_token', __( 'TikTok: token non valido.', 'trello-social-auto-publisher' ) );
+            return new WP_Error( 'tt_invalid_token', __( 'TikTok: token non valido.', 'fp-publisher' ) );
         }
 
         // No lightweight public endpoint is available for validation without additional credentials.
@@ -718,14 +718,14 @@ class TTS_Client {
         $client  = isset( $_GET['client_id'] ) ? absint( $_GET['client_id'] ) : 0;
 
         if ( empty( $code ) || $state !== $expect ) {
-            wp_die( esc_html__( 'OAuth verification failed.', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'OAuth verification failed.', 'fp-publisher' ) );
         }
 
         // Exchange code for token
         $token = $this->exchange_code_for_token( $channel, $code );
         
         if ( ! $token ) {
-            wp_die( esc_html__( 'Failed to obtain access token.', 'trello-social-auto-publisher' ) );
+            wp_die( esc_html__( 'Failed to obtain access token.', 'fp-publisher' ) );
         }
 
         if ( $client ) {
