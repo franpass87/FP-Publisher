@@ -1549,7 +1549,7 @@ class TTS_Admin {
             echo '<span style="font-size: 48px; margin-bottom: 10px; display: block;">📝</span>';
             echo '<p style="margin: 0; font-size: 16px;">' . esc_html__('No social posts found.', 'trello-social-auto-publisher') . '</p>';
             echo '<p style="margin: 5px 0 0 0; font-size: 14px;">' . esc_html__('Create your first social media post to get started!', 'trello-social-auto-publisher') . '</p>';
-            echo '<a href="' . esc_url(admin_url('admin.php?page=tts-client-wizard')) . '" class="tts-btn" style="margin-top: 15px;">';
+            echo '<a href="' . esc_url(admin_url('admin.php?page=fp-publisher-client-wizard')) . '" class="tts-btn" style="margin-top: 15px;">';
             echo esc_html__('Add New Client', 'trello-social-auto-publisher');
             echo '</a>';
             echo '</div>';
@@ -1611,7 +1611,7 @@ class TTS_Admin {
             array(
                 'title' => __('Add New Client', 'trello-social-auto-publisher'),
                 'description' => __('Set up a new social media client', 'trello-social-auto-publisher'),
-                'url' => admin_url('admin.php?page=tts-client-wizard'),
+                'url' => admin_url('admin.php?page=fp-publisher-client-wizard'),
                 'icon' => 'dashicons-plus',
                 'color' => '#135e96'
             ),
@@ -2920,7 +2920,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
                         <a href="<?php echo esc_url( admin_url( 'admin.php?page=tts-social-connections' ) ); ?>" class="button button-primary">
                             <?php esc_html_e( 'Configure Social Apps', 'trello-social-auto-publisher' ); ?>
                         </a>
-                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=tts-client-wizard' ) ); ?>" class="button">
+                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-client-wizard' ) ); ?>" class="button">
                             <?php esc_html_e( 'Create Client', 'trello-social-auto-publisher' ); ?>
                         </a>
                     </div>

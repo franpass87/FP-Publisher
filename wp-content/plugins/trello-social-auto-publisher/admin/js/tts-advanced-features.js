@@ -24,7 +24,7 @@ class TTSAdvancedFeatures {
         this.shortcuts.set('ctrl+shift+a', () => this.navigateTo('tts-analytics'));
         this.shortcuts.set('ctrl+shift+h', () => this.navigateTo('tts-health'));
         this.shortcuts.set('ctrl+shift+l', () => this.navigateTo('tts-log'));
-        this.shortcuts.set('ctrl+shift+n', () => this.navigateTo('tts-client-wizard'));
+        this.shortcuts.set('ctrl+shift+n', () => this.navigateTo('fp-publisher-client-wizard'));
         this.shortcuts.set('ctrl+shift+r', () => this.refreshCurrentPage());
         this.shortcuts.set('ctrl+shift+e', () => this.openExportModal());
         this.shortcuts.set('ctrl+shift+i', () => this.openImportModal());

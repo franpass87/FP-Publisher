@@ -751,7 +751,7 @@ class TTS_Client {
             set_transient( 'tts_oauth_' . $channel . '_token', $token, 15 * MINUTE_IN_SECONDS );
         }
 
-        wp_safe_redirect( add_query_arg( array( 'page' => 'tts-client-wizard', 'step' => $step ), admin_url( 'admin.php' ) ) );
+        wp_safe_redirect( add_query_arg( array( 'page' => 'fp-publisher-client-wizard', 'step' => $step ), admin_url( 'admin.php' ) ) );
         exit;
     }
 
