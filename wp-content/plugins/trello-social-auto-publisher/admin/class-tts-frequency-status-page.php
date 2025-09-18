@@ -71,7 +71,7 @@ class TTS_Frequency_Status_Page {
      * Render the page content.
      */
     public function render_page() {
-        $monitor = new TTS_Frequency_Monitor();
+        $monitor = TTS_Frequency_Monitor::get_instance();
         $clients = get_posts( array(
             'post_type' => 'tts_client',
             'post_status' => 'publish',
@@ -224,7 +224,7 @@ class TTS_Frequency_Status_Page {
             wp_die( __( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
-        $monitor = new TTS_Frequency_Monitor();
+        $monitor = TTS_Frequency_Monitor::get_instance();
         $clients = get_posts( array(
             'post_type' => 'tts_client',
             'post_status' => 'publish',
@@ -250,7 +250,7 @@ class TTS_Frequency_Status_Page {
             wp_die( __( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
-        $monitor = new TTS_Frequency_Monitor();
+        $monitor = TTS_Frequency_Monitor::get_instance();
         $monitor->check_all_clients();
 
         wp_send_json_success( array( 'message' => __( 'Frequency check completed', 'fp-publisher' ) ) );
