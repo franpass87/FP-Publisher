@@ -48,7 +48,7 @@ class TTSHelpSystem {
                     'Ctrl+Shift+K: Show keyboard shortcuts'
                 ]
             },
-            'tts-calendar': {
+            'fp-publisher-calendar': {
                 title: 'Calendar Help',
                 sections: [
                     {
@@ -67,7 +67,7 @@ class TTSHelpSystem {
                     'Left/Right arrows: Navigate months'
                 ]
             },
-            'tts-analytics': {
+            'fp-publisher-analytics': {
                 title: 'Analytics Help',
                 sections: [
                     {
@@ -86,7 +86,7 @@ class TTSHelpSystem {
                     'Ctrl+Shift+E: Export analytics'
                 ]
             },
-            'tts-health': {
+            'fp-publisher-health': {
                 title: 'Health Status Help',
                 sections: [
                     {
@@ -110,7 +110,7 @@ class TTSHelpSystem {
     addHelpButton() {
         // Add help button to admin bar
         const adminBar = document.getElementById('wp-admin-bar-root');
-        if (adminBar && window.location.href.includes('page=tts-')) {
+        if (adminBar && window.location.href.includes('page=fp-publisher-')) {
             const helpItem = document.createElement('li');
             helpItem.id = 'wp-admin-bar-tts-help';
             helpItem.innerHTML = `
@@ -307,7 +307,7 @@ class TTSHelpSystem {
         document.head.appendChild(helpStyles);
 
         // Add to page if on plugin pages
-        if (window.location.href.includes('page=tts-')) {
+        if (window.location.href.includes('page=fp-publisher-')) {
             document.body.appendChild(floatingHelp);
             this.bindFloatingHelpEvents(floatingHelp);
         }
@@ -704,7 +704,7 @@ class TTSHelpSystem {
 
 // Initialize help system and make it globally available
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.href.includes('page=tts-')) {
+    if (window.location.href.includes('page=fp-publisher-')) {
         window.TTSHelpSystem = {
             instance: new TTSHelpSystem(),
             highlightElement: function(selector) {

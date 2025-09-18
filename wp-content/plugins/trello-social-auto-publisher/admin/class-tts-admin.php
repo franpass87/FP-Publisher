@@ -1618,28 +1618,28 @@ class TTS_Admin {
             array(
                 'title' => __('View Calendar', 'trello-social-auto-publisher'),
                 'description' => __('See scheduled posts in calendar view', 'trello-social-auto-publisher'),
-                'url' => admin_url('admin.php?page=tts-calendar'),
+                'url' => admin_url('admin.php?page=fp-publisher-calendar'),
                 'icon' => 'dashicons-calendar',
                 'color' => '#f56e28'
             ),
             array(
                 'title' => __('Check Health Status', 'trello-social-auto-publisher'),
                 'description' => __('Monitor system health and tokens', 'trello-social-auto-publisher'),
-                'url' => admin_url('admin.php?page=tts-health'),
+                'url' => admin_url('admin.php?page=fp-publisher-health'),
                 'icon' => 'dashicons-heart',
                 'color' => '#00a32a'
             ),
             array(
                 'title' => __('View Analytics', 'trello-social-auto-publisher'),
                 'description' => __('Analyze performance and engagement', 'trello-social-auto-publisher'),
-                'url' => admin_url('admin.php?page=tts-analytics'),
+                'url' => admin_url('admin.php?page=fp-publisher-analytics'),
                 'icon' => 'dashicons-chart-area',
                 'color' => '#7c3aed'
             ),
             array(
                 'title' => __('Manage Posts', 'trello-social-auto-publisher'),
                 'description' => __('View and manage all social posts', 'trello-social-auto-publisher'),
-                'url' => admin_url('admin.php?page=tts-social-posts'),
+                'url' => admin_url('admin.php?page=fp-publisher-social-posts'),
                 'icon' => 'dashicons-admin-post',
                 'color' => '#2563eb'
             ),
