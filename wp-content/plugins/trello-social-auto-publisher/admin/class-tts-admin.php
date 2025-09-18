@@ -2550,7 +2550,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
                         foreach ( $platforms as $platform => $config ) :
                             $platform_settings = isset( $settings[$platform] ) ? $settings[$platform] : array();
                         ?>
-                        <div class="tts-platform-config">
+                        <div class="tts-platform-config" data-platform="<?php echo esc_attr( $platform ); ?>">
                             <h2><?php echo esc_html( $config['icon'] . ' ' . $config['name'] ); ?></h2>
                             
                             <?php foreach ( $config['fields'] as $field ) : 
@@ -2573,7 +2573,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
                             // Check connection status
                             $connection_status = $this->check_platform_connection_status( $platform );
                             ?>
-                            <div class="tts-connection-status">
+                            <div class="tts-connection-status" data-platform="<?php echo esc_attr( $platform ); ?>">
                                 <strong><?php esc_html_e( 'Status:', 'fp-publisher' ); ?></strong>
                                 <span class="tts-status-<?php echo esc_attr( $connection_status['status'] ); ?>">
                                     <?php echo esc_html( $connection_status['message'] ); ?>
