@@ -202,53 +202,86 @@ class TTS_Performance {
         global $wpdb;
         
         $cache_key = 'tts_success_rate_stats';
-        $cached = get_transient( $cache_key );
-        
-        if ( false !== $cached ) {
-            return $cached;
-        }
-        
-        $table = $wpdb->prefix . 'tts_logs';
-        
-        // Get success rate for different periods
+
+        // Define analysis periods using numeric durations.
         $periods = array(
-            'today' => '1 DAY',
-            'week' => '7 DAY',
-            'month' => '30 DAY'
+            'today' => DAY_IN_SECONDS,
+            'week'  => WEEK_IN_SECONDS,
+            'month' => 30 * DAY_IN_SECONDS,
         );
-        
+
+        $cached = get_transient( $cache_key );
+
+        if ( false !== $cached ) {
+            $has_valid_cutoffs = true;
+
+            foreach ( array_keys( $periods ) as $period_key ) {
+                if ( ! isset( $cached[ $period_key ]['cutoff'] ) ) {
+                    $has_valid_cutoffs = false;
+                    break;
+                }
+            }
+
+            if ( $has_valid_cutoffs ) {
+                return $cached;
+            }
+
+            delete_transient( $cache_key );
+        }
+
+        $table = $wpdb->prefix . 'tts_logs';
         $success_data = array();
-        
-        foreach ( $periods as $period => $interval ) {
-            $total = $wpdb->get_var( $wpdb->prepare("
-                SELECT COUNT(*) FROM {$table}
-                WHERE created_at >= DATE_SUB(NOW(), INTERVAL %s)
-            ", $interval ) );
-            
+        $current_timestamp = current_time( 'timestamp' );
+
+        foreach ( $periods as $period => $duration ) {
+            $duration = absint( $duration );
+
+            if ( $duration <= 0 ) {
+                continue;
+            }
+
+            $cutoff_timestamp = max( 0, $current_timestamp - $duration );
+            $cutoff = function_exists( 'wp_date' )
+                ? wp_date( 'Y-m-d H:i:s', $cutoff_timestamp )
+                : date_i18n( 'Y-m-d H:i:s', $cutoff_timestamp );
+
+            $total = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$table} WHERE created_at >= %s",
+                    $cutoff
+                )
+            );
+
             if ( $total > 0 ) {
-                $successful = $wpdb->get_var( $wpdb->prepare("
-                    SELECT COUNT(*) FROM {$table}
-                    WHERE status = 'success'
-                    AND created_at >= DATE_SUB(NOW(), INTERVAL %s)
-                ", $interval ) );
-                
-                $success_data[$period] = array(
+                $successful = (int) $wpdb->get_var(
+                    $wpdb->prepare(
+                        "SELECT COUNT(*) FROM {$table} WHERE status = %s AND created_at >= %s",
+                        'success',
+                        $cutoff
+                    )
+                );
+
+                $success_data[ $period ] = array(
                     'rate' => round( ( $successful / $total ) * 100, 2 ),
-                    'total' => (int) $total,
-                    'successful' => (int) $successful,
-                    'failed' => (int) ( $total - $successful )
+                    'total' => $total,
+                    'successful' => $successful,
+                    'failed' => max( 0, $total - $successful ),
+                    'cutoff' => $cutoff,
                 );
             } else {
-                $success_data[$period] = array(
+                $success_data[ $period ] = array(
                     'rate' => 100.0,
                     'total' => 0,
                     'successful' => 0,
-                    'failed' => 0
+                    'failed' => 0,
+                    'cutoff' => $cutoff,
                 );
             }
         }
-        
+
+        delete_transient( $cache_key );
         set_transient( $cache_key, $success_data, 10 * MINUTE_IN_SECONDS );
+
         return $success_data;
     }
     
