@@ -3771,9 +3771,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
      * AJAX handler for data export.
      */
     public function ajax_export_data() {
-        if ( ! wp_verify_nonce( $_POST['nonce'], 'tts_ajax_nonce' ) ) {
-            wp_die( 'Security check failed' );
-        }
+        check_ajax_referer( 'tts_ajax_nonce', 'nonce' );
         
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'fp-publisher' ) ) );
@@ -3795,11 +3793,21 @@ class TTS_Social_Posts_Table extends WP_List_Table {
             // Create download file
             $filename = 'tts-export-' . date( 'Y-m-d-H-i-s' ) . '.json';
             $upload_dir = wp_upload_dir();
+
+            if ( ! empty( $upload_dir['error'] ) ) {
+                error_log( 'TTS_Admin: Export failed - ' . $upload_dir['error'] );
+                wp_send_json_error( array( 'message' => __( 'Failed to access the upload directory. Please try again later.', 'fp-publisher' ) ) );
+            }
+
             $file_path = $upload_dir['path'] . '/' . $filename;
-            
-            file_put_contents( $file_path, json_encode( $result['data'], JSON_PRETTY_PRINT ) );
-            
-            wp_send_json_success( array( 
+            $file_written = file_put_contents( $file_path, json_encode( $result['data'], JSON_PRETTY_PRINT ) );
+
+            if ( false === $file_written ) {
+                error_log( 'TTS_Admin: Failed to write export file to ' . $file_path );
+                wp_send_json_error( array( 'message' => __( 'Failed to write the export file. Please check file permissions and try again.', 'fp-publisher' ) ) );
+            }
+
+            wp_send_json_success( array(
                 'message' => __( 'Export completed successfully', 'fp-publisher' ),
                 'download_url' => $upload_dir['url'] . '/' . $filename,
                 'file_size' => $result['file_size']
