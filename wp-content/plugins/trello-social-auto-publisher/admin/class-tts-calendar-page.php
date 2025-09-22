@@ -56,12 +56,6 @@ class TTS_Calendar_Page {
                         'compare' => '<=',
                         'type'    => 'DATETIME',
                     ),
-                    array(
-                        'key'     => '_tts_publish_at',
-                        'value'   => current_time( 'mysql' ),
-                        'compare' => '>=',
-                        'type'    => 'DATETIME',
-                    ),
                 ),
             )
         );
