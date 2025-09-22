@@ -3388,31 +3388,114 @@ class TTS_Social_Posts_Table extends WP_List_Table {
                 if ( empty( $settings['app_id'] ) || empty( $settings['app_secret'] ) ) {
                     return array( 'success' => false, 'message' => __( 'App credentials not configured', 'fp-publisher' ) );
                 }
-                
+
                 $response = wp_remote_get( 'https://graph.facebook.com/v18.0/oauth/access_token?' . http_build_query( array(
                     'client_id' => $settings['app_id'],
                     'client_secret' => $settings['app_secret'],
                     'grant_type' => 'client_credentials'
                 ) ) );
-                
+
                 if ( is_wp_error( $response ) ) {
                     return array( 'success' => false, 'message' => __( 'Connection failed: ', 'fp-publisher' ) . $response->get_error_message() );
                 }
-                
+
                 $body = json_decode( wp_remote_retrieve_body( $response ), true );
                 if ( isset( $body['access_token'] ) ) {
                     return array( 'success' => true, 'message' => __( 'Facebook app credentials valid', 'fp-publisher' ) );
                 } else {
                     return array( 'success' => false, 'message' => __( 'Invalid Facebook app credentials', 'fp-publisher' ) );
                 }
-                
+
+            case 'instagram':
+                if ( empty( $settings['app_id'] ) || empty( $settings['app_secret'] ) ) {
+                    return array( 'success' => false, 'message' => __( 'Instagram app credentials not configured', 'fp-publisher' ) );
+                }
+
+                $response = wp_remote_get( 'https://graph.facebook.com/v18.0/oauth/access_token?' . http_build_query( array(
+                    'client_id' => $settings['app_id'],
+                    'client_secret' => $settings['app_secret'],
+                    'grant_type' => 'client_credentials'
+                ) ) );
+
+                if ( is_wp_error( $response ) ) {
+                    return array( 'success' => false, 'message' => __( 'Connection failed: ', 'fp-publisher' ) . $response->get_error_message() );
+                }
+
+                $body = json_decode( wp_remote_retrieve_body( $response ), true );
+                if ( isset( $body['access_token'] ) ) {
+                    return array( 'success' => true, 'message' => __( 'Instagram app credentials validated successfully', 'fp-publisher' ) );
+                }
+
+                return array( 'success' => false, 'message' => __( 'Invalid Instagram app credentials', 'fp-publisher' ) );
+
             case 'youtube':
                 if ( empty( $settings['client_id'] ) || empty( $settings['client_secret'] ) ) {
                     return array( 'success' => false, 'message' => __( 'Client credentials not configured', 'fp-publisher' ) );
                 }
-                
+
                 return array( 'success' => true, 'message' => __( 'YouTube client credentials format valid', 'fp-publisher' ) );
-                
+
+            case 'tiktok':
+                $client_key    = isset( $settings['client_key'] ) ? trim( $settings['client_key'] ) : '';
+                $client_secret = isset( $settings['client_secret'] ) ? trim( $settings['client_secret'] ) : '';
+                $token         = '';
+                foreach ( array( 'access_token', 'token', 'tiktok_access_token' ) as $token_key ) {
+                    if ( ! empty( $settings[ $token_key ] ) ) {
+                        $token = trim( $settings[ $token_key ] );
+                        break;
+                    }
+                }
+
+                $placeholder_checks = array( 'placeholder', 'changeme', 'your-token', 'token' );
+                if ( '' !== $token ) {
+                    if ( strlen( $token ) < 10 || in_array( strtolower( $token ), $placeholder_checks, true ) ) {
+                        return array( 'success' => false, 'message' => __( 'TikTok access token is missing or appears invalid', 'fp-publisher' ) );
+                    }
+
+                    $response = wp_remote_get(
+                        'https://open.tiktokapis.com/v2/user/info/?fields=open_id',
+                        array(
+                            'timeout' => 15,
+                            'headers' => array(
+                                'Authorization' => 'Bearer ' . $token,
+                            ),
+                        )
+                    );
+
+                    if ( is_wp_error( $response ) ) {
+                        return array( 'success' => false, 'message' => __( 'Connection failed: ', 'fp-publisher' ) . $response->get_error_message() );
+                    }
+
+                    $response_code = wp_remote_retrieve_response_code( $response );
+                    if ( 200 === $response_code ) {
+                        return array( 'success' => true, 'message' => __( 'TikTok access token validated successfully', 'fp-publisher' ) );
+                    }
+
+                    $body          = json_decode( wp_remote_retrieve_body( $response ), true );
+                    $error_message = '';
+
+                    if ( isset( $body['error']['message'] ) ) {
+                        $error_message = $body['error']['message'];
+                    } elseif ( isset( $body['message'] ) ) {
+                        $error_message = $body['message'];
+                    } else {
+                        $error_message = sprintf( __( 'HTTP %d response received', 'fp-publisher' ), $response_code );
+                    }
+
+                    return array( 'success' => false, 'message' => sprintf( __( 'TikTok API error: %s', 'fp-publisher' ), $error_message ) );
+                }
+
+                if ( empty( $client_key ) || empty( $client_secret ) ) {
+                    return array( 'success' => false, 'message' => __( 'TikTok client credentials not configured', 'fp-publisher' ) );
+                }
+
+                $credential_placeholders = array( 'placeholder', 'changeme', 'your-client-key', 'your-client-secret' );
+                if ( in_array( strtolower( $client_key ), $credential_placeholders, true ) || in_array( strtolower( $client_secret ), $credential_placeholders, true ) ) {
+                    return array( 'success' => false, 'message' => __( 'TikTok client credentials appear to be placeholders', 'fp-publisher' ) );
+                }
+
+                return array( 'success' => true, 'message' => __( 'TikTok client credentials format valid', 'fp-publisher' ) );
+
             default:
                 return array( 'success' => true, 'message' => __( 'Platform configuration appears valid', 'fp-publisher' ) );
         }
