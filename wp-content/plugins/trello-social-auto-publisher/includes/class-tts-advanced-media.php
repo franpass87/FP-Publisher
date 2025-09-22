@@ -288,25 +288,55 @@ class TTS_Advanced_Media {
         $settings = $platform_settings[ $platform ] ?? $platform_settings['instagram'];
         
         // Get video information
-        $video_info = $this->get_video_info( $video_path );
-        
+        $video_info = $this->get_video_info( $attachment_id, $video_path );
+
         // Quality settings
         $quality_settings = array(
             'low' => array( 'bitrate' => '500k', 'width' => 640 ),
             'medium' => array( 'bitrate' => '1000k', 'width' => 1280 ),
             'high' => array( 'bitrate' => '2000k', 'width' => 1920 )
         );
-        
+
         $quality_setting = $quality_settings[ $quality ] ?? $quality_settings['medium'];
-        
+
+        $original_size = filesize( $video_path );
+        if ( false === $original_size ) {
+            $original_size = 0;
+        }
+
+        $original_dimensions = $video_info['dimensions'] ?? array();
+        $optimized_dimensions = $original_dimensions;
+
+        if (
+            ! empty( $original_dimensions['width'] ) &&
+            ! empty( $original_dimensions['height'] )
+        ) {
+            $optimized_dimensions = $this->calculate_optimized_dimensions(
+                $original_dimensions,
+                $settings['aspect_ratio'],
+                $quality_setting['width']
+            );
+        } elseif ( ! is_array( $optimized_dimensions ) ) {
+            $optimized_dimensions = array(
+                'width' => null,
+                'height' => null,
+            );
+        }
+
+        $optimized_duration = null;
+
+        if ( isset( $video_info['duration'] ) && is_numeric( $video_info['duration'] ) ) {
+            $optimized_duration = min( (int) $video_info['duration'], (int) $settings['max_duration'] );
+        }
+
         // Simulate video optimization (would use FFmpeg or similar in production)
         $optimized_info = array(
-            'original_size' => filesize( $video_path ),
+            'original_size' => (int) $original_size,
             'original_duration' => $video_info['duration'],
-            'original_dimensions' => $video_info['dimensions'],
-            'optimized_size' => round( filesize( $video_path ) * 0.7 ), // Simulate 30% compression
-            'optimized_duration' => min( $video_info['duration'], $settings['max_duration'] ),
-            'optimized_dimensions' => $this->calculate_optimized_dimensions( $video_info['dimensions'], $settings['aspect_ratio'], $quality_setting['width'] ),
+            'original_dimensions' => $original_dimensions,
+            'optimized_size' => (int) round( $original_size * 0.7 ), // Simulate 30% compression
+            'optimized_duration' => $optimized_duration,
+            'optimized_dimensions' => $optimized_dimensions,
             'platform_settings' => $settings,
             'quality_used' => $quality,
             'compression_ratio' => '30%',
@@ -329,22 +359,359 @@ class TTS_Advanced_Media {
     /**
      * Get video information.
      *
-     * @param string $video_path Video file path.
+     * @param int    $attachment_id Attachment ID.
+     * @param string $video_path    Video file path.
      * @return array Video information.
      */
-    private function get_video_info( $video_path ) {
-        // Simulate video info extraction (would use FFprobe or similar in production)
+    private function get_video_info( $attachment_id, $video_path ) {
+        $metadata = wp_get_attachment_metadata( $attachment_id );
+
+        if ( ! is_array( $metadata ) ) {
+            $metadata = array();
+        }
+
+        $duration      = $this->read_duration_from_metadata( $metadata );
+        $width         = $this->read_dimension_from_metadata( $metadata, 'width' );
+        $height        = $this->read_dimension_from_metadata( $metadata, 'height' );
+        $bitrate       = $this->read_bitrate_from_metadata( $metadata );
+        $framerate     = $this->read_framerate_from_metadata( $metadata );
+        $codec         = $this->read_codec_from_metadata( $metadata );
+        $audio_codec   = $this->read_audio_codec_from_metadata( $metadata );
+
+        if (
+            null === $duration ||
+            null === $width ||
+            null === $height ||
+            null === $bitrate ||
+            null === $framerate ||
+            null === $codec ||
+            null === $audio_codec
+        ) {
+            $fallback_metadata = $this->load_video_metadata_from_file( $video_path );
+
+            if ( null === $duration ) {
+                $duration = $this->read_duration_from_metadata( $fallback_metadata );
+            }
+
+            if ( null === $width ) {
+                $width = $this->read_dimension_from_metadata( $fallback_metadata, 'width' );
+            }
+
+            if ( null === $height ) {
+                $height = $this->read_dimension_from_metadata( $fallback_metadata, 'height' );
+            }
+
+            if ( null === $bitrate ) {
+                $bitrate = $this->read_bitrate_from_metadata( $fallback_metadata );
+            }
+
+            if ( null === $framerate ) {
+                $framerate = $this->read_framerate_from_metadata( $fallback_metadata );
+            }
+
+            if ( null === $codec ) {
+                $codec = $this->read_codec_from_metadata( $fallback_metadata );
+            }
+
+            if ( null === $audio_codec ) {
+                $audio_codec = $this->read_audio_codec_from_metadata( $fallback_metadata );
+            }
+        }
+
         return array(
-            'duration' => rand( 30, 180 ), // seconds
+            'duration' => $duration,
             'dimensions' => array(
-                'width' => rand( 1280, 1920 ),
-                'height' => rand( 720, 1080 )
+                'width' => $width,
+                'height' => $height,
             ),
-            'bitrate' => rand( 1000, 5000 ) . 'k',
-            'framerate' => '30fps',
-            'codec' => 'h264',
-            'audio_codec' => 'aac'
+            'bitrate' => $bitrate,
+            'framerate' => $framerate,
+            'codec' => $codec,
+            'audio_codec' => $audio_codec,
         );
+    }
+
+    /**
+     * Attempt to read the duration value from attachment or file metadata.
+     *
+     * @param array $metadata Metadata array.
+     * @return int|null Duration in seconds.
+     */
+    private function read_duration_from_metadata( $metadata ) {
+        if ( ! is_array( $metadata ) ) {
+            return null;
+        }
+
+        $numeric_keys = array( 'length', 'video.length', 'playtime_seconds' );
+
+        foreach ( $numeric_keys as $key ) {
+            $value = $this->get_metadata_value( $metadata, $key );
+
+            if ( is_numeric( $value ) ) {
+                $seconds = (int) round( (float) $value );
+
+                if ( $seconds >= 0 ) {
+                    return $seconds;
+                }
+            }
+        }
+
+        $formatted_keys = array( 'length_formatted', 'video.length_formatted', 'playtime_string' );
+
+        foreach ( $formatted_keys as $key ) {
+            $value = $this->get_metadata_value( $metadata, $key );
+
+            if ( is_string( $value ) && '' !== trim( $value ) ) {
+                $seconds = $this->parse_duration_string( $value );
+
+                if ( null !== $seconds ) {
+                    return $seconds;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Attempt to read a dimension value from metadata.
+     *
+     * @param array  $metadata  Metadata array.
+     * @param string $dimension Dimension key (width or height).
+     * @return int|null Dimension in pixels.
+     */
+    private function read_dimension_from_metadata( $metadata, $dimension ) {
+        if ( ! is_array( $metadata ) ) {
+            return null;
+        }
+
+        $keys = array(
+            $dimension,
+            'video.' . $dimension,
+        );
+
+        if ( 'width' === $dimension ) {
+            $keys[] = 'video.resolution_x';
+            $keys[] = 'resolution_x';
+        } elseif ( 'height' === $dimension ) {
+            $keys[] = 'video.resolution_y';
+            $keys[] = 'resolution_y';
+        }
+
+        foreach ( $keys as $key ) {
+            $value = $this->get_metadata_value( $metadata, $key );
+
+            if ( is_numeric( $value ) ) {
+                $dimension_value = (int) round( (float) $value );
+
+                if ( $dimension_value > 0 ) {
+                    return $dimension_value;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Attempt to read the bitrate value from metadata.
+     *
+     * @param array $metadata Metadata array.
+     * @return int|null Bitrate value.
+     */
+    private function read_bitrate_from_metadata( $metadata ) {
+        if ( ! is_array( $metadata ) ) {
+            return null;
+        }
+
+        $keys = array( 'bitrate', 'video.bitrate', 'audio.bitrate' );
+
+        foreach ( $keys as $key ) {
+            $value = $this->get_metadata_value( $metadata, $key );
+
+            if ( is_numeric( $value ) ) {
+                $bitrate = (int) round( (float) $value );
+
+                if ( $bitrate > 0 ) {
+                    return $bitrate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Attempt to read the frame rate from metadata.
+     *
+     * @param array $metadata Metadata array.
+     * @return float|null Frame rate value.
+     */
+    private function read_framerate_from_metadata( $metadata ) {
+        if ( ! is_array( $metadata ) ) {
+            return null;
+        }
+
+        $keys = array( 'framerate', 'frame_rate', 'video.frame_rate', 'video.framerate' );
+
+        foreach ( $keys as $key ) {
+            $value = $this->get_metadata_value( $metadata, $key );
+
+            if ( is_numeric( $value ) ) {
+                $framerate = (float) $value;
+
+                if ( $framerate > 0 ) {
+                    return $framerate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Attempt to read the video codec from metadata.
+     *
+     * @param array $metadata Metadata array.
+     * @return string|null Codec value.
+     */
+    private function read_codec_from_metadata( $metadata ) {
+        if ( ! is_array( $metadata ) ) {
+            return null;
+        }
+
+        $keys = array( 'codec', 'video.codec', 'video.dataformat', 'dataformat', 'fileformat', 'encoder', 'video.encoder' );
+
+        foreach ( $keys as $key ) {
+            $value = $this->get_metadata_value( $metadata, $key );
+
+            if ( is_string( $value ) ) {
+                $value = trim( $value );
+
+                if ( '' !== $value ) {
+                    return $value;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Attempt to read the audio codec from metadata.
+     *
+     * @param array $metadata Metadata array.
+     * @return string|null Audio codec value.
+     */
+    private function read_audio_codec_from_metadata( $metadata ) {
+        if ( ! is_array( $metadata ) ) {
+            return null;
+        }
+
+        $keys = array( 'audio.codec', 'audio.dataformat', 'audio.encoder' );
+
+        foreach ( $keys as $key ) {
+            $value = $this->get_metadata_value( $metadata, $key );
+
+            if ( is_string( $value ) ) {
+                $value = trim( $value );
+
+                if ( '' !== $value ) {
+                    return $value;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse a duration string (e.g. 00:01:30) into seconds.
+     *
+     * @param string $duration_string Duration string.
+     * @return int|null Duration in seconds.
+     */
+    private function parse_duration_string( $duration_string ) {
+        if ( ! is_string( $duration_string ) ) {
+            return null;
+        }
+
+        $duration_string = trim( $duration_string );
+
+        if ( '' === $duration_string ) {
+            return null;
+        }
+
+        $parts = explode( ':', $duration_string );
+
+        if ( empty( $parts ) ) {
+            return null;
+        }
+
+        $seconds    = 0;
+        $multiplier = 1;
+
+        while ( $parts ) {
+            $part = array_pop( $parts );
+            $part = trim( $part );
+
+            if ( '' === $part || ! is_numeric( $part ) ) {
+                return null;
+            }
+
+            $seconds   += (float) $part * $multiplier;
+            $multiplier *= 60;
+        }
+
+        $seconds = (int) round( $seconds );
+
+        return ( $seconds >= 0 ) ? $seconds : null;
+    }
+
+    /**
+     * Safely retrieve a nested metadata value using dot notation.
+     *
+     * @param array  $metadata Metadata array.
+     * @param string $key_path Dot-notated key path.
+     * @return mixed|null Metadata value or null when unavailable.
+     */
+    private function get_metadata_value( $metadata, $key_path ) {
+        if ( ! is_array( $metadata ) ) {
+            return null;
+        }
+
+        $segments = explode( '.', $key_path );
+        $value    = $metadata;
+
+        foreach ( $segments as $segment ) {
+            if ( ! is_array( $value ) || ! array_key_exists( $segment, $value ) ) {
+                return null;
+            }
+
+            $value = $value[ $segment ];
+        }
+
+        return $value;
+    }
+
+    /**
+     * Load metadata directly from the video file when attachment metadata is incomplete.
+     *
+     * @param string $video_path Video file path.
+     * @return array Metadata array.
+     */
+    private function load_video_metadata_from_file( $video_path ) {
+        if ( empty( $video_path ) || ! file_exists( $video_path ) ) {
+            return array();
+        }
+
+        if ( ! function_exists( 'wp_read_video_metadata' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+        }
+
+        $metadata = wp_read_video_metadata( $video_path );
+
+        return is_array( $metadata ) ? $metadata : array();
     }
 
     /**
@@ -356,15 +723,42 @@ class TTS_Advanced_Media {
      * @return array Optimized dimensions.
      */
     private function calculate_optimized_dimensions( $original_dimensions, $target_aspect_ratio, $max_width ) {
+        $width  = $original_dimensions['width'] ?? null;
+        $height = $original_dimensions['height'] ?? null;
+
+        if ( empty( $width ) || empty( $height ) ) {
+            return array(
+                'width' => $width,
+                'height' => $height,
+            );
+        }
+
+        if ( empty( $target_aspect_ratio ) || false === strpos( $target_aspect_ratio, ':' ) ) {
+            return array(
+                'width' => min( (int) $width, (int) $max_width ),
+                'height' => (int) $height,
+            );
+        }
+
         list( $ratio_width, $ratio_height ) = explode( ':', $target_aspect_ratio );
-        
+
+        $ratio_width  = (float) $ratio_width;
+        $ratio_height = (float) $ratio_height;
+
+        if ( $ratio_width <= 0 || $ratio_height <= 0 ) {
+            return array(
+                'width' => min( (int) $width, (int) $max_width ),
+                'height' => (int) $height,
+            );
+        }
+
         $target_ratio = $ratio_width / $ratio_height;
-        $width = min( $original_dimensions['width'], $max_width );
-        $height = round( $width / $target_ratio );
-        
+        $width        = min( (int) $width, (int) $max_width );
+        $height       = (int) round( $width / $target_ratio );
+
         return array(
             'width' => $width,
-            'height' => $height
+            'height' => $height,
         );
     }
 
@@ -376,11 +770,38 @@ class TTS_Advanced_Media {
      * @return array Requirements check.
      */
     private function check_video_requirements( $video_info, $platform_settings ) {
+        $duration_ok = null;
+
+        if ( isset( $video_info['duration'] ) && is_numeric( $video_info['duration'] ) ) {
+            $duration_ok = ( (int) $video_info['duration'] ) <= (int) $platform_settings['max_duration'];
+        }
+
+        $aspect_ratio_ok = null;
+        $dimensions      = $video_info['dimensions'] ?? array();
+
+        if ( ! empty( $dimensions['width'] ) && ! empty( $dimensions['height'] ) ) {
+            $aspect_ratio_ok = true;
+
+            if ( ! empty( $platform_settings['aspect_ratio'] ) && false !== strpos( $platform_settings['aspect_ratio'], ':' ) ) {
+                list( $ratio_width, $ratio_height ) = explode( ':', $platform_settings['aspect_ratio'] );
+
+                $ratio_width  = (float) $ratio_width;
+                $ratio_height = (float) $ratio_height;
+
+                if ( $ratio_width > 0 && $ratio_height > 0 ) {
+                    $target_ratio = $ratio_width / $ratio_height;
+                    $actual_ratio = (float) $dimensions['width'] / (float) $dimensions['height'];
+
+                    $aspect_ratio_ok = abs( $actual_ratio - $target_ratio ) < 0.1;
+                }
+            }
+        }
+
         return array(
-            'duration_ok' => $video_info['duration'] <= $platform_settings['max_duration'],
+            'duration_ok' => $duration_ok,
             'size_ok' => true, // Would check actual file size
             'format_ok' => true, // Would check if format is supported
-            'aspect_ratio_ok' => true // Would check aspect ratio
+            'aspect_ratio_ok' => $aspect_ratio_ok,
         );
     }
 
