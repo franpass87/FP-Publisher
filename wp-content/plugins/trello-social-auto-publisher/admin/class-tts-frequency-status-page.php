@@ -283,5 +283,3 @@ class TTS_Frequency_Status_Page {
         wp_send_json_success( array( 'message' => __( 'Test alerts sent successfully', 'fp-publisher' ) ) );
     }
 }
-
-new TTS_Frequency_Status_Page();

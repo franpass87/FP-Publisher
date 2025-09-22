@@ -344,6 +344,3 @@ class TTS_AI_Features_Page {
         <?php
     }
 }
-
-// Initialize the AI Features page
-new TTS_AI_Features_Page();

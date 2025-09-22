@@ -326,5 +326,3 @@ class TTS_Analytics_Page {
         fclose( $output );
     }
 }
-
-new TTS_Analytics_Page();
