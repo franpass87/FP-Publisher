@@ -14,6 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Advanced utilities and batch operations.
  */
 class TTS_Advanced_Utils {
+
+    const SECRET_PLACEHOLDER = '[REDACTED]';
     
     /**
      * Export plugin settings and data.
@@ -28,7 +30,8 @@ class TTS_Advanced_Utils {
             'clients' => true,
             'posts' => false,
             'logs' => false,
-            'analytics' => false
+            'analytics' => false,
+            'include_secrets' => false
         );
         
         $options = wp_parse_args( $options, $defaults );
@@ -48,16 +51,40 @@ class TTS_Advanced_Utils {
             // Export social media app configurations
             if ( $options['social_apps'] ) {
                 $social_apps = get_option( 'tts_social_apps', array() );
-                // Remove sensitive data for security
+                $redacted_fields = array();
+
                 foreach ( $social_apps as $platform => &$config ) {
-                    if ( isset( $config['app_secret'] ) ) {
-                        $config['app_secret'] = '[REDACTED]';
+                    if ( ! is_array( $config ) ) {
+                        continue;
                     }
-                    if ( isset( $config['client_secret'] ) ) {
-                        $config['client_secret'] = '[REDACTED]';
+
+                    foreach ( $config as $field_key => $field_value ) {
+                        if ( ! self::is_secret_field( $field_key ) ) {
+                            continue;
+                        }
+
+                        if ( $options['include_secrets'] ) {
+                            continue;
+                        }
+
+                        if ( ! empty( $field_value ) ) {
+                            $redacted_fields[ $platform ][] = $field_key;
+                        }
+
+                        $config[ $field_key ] = self::SECRET_PLACEHOLDER;
                     }
                 }
+                unset( $config );
+
                 $export_data['data']['social_apps'] = $social_apps;
+
+                $export_data['data']['social_apps_meta'] = array(
+                    'secrets_included' => (bool) $options['include_secrets'],
+                );
+
+                if ( ! empty( $redacted_fields ) ) {
+                    $export_data['data']['social_apps_meta']['redacted_fields'] = $redacted_fields;
+                }
             }
             
             // Export clients
@@ -181,19 +208,47 @@ class TTS_Advanced_Utils {
             // Import social apps (excluding secrets)
             if ( isset( $data['social_apps'] ) && ( $options['overwrite_social_apps'] || ! get_option( 'tts_social_apps' ) ) ) {
                 $current_apps = get_option( 'tts_social_apps', array() );
+                $redacted_notices = array();
+
                 foreach ( $data['social_apps'] as $platform => $config ) {
-                    // Keep existing secrets if they exist
-                    if ( isset( $current_apps[$platform] ) ) {
-                        foreach ( array( 'app_secret', 'client_secret' ) as $secret_field ) {
-                            if ( isset( $current_apps[$platform][$secret_field] ) && $config[$secret_field] === '[REDACTED]' ) {
-                                $config[$secret_field] = $current_apps[$platform][$secret_field];
+                    if ( ! is_array( $config ) ) {
+                        continue;
+                    }
+
+                    $existing_config = isset( $current_apps[ $platform ] ) && is_array( $current_apps[ $platform ] ) ? $current_apps[ $platform ] : array();
+
+                    foreach ( $config as $field_key => $field_value ) {
+                        if ( ! self::is_secret_field( $field_key ) ) {
+                            continue;
+                        }
+
+                        if ( self::SECRET_PLACEHOLDER === $field_value ) {
+                            if ( isset( $existing_config[ $field_key ] ) && '' !== $existing_config[ $field_key ] ) {
+                                $config[ $field_key ] = $existing_config[ $field_key ];
+                            } else {
+                                unset( $config[ $field_key ] );
+                                $redacted_notices[ $platform ][] = $field_key;
                             }
                         }
                     }
-                    $current_apps[$platform] = $config;
+
+                    $current_apps[ $platform ] = array_merge( $existing_config, $config );
                 }
+
                 update_option( 'tts_social_apps', $current_apps );
                 $import_log[] = 'Social media configurations imported';
+
+                if ( ! empty( $redacted_notices ) ) {
+                    foreach ( $redacted_notices as $platform => $fields ) {
+                        $fields = array_unique( $fields );
+                        $field_labels = array_map( array( __CLASS__, 'format_secret_field_label' ), $fields );
+                        $import_log[] = sprintf(
+                            '%s secrets were not imported. Please re-enter: %s.',
+                            ucfirst( $platform ),
+                            implode( ', ', $field_labels )
+                        );
+                    }
+                }
             }
             
             // Import clients
@@ -292,6 +347,43 @@ class TTS_Advanced_Utils {
         }
         
         return array( 'valid' => true );
+    }
+
+    /**
+     * Determine if a configuration field contains a secret value.
+     *
+     * @param string $field_key Configuration field key.
+     * @return bool Whether the key is considered sensitive.
+     */
+    private static function is_secret_field( $field_key ) {
+        if ( ! is_string( $field_key ) ) {
+            return false;
+        }
+
+        $indicators = array( 'secret', 'token', 'password' );
+
+        foreach ( $indicators as $indicator ) {
+            if ( false !== stripos( $field_key, $indicator ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Convert a secret field key into a human readable label.
+     *
+     * @param string $field_key Configuration field key.
+     * @return string Human readable label.
+     */
+    private static function format_secret_field_label( $field_key ) {
+        if ( ! is_string( $field_key ) ) {
+            return '';
+        }
+
+        $label = str_replace( array( '_', '-' ), ' ', $field_key );
+        return ucwords( $label );
     }
     
     /**

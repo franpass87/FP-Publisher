@@ -3561,7 +3561,8 @@ class TTS_Social_Posts_Table extends WP_List_Table {
             'clients' => isset( $_POST['export_clients'] ) && $_POST['export_clients'] === 'true',
             'posts' => isset( $_POST['export_posts'] ) && $_POST['export_posts'] === 'true',
             'logs' => isset( $_POST['export_logs'] ) && $_POST['export_logs'] === 'true',
-            'analytics' => isset( $_POST['export_analytics'] ) && $_POST['export_analytics'] === 'true'
+            'analytics' => isset( $_POST['export_analytics'] ) && $_POST['export_analytics'] === 'true',
+            'include_secrets' => isset( $_POST['export_include_secrets'] ) && in_array( $_POST['export_include_secrets'], array( 'true', 'on', '1' ), true )
         );
         
         $result = TTS_Advanced_Utils::export_data( $export_options );
@@ -3786,6 +3787,9 @@ class TTS_Social_Posts_Table extends WP_List_Table {
             <h2><?php esc_html_e( 'Export Data', 'fp-publisher' ); ?></h2>
             <form id="tts-export-form">
                 <div class="tts-export-options">
+                    <p class="description">
+                        <?php esc_html_e( 'Sensitive credentials are excluded unless you explicitly include them below.', 'fp-publisher' ); ?>
+                    </p>
                     <label>
                         <input type="checkbox" name="export_settings" checked>
                         <?php esc_html_e( 'Plugin Settings', 'fp-publisher' ); ?>
@@ -3809,6 +3813,11 @@ class TTS_Social_Posts_Table extends WP_List_Table {
                     <label>
                         <input type="checkbox" name="export_analytics">
                         <?php esc_html_e( 'Analytics Data', 'fp-publisher' ); ?>
+                    </label>
+                    <label class="tts-export-include-secrets">
+                        <input type="checkbox" name="export_include_secrets">
+                        <?php esc_html_e( 'Include secrets (app/client secrets, tokens)', 'fp-publisher' ); ?>
+                        <span class="description"><?php esc_html_e( 'Only enable this on secure systems. Without this option the export will mark secrets as [REDACTED].', 'fp-publisher' ); ?></span>
                     </label>
                 </div>
                 <div class="tts-modal-actions">

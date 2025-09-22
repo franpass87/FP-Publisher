@@ -25,6 +25,12 @@ Il plugin ora utilizza una struttura di menu consolidata per migliorare la navig
 
 Vedi [MENU_STRUCTURE.md](MENU_STRUCTURE.md) per la documentazione completa della nuova struttura.
 
+## 🔄 Esportazione e Importazione
+
+- I segreti (app/client secrets, access token, refresh token) vengono esclusi automaticamente e nell'export risultano come `[REDACTED]`.
+- Se devi clonare l'installazione in un ambiente fidato puoi abilitare l'opzione **Include secrets** dal modale di export per includerli in chiaro.
+- In fase di import eventuali placeholder `[REDACTED]` non sovrascrivono i segreti esistenti e, se mancanti, viene segnalato che vanno inseriti manualmente.
+
 ## API richieste
 
 - **Trello**: API Key e Token.
