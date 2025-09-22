@@ -15,10 +15,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Analytics_Page {
 
     /**
+     * Cached analytics data for the current request.
+     *
+     * @var array|null
+     */
+    private $current_data = null;
+
+    /**
+     * Cached, sanitized request filters.
+     *
+     * @var array|null
+     */
+    private $current_filters = null;
+
+    /**
      * Initialize the analytics page.
      */
     public function __construct() {
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+        add_filter( 'tts_analytics_localized_data', array( $this, 'inject_localized_data' ) );
     }
 
     /**
@@ -60,28 +75,40 @@ class TTS_Analytics_Page {
     }
 
     /**
+     * Inject analytics data into the localized script configuration.
+     *
+     * @param array $localized_data Localized data registered for the script.
+     *
+     * @return array
+     */
+    public function inject_localized_data( $localized_data ) {
+        if ( ! $this->is_analytics_request() ) {
+            return $localized_data;
+        }
+
+        $localized_data['data'] = $this->get_current_data();
+
+        return $localized_data;
+    }
+
+    /**
      * Render the analytics page and output filters & chart container.
      */
     public function render_page() {
-        $channel = isset( $_GET['channel'] ) ? sanitize_text_field( wp_unslash( $_GET['channel'] ) ) : '';
-        $start   = isset( $_GET['start'] ) ? sanitize_text_field( wp_unslash( $_GET['start'] ) ) : '';
-        $end     = isset( $_GET['end'] ) ? sanitize_text_field( wp_unslash( $_GET['end'] ) ) : '';
-        $page    = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : 'fp-publisher-analytics';
+        $filters = $this->get_current_filters();
+        $channel = $filters['channel'];
+        $start   = $filters['start'];
+        $end     = $filters['end'];
+        $page    = $filters['page'] ? $filters['page'] : 'fp-publisher-analytics';
 
-        $data = $this->get_metrics_data( $channel, $start, $end );
+        $data = $this->get_current_data();
 
-        if ( isset( $_GET['export'] ) && 'csv' === $_GET['export'] ) {
+        $export = isset( $_GET['export'] ) ? sanitize_key( wp_unslash( $_GET['export'] ) ) : '';
+
+        if ( 'csv' === $export ) {
             $this->export_csv( $data );
             exit;
         }
-
-        wp_localize_script(
-            'tts-analytics',
-            'ttsAnalytics',
-            array(
-                'data' => $data,
-            )
-        );
 
         $channels = $this->get_available_channels();
 
@@ -146,6 +173,54 @@ class TTS_Analytics_Page {
         echo '</div>';
         echo '</div>';
         echo '</div>';
+    }
+
+    /**
+     * Determine whether the current request targets the analytics admin page.
+     *
+     * @return bool
+     */
+    private function is_analytics_request() {
+        $filters = $this->get_current_filters();
+
+        return 'fp-publisher-analytics' === $filters['page'];
+    }
+
+    /**
+     * Retrieve and cache the sanitized request filters.
+     *
+     * @return array
+     */
+    private function get_current_filters() {
+        if ( null === $this->current_filters ) {
+            $channel = isset( $_GET['channel'] ) ? sanitize_text_field( wp_unslash( $_GET['channel'] ) ) : '';
+            $start   = isset( $_GET['start'] ) ? sanitize_text_field( wp_unslash( $_GET['start'] ) ) : '';
+            $end     = isset( $_GET['end'] ) ? sanitize_text_field( wp_unslash( $_GET['end'] ) ) : '';
+            $page    = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+
+            $this->current_filters = array(
+                'channel' => $channel,
+                'start'   => $start,
+                'end'     => $end,
+                'page'    => $page,
+            );
+        }
+
+        return $this->current_filters;
+    }
+
+    /**
+     * Get analytics data for the current request context.
+     *
+     * @return array
+     */
+    private function get_current_data() {
+        if ( null === $this->current_data ) {
+            $filters = $this->get_current_filters();
+            $this->current_data = $this->get_metrics_data( $filters['channel'], $filters['start'], $filters['end'] );
+        }
+
+        return $this->current_data;
     }
 
     /**
