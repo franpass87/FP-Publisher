@@ -478,11 +478,6 @@ class TTS_Admin {
      * Enqueue AI features specific assets.
      */
     private function enqueue_ai_features_assets() {
-        // Only load large AI assets if user has premium features enabled
-        if ( ! get_option( 'tts_ai_features_enabled', false ) ) {
-            return;
-        }
-
         $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-advanced-features.js' );
         wp_enqueue_script(
             'tts-advanced-features',
