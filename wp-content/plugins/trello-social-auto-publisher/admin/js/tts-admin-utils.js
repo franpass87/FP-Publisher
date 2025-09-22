@@ -354,7 +354,9 @@ class TTSAdminUtils {
 
         // AJAX actions
         document.addEventListener('click', (e) => {
-            const target = e.target instanceof Element ? e.target : e.target.parentElement;
+            const target = e.target instanceof Element
+                ? e.target
+                : (e.target && e.target.parentNode instanceof Element ? e.target.parentNode : null);
             const ajaxElement = target?.closest('[data-ajax-action]');
             if (ajaxElement) {
                 e.preventDefault();
