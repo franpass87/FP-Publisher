@@ -15,6 +15,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Integration_Hub {
 
     /**
+     * Current database schema version.
+     */
+    const DB_VERSION = '1.0.0';
+
+    /**
+     * Name of the option storing the schema version.
+     */
+    const DB_VERSION_OPTION = 'tts_integration_hub_db_version';
+
+    /**
      * Available integrations.
      */
     private $available_integrations = array(
@@ -151,10 +161,7 @@ class TTS_Integration_Hub {
         add_action( 'wp_ajax_tts_get_integration_data', array( $this, 'ajax_get_integration_data' ) );
         add_action( 'wp_ajax_tts_configure_integration', array( $this, 'ajax_configure_integration' ) );
         add_action( 'wp_ajax_tts_get_available_integrations', array( $this, 'ajax_get_available_integrations' ) );
-        
-        // Initialize database tables
-        add_action( 'init', array( $this, 'create_integration_tables' ) );
-        
+
         // Schedule sync operations
         add_action( 'init', array( $this, 'schedule_integration_sync' ) );
         add_action( 'tts_integration_sync', array( $this, 'run_integration_sync' ) );
@@ -162,11 +169,25 @@ class TTS_Integration_Hub {
     }
 
     /**
+     * Handle installation tasks.
+     */
+    public static function install() {
+        $installed_version = get_option( self::DB_VERSION_OPTION );
+
+        self::create_integration_tables();
+
+        if ( false === $installed_version || version_compare( $installed_version, self::DB_VERSION, '<' ) ) {
+            // Future schema migrations should be added here when DB_VERSION increases.
+            update_option( self::DB_VERSION_OPTION, self::DB_VERSION );
+        }
+    }
+
+    /**
      * Create integration database tables.
      */
-    public function create_integration_tables() {
+    public static function create_integration_tables() {
         global $wpdb;
-        
+
         $charset_collate = $wpdb->get_charset_collate();
         
         // Integrations table
