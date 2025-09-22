@@ -251,15 +251,21 @@ class TTS_Admin {
         // Optimized hook checking - only load on FP Publisher pages
         $fp_publisher_pages = array(
             'toplevel_page_fp-publisher-main',
-            'fp-publisher_page_fp-publisher-calendar',
-            'fp-publisher_page_fp-publisher-analytics',
-            'fp-publisher_page_fp-publisher-health',
-            'fp-publisher_page_fp-publisher-clienti',
-            'fp-publisher_page_fp-publisher-client-wizard',
-            'fp-publisher_page_fp-publisher-content',
-            'fp-publisher_page_fp-publisher-social-connections',
+            'fp-publisher_page_fp-publisher-main',
             'fp-publisher_page_fp-publisher-ai-features',
-            'fp-publisher_page_fp-publisher-log'
+            'fp-publisher_page_fp-publisher-analytics',
+            'fp-publisher_page_fp-publisher-calendar',
+            'fp-publisher_page_fp-publisher-client-wizard',
+            'fp-publisher_page_fp-publisher-clienti',
+            'fp-publisher_page_fp-publisher-content',
+            'fp-publisher_page_fp-publisher-frequency-status',
+            'fp-publisher_page_fp-publisher-health',
+            'fp-publisher_page_fp-publisher-help',
+            'fp-publisher_page_fp-publisher-log',
+            'fp-publisher_page_fp-publisher-settings',
+            'fp-publisher_page_fp-publisher-social-connections',
+            'fp-publisher_page_fp-publisher-social-posts',
+            'fp-publisher_page_fp-publisher-test-connections'
         );
 
         if ( ! in_array( $hook, $fp_publisher_pages, true ) ) {
@@ -334,6 +340,7 @@ class TTS_Admin {
     private function enqueue_page_specific_assets( $hook ) {
         switch ( $hook ) {
             case 'toplevel_page_fp-publisher-main':
+            case 'fp-publisher_page_fp-publisher-main':
                 $this->enqueue_dashboard_specific_assets();
                 break;
             case 'fp-publisher_page_fp-publisher-calendar':
@@ -354,6 +361,45 @@ class TTS_Admin {
             case 'fp-publisher_page_fp-publisher-ai-features':
                 $this->enqueue_ai_features_assets();
                 break;
+            case 'fp-publisher_page_fp-publisher-social-posts':
+            case 'fp-publisher_page_fp-publisher-settings':
+            case 'fp-publisher_page_fp-publisher-test-connections':
+            case 'fp-publisher_page_fp-publisher-help':
+            case 'fp-publisher_page_fp-publisher-frequency-status':
+                $this->enqueue_shared_admin_page_assets();
+                break;
+        }
+
+        if ( in_array( $hook, array( 'fp-publisher_page_fp-publisher-clienti', 'fp-publisher_page_fp-publisher-content' ), true ) ) {
+            $this->enqueue_shared_admin_page_assets();
+        }
+    }
+
+    /**
+     * Enqueue shared assets for admin pages without dedicated bundles.
+     */
+    private function enqueue_shared_admin_page_assets() {
+        $css_path = plugin_dir_path( __FILE__ ) . 'css/tts-optimized.css';
+        if ( file_exists( $css_path ) ) {
+            $css_version = filemtime( $css_path );
+            wp_enqueue_style(
+                'tts-optimized',
+                plugin_dir_url( __FILE__ ) . 'css/tts-optimized.css',
+                array( 'tts-core' ),
+                $css_version
+            );
+        }
+
+        $js_path = plugin_dir_path( __FILE__ ) . 'js/tts-optimized-core.js';
+        if ( file_exists( $js_path ) ) {
+            $js_version = filemtime( $js_path );
+            wp_enqueue_script(
+                'tts-optimized-core',
+                plugin_dir_url( __FILE__ ) . 'js/tts-optimized-core.js',
+                array( 'tts-core', 'tts-admin-utils' ),
+                $js_version,
+                true
+            );
         }
     }
 
