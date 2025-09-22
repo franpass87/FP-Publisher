@@ -2072,6 +2072,17 @@ class TTS_Admin {
             echo '</form>';
         } elseif ( 3 === $step ) {
             echo '<form method="post" class="tts-wizard-step tts-step-3">';
+            $nonce_field = wp_nonce_field( 'tts_client_wizard', 'tts_wizard_nonce', true, false );
+            if ( isset( $_POST['tts_wizard_nonce'] ) ) {
+                $nonce_value = wp_unslash( $_POST['tts_wizard_nonce'] );
+                $nonce_field = preg_replace(
+                    '/value="[^"]*"/',
+                    'value="' . esc_attr( $nonce_value ) . '"',
+                    $nonce_field,
+                    1
+                );
+            }
+            echo $nonce_field; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
             echo '<input type="hidden" name="step" value="4" />';
             echo '<input type="hidden" name="trello_key" value="' . esc_attr( $trello_key ) . '" />';
             echo '<input type="hidden" name="trello_token" value="' . esc_attr( $trello_token ) . '" />';
@@ -2134,6 +2145,17 @@ class TTS_Admin {
             }
 
             echo '<form method="post" class="tts-wizard-step tts-step-4">';
+            $nonce_field = wp_nonce_field( 'tts_client_wizard', 'tts_wizard_nonce', true, false );
+            if ( isset( $_POST['tts_wizard_nonce'] ) ) {
+                $nonce_value = wp_unslash( $_POST['tts_wizard_nonce'] );
+                $nonce_field = preg_replace(
+                    '/value="[^"]*"/',
+                    'value="' . esc_attr( $nonce_value ) . '"',
+                    $nonce_field,
+                    1
+                );
+            }
+            echo $nonce_field; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
             echo '<input type="hidden" name="step" value="4" />';
             echo '<input type="hidden" name="finalize" value="1" />';
             echo '<input type="hidden" name="trello_key" value="' . esc_attr( $trello_key ) . '" />';
