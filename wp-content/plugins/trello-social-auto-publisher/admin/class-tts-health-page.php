@@ -96,12 +96,17 @@ class TTS_Health_Page {
         // Trello webhook check.
         echo '<div class="tts-health-card">';
         echo '<h3>' . esc_html__( 'Webhook Trello', 'fp-publisher' ) . '</h3>';
-        $webhook = TTS_Webhook::check_connection();
-        if ( is_wp_error( $webhook ) || ! $webhook ) {
-            $message = is_wp_error( $webhook ) ? $webhook->get_error_message() : __( 'Errore', 'fp-publisher' );
-            echo '<div class="tts-status-error"><span class="dashicons dashicons-warning"></span>' . esc_html( $message ) . '</div>';
+        $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
+        if ( $trello_enabled ) {
+            $webhook = TTS_Webhook::check_connection();
+            if ( is_wp_error( $webhook ) || ! $webhook ) {
+                $message = is_wp_error( $webhook ) ? $webhook->get_error_message() : __( 'Errore', 'fp-publisher' );
+                echo '<div class="tts-status-error"><span class="dashicons dashicons-warning"></span>' . esc_html( $message ) . '</div>';
+            } else {
+                echo '<div class="tts-status-ok"><span class="dashicons dashicons-yes"></span>' . esc_html__( 'Connessione attiva', 'fp-publisher' ) . '</div>';
+            }
         } else {
-            echo '<div class="tts-status-ok"><span class="dashicons dashicons-yes"></span>' . esc_html__( 'Connessione attiva', 'fp-publisher' ) . '</div>';
+            echo '<div class="tts-status-warning"><span class="dashicons dashicons-minus"></span>' . esc_html__( 'Integrazione Trello disabilitata', 'fp-publisher' ) . '</div>';
         }
         echo '</div>';
 
@@ -139,6 +144,7 @@ class TTS_Health_Page {
     private function render_general_health() {
         $issues = 0;
         $total_checks = 0;
+        $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
         
         // Count issues from all checks
         $clients = get_posts(array('post_type' => 'tts_client', 'posts_per_page' => -1, 'fields' => 'ids'));
@@ -148,9 +154,11 @@ class TTS_Health_Page {
             if (is_wp_error($result) || !$result) $issues++;
         }
         
-        $total_checks++; // Webhook check
-        $webhook = TTS_Webhook::check_connection();
-        if (is_wp_error($webhook) || !$webhook) $issues++;
+        if ( $trello_enabled ) {
+            $total_checks++; // Webhook check
+            $webhook = TTS_Webhook::check_connection();
+            if (is_wp_error($webhook) || !$webhook) $issues++;
+        }
         
         $total_checks++; // Scheduler check
         if (is_callable(array('TTS_Scheduler', 'check_queue'))) {
