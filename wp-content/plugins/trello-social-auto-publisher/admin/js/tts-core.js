@@ -210,9 +210,15 @@
 
             const formData = new FormData($form[0]);
 
-            if (action === 'tts_export_data') {
+            const booleanCheckboxActions = ['tts_export_data', 'tts_import_data'];
+            if (booleanCheckboxActions.includes(action)) {
                 $form.find('input[type="checkbox"]').each((index, checkbox) => {
                     if (!checkbox.name) {
+                        return;
+                    }
+
+                    const attrValue = checkbox.getAttribute('value');
+                    if (attrValue !== null && attrValue !== 'on') {
                         return;
                     }
 
@@ -221,7 +227,9 @@
             }
 
             formData.set('action', action);
-            formData.set('nonce', this.config.nonce);
+            if (this.config.nonce) {
+                formData.set('nonce', this.config.nonce);
+            }
 
             // Set loading state
             $submitBtn.addClass(this.config.loadingClass).prop('disabled', true);
