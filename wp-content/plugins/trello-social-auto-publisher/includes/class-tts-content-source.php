@@ -138,7 +138,7 @@ class TTS_Content_Source {
     public static function get_posts_by_source( $source, $args = array() ) {
         $default_args = array(
             'post_type'      => 'tts_social_post',
-            'post_status'    => 'any',
+            'post_status'    => array( 'publish', 'draft', 'pending', 'future', 'private' ),
             'meta_query'     => array(
                 array(
                     'key'     => '_tts_content_source',
