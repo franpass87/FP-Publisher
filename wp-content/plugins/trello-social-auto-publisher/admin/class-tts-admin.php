@@ -560,15 +560,32 @@ class TTS_Admin {
             true
         );
 
-        // Localize analytics script with optimized data
+        $localized_data = array(
+            'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
+            'nonce'        => wp_create_nonce( 'tts_analytics' ),
+            'chartColors'  => $this->get_chart_color_scheme(),
+            'data'         => array(),
+        );
+
+        /**
+         * Filters the localized data made available to the analytics script.
+         *
+         * This allows other components (e.g. the analytics page renderer) to
+         * inject the chart dataset so everything travels in a single
+         * configuration object.
+         *
+         * @param array $localized_data Localized configuration for the script.
+         */
+        $localized_data = apply_filters( 'tts_analytics_localized_data', $localized_data );
+
+        if ( ! isset( $localized_data['data'] ) ) {
+            $localized_data['data'] = array();
+        }
+
         wp_localize_script(
             'tts-analytics',
             'ttsAnalytics',
-            array(
-                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-                'nonce' => wp_create_nonce( 'tts_analytics' ),
-                'chartColors' => $this->get_chart_color_scheme(),
-            )
+            $localized_data
         );
     }
 
