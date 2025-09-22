@@ -43,6 +43,12 @@ function tsap_plugin_activate() {
     if ( class_exists( 'TTS_Workflow_System' ) ) {
         TTS_Workflow_System::install();
     }
+
+    require_once TSAP_PLUGIN_DIR . 'includes/class-tts-integration-hub.php';
+
+    if ( class_exists( 'TTS_Integration_Hub' ) ) {
+        TTS_Integration_Hub::install();
+    }
 }
 
 add_action( 'plugins_loaded', function () {
