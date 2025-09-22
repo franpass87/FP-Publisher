@@ -94,18 +94,58 @@ class TTS_Advanced_Utils {
                     'posts_per_page' => -1,
                     'post_status' => 'any'
                 ) );
-                
+
                 $clients_data = array();
+                $clients_meta_notes = array();
+
                 foreach ( $clients as $client ) {
+                    $client_meta        = get_post_meta( $client->ID );
+                    $client_meta_export = $client_meta;
+
+                    if ( ! $options['include_secrets'] ) {
+                        foreach ( $client_meta_export as $meta_key => &$meta_values ) {
+                            if ( ! self::is_sensitive_client_meta_key( $meta_key ) ) {
+                                continue;
+                            }
+
+                            if ( ! empty( $meta_values ) ) {
+                                $clients_meta_notes[ $client->ID ][] = $meta_key;
+                            }
+
+                            if ( is_array( $meta_values ) ) {
+                                foreach ( $meta_values as &$meta_value ) {
+                                    $meta_value = self::SECRET_PLACEHOLDER;
+                                }
+                                unset( $meta_value );
+                            } else {
+                                $meta_values = self::SECRET_PLACEHOLDER;
+                            }
+                        }
+                        unset( $meta_values );
+                    }
+
                     $clients_data[] = array(
                         'title' => $client->post_title,
                         'content' => $client->post_content,
                         'status' => $client->post_status,
-                        'meta' => get_post_meta( $client->ID ),
+                        'meta' => $client_meta_export,
                         'date_created' => $client->post_date
                     );
                 }
+
                 $export_data['data']['clients'] = $clients_data;
+
+                $export_data['data']['clients_meta'] = array(
+                    'secrets_included' => (bool) $options['include_secrets'],
+                );
+
+                if ( ! empty( $clients_meta_notes ) ) {
+                    foreach ( $clients_meta_notes as $client_id => $meta_keys ) {
+                        $clients_meta_notes[ $client_id ] = array_values( array_unique( $meta_keys ) );
+                    }
+
+                    $export_data['data']['clients_meta']['redacted_fields'] = $clients_meta_notes;
+                }
             }
             
             // Export social posts (if requested)
@@ -366,6 +406,46 @@ class TTS_Advanced_Utils {
             if ( false !== stripos( $field_key, $indicator ) ) {
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    /**
+     * Determine if a client meta key contains sensitive information.
+     *
+     * @param string $meta_key Meta key to evaluate.
+     * @return bool Whether the key should be treated as secret.
+     */
+    private static function is_sensitive_client_meta_key( $meta_key ) {
+        if ( ! is_string( $meta_key ) ) {
+            return false;
+        }
+
+        $sensitive_keys = array(
+            '_tts_trello_key',
+            '_tts_trello_token',
+            '_tts_trello_secret',
+            '_tts_fb_token',
+            '_tts_ig_token',
+            '_tts_yt_token',
+            '_tts_tt_token',
+        );
+
+        if ( in_array( $meta_key, $sensitive_keys, true ) ) {
+            return true;
+        }
+
+        if ( self::is_secret_field( $meta_key ) ) {
+            return true;
+        }
+
+        if ( preg_match( '/(?:^|[_-])(api_)?key$/i', $meta_key ) ) {
+            return true;
+        }
+
+        if ( 0 === strpos( $meta_key, '_tts_' ) && false !== stripos( $meta_key, 'access' ) && false !== stripos( $meta_key, 'key' ) ) {
+            return true;
         }
 
         return false;
