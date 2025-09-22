@@ -1906,14 +1906,23 @@ class TTS_Admin {
             session_start();
         }
 
+        $post_step = 0;
+        if ( isset( $_POST['step'] ) ) {
+            $post_step = absint( wp_unslash( $_POST['step'] ) );
+        }
+
         // Security: Verify nonce for form submissions
-        if ( isset( $_POST['step'] ) && $_POST['step'] > 1 ) {
-            if ( ! wp_verify_nonce( $_POST['tts_wizard_nonce'], 'tts_client_wizard' ) ) {
+        if ( $post_step > 1 ) {
+            if ( ! isset( $_POST['tts_wizard_nonce'] ) || ! wp_verify_nonce( wp_unslash( $_POST['tts_wizard_nonce'] ), 'tts_client_wizard' ) ) {
                 wp_die( esc_html__( 'Security verification failed. Please try again.', 'fp-publisher' ) );
             }
         }
 
-        $step = isset( $_GET['step'] ) ? absint( $_GET['step'] ) : 1;
+        if ( $post_step > 0 ) {
+            $step = $post_step;
+        } else {
+            $step = isset( $_GET['step'] ) ? absint( wp_unslash( $_GET['step'] ) ) : 1;
+        }
 
         echo '<div class="wrap tts-client-wizard">';
         echo '<h1>' . esc_html__( 'Client Wizard', 'fp-publisher' ) . '</h1>';
