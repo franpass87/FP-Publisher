@@ -18,7 +18,6 @@ class TTS_Workflow_System {
      * Initialize workflow system.
      */
     public function __construct() {
-        add_action( 'init', array( $this, 'create_workflow_tables' ) );
         add_action( 'wp_ajax_tts_submit_for_approval', array( $this, 'ajax_submit_for_approval' ) );
         add_action( 'wp_ajax_tts_approve_content', array( $this, 'ajax_approve_content' ) );
         add_action( 'wp_ajax_tts_reject_content', array( $this, 'ajax_reject_content' ) );
@@ -35,11 +34,18 @@ class TTS_Workflow_System {
     }
 
     /**
+     * Install workflow database schema.
+     */
+    public static function install() {
+        self::create_workflow_tables();
+    }
+
+    /**
      * Create workflow-related database tables.
      */
-    public function create_workflow_tables() {
+    private static function create_workflow_tables() {
         global $wpdb;
-        
+
         $charset_collate = $wpdb->get_charset_collate();
         
         // Workflow states table

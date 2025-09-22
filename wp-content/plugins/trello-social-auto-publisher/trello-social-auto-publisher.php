@@ -37,6 +37,12 @@ function tsap_plugin_activate() {
     if ( class_exists( 'TTS_Security_Audit' ) ) {
         TTS_Security_Audit::activate();
     }
+
+    require_once TSAP_PLUGIN_DIR . 'includes/class-tts-workflow-system.php';
+
+    if ( class_exists( 'TTS_Workflow_System' ) ) {
+        TTS_Workflow_System::install();
+    }
 }
 
 add_action( 'plugins_loaded', function () {
