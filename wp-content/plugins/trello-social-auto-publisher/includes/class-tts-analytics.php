@@ -178,7 +178,8 @@ class TTS_Analytics {
             if ( json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ) {
                 $access_token = isset( $decoded['access_token'] ) ? $decoded['access_token'] : '';
                 $api_key      = isset( $decoded['api_key'] ) ? $decoded['api_key'] : '';
-            } elseif ( 0 === strpos( $raw_creds, 'AIza' ) ) {
+            } elseif ( preg_match( '/^[A-Za-z0-9_\-]{35,40}$/', $raw_creds ) ) {
+                // Assume this is a Google API key based on its format (typically 39 chars, alphanumeric, -, _)
                 $api_key = $raw_creds;
             } else {
                 $access_token = $raw_creds;
