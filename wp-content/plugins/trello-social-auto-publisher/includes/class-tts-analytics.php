@@ -161,15 +161,48 @@ class TTS_Analytics {
             return new WP_Error( 'yt_no_id', __( 'Missing YouTube video ID', 'fp-publisher' ) );
         }
 
-        $endpoint = add_query_arg(
-            array(
-                'id'   => $remote_id,
-                'part' => 'statistics',
-                'key'  => $credentials,
-            ),
-            'https://www.googleapis.com/youtube/v3/videos'
+        $access_token = '';
+        $api_key      = '';
+
+        if ( is_object( $credentials ) ) {
+            $credentials = (array) $credentials;
+        }
+
+        if ( is_array( $credentials ) ) {
+            $access_token = isset( $credentials['access_token'] ) ? $credentials['access_token'] : '';
+            $api_key      = isset( $credentials['api_key'] ) ? $credentials['api_key'] : '';
+        } elseif ( is_string( $credentials ) ) {
+            $raw_creds = trim( $credentials );
+
+            $decoded = json_decode( $raw_creds, true );
+            if ( json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ) {
+                $access_token = isset( $decoded['access_token'] ) ? $decoded['access_token'] : '';
+                $api_key      = isset( $decoded['api_key'] ) ? $decoded['api_key'] : '';
+            } elseif ( 0 === strpos( $raw_creds, 'AIza' ) ) {
+                $api_key = $raw_creds;
+            } else {
+                $access_token = $raw_creds;
+            }
+        }
+
+        $query_args = array(
+            'id'   => $remote_id,
+            'part' => 'statistics',
         );
-        $response = wp_remote_get( $endpoint, array( 'timeout' => 20 ) );
+
+        if ( ! empty( $api_key ) ) {
+            $query_args['key'] = $api_key;
+        }
+
+        $request_args = array( 'timeout' => 20 );
+        if ( ! empty( $access_token ) ) {
+            $request_args['headers'] = array(
+                'Authorization' => 'Bearer ' . $access_token,
+            );
+        }
+
+        $endpoint = add_query_arg( $query_args, 'https://www.googleapis.com/youtube/v3/videos' );
+        $response = wp_remote_get( $endpoint, $request_args );
         if ( is_wp_error( $response ) ) {
             return $response;
         }
