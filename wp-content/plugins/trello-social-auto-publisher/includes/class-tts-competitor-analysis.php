@@ -15,6 +15,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Competitor_Analysis {
 
     /**
+     * Cached identifier of the first available client post.
+     *
+     * @var int|null
+     */
+    private $default_client_id = null;
+
+    /**
      * Initialize competitor analysis system.
      */
     public function __construct() {
@@ -92,9 +99,10 @@ class TTS_Competitor_Analysis {
                 'platform' => $platform,
                 'handle' => $handle,
                 'added_date' => current_time( 'mysql' ),
-                'status' => 'active'
+                'status' => 'active',
+                'last_error' => ''
             ),
-            array( '%s', '%s', '%s', '%s', '%s' )
+            array( '%s', '%s', '%s', '%s', '%s', '%s' )
         );
         
         if ( false === $result ) {
@@ -126,6 +134,7 @@ class TTS_Competitor_Analysis {
             following_count int(11),
             post_count int(11),
             engagement_rate decimal(5,2),
+            last_error text,
             PRIMARY KEY (id),
             KEY platform (platform),
             KEY status (status)
@@ -202,7 +211,16 @@ class TTS_Competitor_Analysis {
 
         try {
             $analysis = $this->analyze_competitor( $competitor_id );
-            
+
+            if ( is_wp_error( $analysis ) ) {
+                wp_send_json_error(
+                    array(
+                        'message' => $analysis->get_error_message(),
+                        'code'    => $analysis->get_error_code(),
+                    )
+                );
+            }
+
             wp_send_json_success( array(
                 'analysis' => $analysis,
                 'message' => __( 'Competitor analyzed successfully!', 'fp-publisher' )
@@ -233,308 +251,708 @@ class TTS_Competitor_Analysis {
             throw new Exception( 'Competitor not found' );
         }
         
-        // Simulate competitor data analysis (would use real APIs in production)
-        $analysis = $this->simulate_competitor_analysis( $competitor );
-        
-        // Update competitor data in database
+        $analysis = $this->fetch_competitor_analysis( $competitor );
+
+        if ( is_wp_error( $analysis ) ) {
+            $this->store_competitor_error( $competitor_id, $analysis );
+            return $analysis;
+        }
+
+        $update_data   = array(
+            'last_analyzed' => current_time( 'mysql' ),
+            'last_error'    => '',
+        );
+        $update_format = array( '%s', '%s' );
+
+        if ( array_key_exists( 'followers', $analysis ) && null !== $analysis['followers'] ) {
+            $update_data['follower_count'] = (int) $analysis['followers'];
+            $update_format[]               = '%d';
+        }
+
+        if ( array_key_exists( 'following', $analysis ) && null !== $analysis['following'] ) {
+            $update_data['following_count'] = (int) $analysis['following'];
+            $update_format[]                = '%d';
+        }
+
+        if ( array_key_exists( 'posts', $analysis ) && null !== $analysis['posts'] ) {
+            $update_data['post_count'] = (int) $analysis['posts'];
+            $update_format[]           = '%d';
+        }
+
+        if ( array_key_exists( 'engagement_rate', $analysis ) && null !== $analysis['engagement_rate'] ) {
+            $update_data['engagement_rate'] = (float) $analysis['engagement_rate'];
+            $update_format[]                = '%f';
+        }
+
         $wpdb->update(
             $table_name,
-            array(
-                'last_analyzed' => current_time( 'mysql' ),
-                'follower_count' => $analysis['followers'],
-                'following_count' => $analysis['following'],
-                'post_count' => $analysis['posts'],
-                'engagement_rate' => $analysis['engagement_rate']
-            ),
+            $update_data,
             array( 'id' => $competitor_id ),
-            array( '%s', '%d', '%d', '%d', '%f' ),
+            $update_format,
             array( '%d' )
         );
-        
+
         return $analysis;
     }
 
+    private function fetch_competitor_analysis( $competitor ) {
+        $platform = strtolower( $competitor['platform'] ?? '' );
+
+        switch ( $platform ) {
+            case 'instagram':
+                return $this->fetch_instagram_competitor_analysis( $competitor );
+            case 'facebook':
+                return $this->fetch_facebook_competitor_analysis( $competitor );
+            case 'linkedin':
+                return $this->fetch_linkedin_competitor_analysis( $competitor );
+            case 'twitter':
+                return $this->fetch_twitter_competitor_analysis( $competitor );
+            case 'tiktok':
+                return $this->fetch_tiktok_competitor_analysis( $competitor );
+            default:
+                return new WP_Error(
+                    'tts_competitor_unsupported_platform',
+                    sprintf(
+                        /* translators: %s: platform name */
+                        __( 'Unsupported platform: %s', 'fp-publisher' ),
+                        $platform
+                    )
+                );
+        }
+    }
+
     /**
-     * Simulate competitor analysis (would use real APIs in production).
+     * Retrieve competitor insights from Instagram Business Discovery.
      *
-     * @param array $competitor Competitor data.
-     * @return array Simulated analysis.
+     * @param array $competitor Competitor details.
+     * @return array|WP_Error
      */
-    private function simulate_competitor_analysis( $competitor ) {
-        // Simulate realistic social media metrics
-        $platform_metrics = array(
-            'instagram' => array(
-                'followers' => rand( 1000, 100000 ),
-                'following' => rand( 100, 2000 ),
-                'posts' => rand( 50, 1000 ),
-                'avg_likes' => rand( 50, 5000 ),
-                'avg_comments' => rand( 5, 200 )
-            ),
-            'facebook' => array(
-                'followers' => rand( 500, 50000 ),
-                'following' => rand( 50, 1000 ),
-                'posts' => rand( 30, 500 ),
-                'avg_likes' => rand( 20, 2000 ),
-                'avg_comments' => rand( 2, 100 )
-            ),
-            'twitter' => array(
-                'followers' => rand( 200, 20000 ),
-                'following' => rand( 100, 5000 ),
-                'posts' => rand( 100, 5000 ),
-                'avg_likes' => rand( 5, 500 ),
-                'avg_comments' => rand( 1, 50 )
-            ),
-            'linkedin' => array(
-                'followers' => rand( 500, 30000 ),
-                'following' => rand( 200, 2000 ),
-                'posts' => rand( 20, 200 ),
-                'avg_likes' => rand( 10, 1000 ),
-                'avg_comments' => rand( 2, 50 )
-            ),
-            'tiktok' => array(
-                'followers' => rand( 1000, 500000 ),
-                'following' => rand( 50, 1000 ),
-                'posts' => rand( 20, 500 ),
-                'avg_likes' => rand( 100, 10000 ),
-                'avg_comments' => rand( 10, 500 )
-            ),
-            'youtube' => array(
-                'followers' => rand( 1000, 100000 ),
-                'following' => rand( 10, 500 ),
-                'posts' => rand( 10, 200 ),
-                'avg_likes' => rand( 50, 5000 ),
-                'avg_comments' => rand( 5, 200 )
-            )
-        );
-        
-        $platform = $competitor['platform'];
-        $metrics = $platform_metrics[ $platform ] ?? $platform_metrics['instagram'];
-        
-        // Calculate engagement rate
-        $engagement_rate = ( $metrics['avg_likes'] + $metrics['avg_comments'] ) / $metrics['followers'] * 100;
-        
-        // Generate content analysis
-        $content_analysis = $this->analyze_competitor_content( $competitor );
-        
-        // Generate posting patterns
-        $posting_patterns = $this->analyze_posting_patterns( $competitor );
-        
+    private function fetch_instagram_competitor_analysis( $competitor ) {
+        $fields    = 'followers_count,follows_count,media_count,username,ig_id,profile_picture_url,website,biography,media.limit(10){id,caption,comments_count,like_count,media_type,permalink,timestamp}';
+        $discovery = $this->fetch_instagram_business_discovery( $competitor['handle'] ?? '', $fields );
+
+        if ( is_wp_error( $discovery ) ) {
+            return $discovery;
+        }
+
+        $followers   = isset( $discovery['followers_count'] ) ? (int) $discovery['followers_count'] : null;
+        $media_items = isset( $discovery['media']['data'] ) ? $discovery['media']['data'] : array();
+        $engagement  = $this->calculate_instagram_engagement_rate( $media_items, $followers );
+
         return array(
-            'followers' => $metrics['followers'],
-            'following' => $metrics['following'],
-            'posts' => $metrics['posts'],
-            'avg_likes' => $metrics['avg_likes'],
-            'avg_comments' => $metrics['avg_comments'],
-            'engagement_rate' => round( $engagement_rate, 2 ),
-            'content_analysis' => $content_analysis,
-            'posting_patterns' => $posting_patterns,
-            'growth_rate' => $this->calculate_growth_rate( $competitor ),
-            'top_performing_content' => $this->get_top_performing_content( $competitor ),
-            'hashtag_analysis' => $this->analyze_hashtag_usage( $competitor ),
-            'audience_insights' => $this->get_audience_insights( $competitor )
+            'platform'            => $competitor['platform'] ?? 'instagram',
+            'handle'              => $competitor['handle'] ?? '',
+            'username'            => $discovery['username'] ?? '',
+            'profile_picture_url' => $discovery['profile_picture_url'] ?? '',
+            'website'             => $discovery['website'] ?? '',
+            'followers'           => $followers,
+            'following'           => isset( $discovery['follows_count'] ) ? (int) $discovery['follows_count'] : null,
+            'posts'               => isset( $discovery['media_count'] ) ? (int) $discovery['media_count'] : null,
+            'engagement_rate'     => $engagement,
+            'recent_posts'        => $this->format_instagram_posts( $media_items ),
         );
     }
 
     /**
-     * Analyze competitor content themes and types.
+     * Retrieve competitor insights from Facebook Graph API.
      *
-     * @param array $competitor Competitor data.
-     * @return array Content analysis.
+     * @param array $competitor Competitor details.
+     * @return array|WP_Error
      */
-    private function analyze_competitor_content( $competitor ) {
-        // Simulate content type distribution
-        $content_types = array(
-            'photo' => rand( 30, 60 ),
-            'video' => rand( 20, 40 ),
-            'carousel' => rand( 10, 30 ),
-            'story' => rand( 15, 35 ),
-            'live' => rand( 0, 10 )
+    private function fetch_facebook_competitor_analysis( $competitor ) {
+        $page_data = $this->fetch_facebook_page_data( $competitor );
+
+        if ( is_wp_error( $page_data ) ) {
+            return $page_data;
+        }
+
+        $followers = null;
+        if ( isset( $page_data['followers_count'] ) ) {
+            $followers = (int) $page_data['followers_count'];
+        } elseif ( isset( $page_data['fan_count'] ) ) {
+            $followers = (int) $page_data['fan_count'];
+        }
+
+        $engagement_rate = null;
+        if ( isset( $page_data['talking_about_count'] ) && $page_data['talking_about_count'] && $followers ) {
+            $engagement_rate = round( ( (int) $page_data['talking_about_count'] / $followers ) * 100, 2 );
+        }
+
+        return array(
+            'platform'        => $competitor['platform'] ?? 'facebook',
+            'handle'          => $competitor['handle'] ?? '',
+            'page_id'         => $page_data['id'] ?? '',
+            'name'            => $page_data['name'] ?? '',
+            'followers'       => $followers,
+            'following'       => null,
+            'posts'           => null,
+            'engagement_rate' => $engagement_rate,
         );
-        
-        // Simulate content themes
-        $themes = array(
-            'educational' => rand( 20, 40 ),
-            'promotional' => rand( 10, 30 ),
-            'behind_scenes' => rand( 15, 25 ),
-            'user_generated' => rand( 10, 20 ),
-            'trending' => rand( 5, 15 ),
-            'personal' => rand( 10, 20 )
+    }
+
+    /**
+     * LinkedIn placeholder fetcher.
+     *
+     * @param array $competitor Competitor details.
+     * @return WP_Error
+     */
+    private function fetch_linkedin_competitor_analysis( $competitor ) {
+        unset( $competitor );
+
+        return new WP_Error(
+            'tts_linkedin_integration_unavailable',
+            __( 'LinkedIn integration is not available. Connect a LinkedIn organization to enable competitor analysis.', 'fp-publisher' )
         );
-        
-        // Calculate average performance by type
-        $performance_by_type = array();
-        foreach ( $content_types as $type => $percentage ) {
-            $performance_by_type[ $type ] = array(
-                'percentage' => $percentage,
-                'avg_engagement' => rand( 50, 500 ),
-                'success_rate' => rand( 60, 95 )
+    }
+
+    /**
+     * Twitter placeholder fetcher.
+     *
+     * @param array $competitor Competitor details.
+     * @return WP_Error
+     */
+    private function fetch_twitter_competitor_analysis( $competitor ) {
+        unset( $competitor );
+
+        return new WP_Error(
+            'tts_twitter_integration_unavailable',
+            __( 'Twitter/X integration is not available. Connect a Twitter account with elevated API access to analyze competitors.', 'fp-publisher' )
+        );
+    }
+
+    /**
+     * TikTok placeholder fetcher.
+     *
+     * @param array $competitor Competitor details.
+     * @return WP_Error
+     */
+    private function fetch_tiktok_competitor_analysis( $competitor ) {
+        $token = $this->get_client_platform_token( 'tiktok' );
+
+        if ( empty( $token ) ) {
+            return new WP_Error(
+                'tts_tiktok_not_connected',
+                __( 'TikTok integration is not configured. Connect TikTok from the Social Connections page to analyze competitors.', 'fp-publisher' )
             );
         }
-        
-        return array(
-            'content_types' => $content_types,
-            'themes' => $themes,
-            'performance_by_type' => $performance_by_type,
-            'avg_post_length' => rand( 50, 300 ),
-            'hashtag_usage' => rand( 5, 25 ),
-            'posting_frequency' => rand( 3, 14 ) . ' posts/week'
+
+        unset( $competitor );
+
+        return new WP_Error(
+            'tts_tiktok_competitor_unavailable',
+            __( 'TikTok competitor analytics are not supported in this installation.', 'fp-publisher' )
         );
     }
 
     /**
-     * Analyze posting patterns and timing.
+     * Fetch recent posts from a competitor across supported platforms.
      *
-     * @param array $competitor Competitor data.
-     * @return array Posting patterns.
+     * @param array $competitor Competitor details.
+     * @return array|WP_Error
      */
-    private function analyze_posting_patterns( $competitor ) {
-        // Simulate optimal posting times
-        $best_times = array(
-            'monday' => array( '9:00', '12:00', '18:00' ),
-            'tuesday' => array( '10:00', '14:00', '19:00' ),
-            'wednesday' => array( '9:00', '13:00', '17:00' ),
-            'thursday' => array( '11:00', '15:00', '20:00' ),
-            'friday' => array( '8:00', '12:00', '16:00' ),
-            'saturday' => array( '10:00', '14:00', '19:00' ),
-            'sunday' => array( '9:00', '13:00', '18:00' )
-        );
-        
-        // Simulate posting frequency by day
-        $frequency_by_day = array(
-            'monday' => rand( 1, 3 ),
-            'tuesday' => rand( 1, 3 ),
-            'wednesday' => rand( 1, 3 ),
-            'thursday' => rand( 1, 3 ),
-            'friday' => rand( 1, 3 ),
-            'saturday' => rand( 1, 2 ),
-            'sunday' => rand( 1, 2 )
-        );
-        
-        return array(
-            'best_times' => $best_times,
-            'frequency_by_day' => $frequency_by_day,
-            'most_active_day' => array_keys( $frequency_by_day, max( $frequency_by_day ) )[0],
-            'avg_posts_per_week' => array_sum( $frequency_by_day ),
-            'consistency_score' => rand( 70, 95 )
-        );
+    private function fetch_competitor_posts( $competitor ) {
+        $platform = strtolower( $competitor['platform'] ?? '' );
+
+        switch ( $platform ) {
+            case 'instagram':
+                return $this->fetch_instagram_recent_posts( $competitor );
+            case 'facebook':
+                return $this->fetch_facebook_recent_posts( $competitor );
+            case 'linkedin':
+                return $this->fetch_linkedin_recent_posts( $competitor );
+            case 'twitter':
+                return $this->fetch_twitter_recent_posts( $competitor );
+            case 'tiktok':
+                return $this->fetch_tiktok_recent_posts( $competitor );
+            default:
+                return new WP_Error(
+                    'tts_competitor_unsupported_platform',
+                    sprintf(
+                        /* translators: %s: platform name */
+                        __( 'Unsupported platform: %s', 'fp-publisher' ),
+                        $platform
+                    )
+                );
+        }
     }
 
     /**
-     * Calculate growth rate for competitor.
+     * Fetch recent Instagram posts for competitor analysis.
      *
-     * @param array $competitor Competitor data.
-     * @return array Growth metrics.
+     * @param array $competitor Competitor details.
+     * @return array|WP_Error
      */
-    private function calculate_growth_rate( $competitor ) {
-        // Simulate growth data
-        return array(
-            'follower_growth_rate' => rand( -5, 15 ) . '%',
-            'engagement_growth_rate' => rand( -10, 20 ) . '%',
-            'content_growth_rate' => rand( 0, 25 ) . '%',
-            'monthly_follower_gain' => rand( 10, 1000 ),
-            'growth_trend' => array( 'up', 'down', 'stable' )[ rand( 0, 2 ) ]
-        );
+    private function fetch_instagram_recent_posts( $competitor ) {
+        $fields    = 'media.limit(10){id,caption,comments_count,like_count,media_type,permalink,timestamp}';
+        $discovery = $this->fetch_instagram_business_discovery( $competitor['handle'] ?? '', $fields );
+
+        if ( is_wp_error( $discovery ) ) {
+            return $discovery;
+        }
+
+        $media_items = isset( $discovery['media']['data'] ) ? $discovery['media']['data'] : array();
+
+        return $this->format_instagram_posts( $media_items );
     }
 
     /**
-     * Get top performing content for competitor.
+     * Fetch recent Facebook posts for competitor analysis.
      *
-     * @param array $competitor Competitor data.
-     * @return array Top content.
+     * @param array $competitor Competitor details.
+     * @return array|WP_Error
      */
-    private function get_top_performing_content( $competitor ) {
-        $content_types = array( 'photo', 'video', 'carousel', 'story' );
-        $themes = array( 'educational', 'behind_scenes', 'promotional', 'trending' );
-        
-        $top_content = array();
-        
-        for ( $i = 0; $i < 5; $i++ ) {
-            $top_content[] = array(
-                'type' => $content_types[ rand( 0, count( $content_types ) - 1 ) ],
-                'theme' => $themes[ rand( 0, count( $themes ) - 1 ) ],
-                'likes' => rand( 100, 5000 ),
-                'comments' => rand( 10, 200 ),
-                'shares' => rand( 5, 100 ),
-                'engagement_rate' => rand( 3, 12 ) . '%',
-                'posted_date' => date( 'Y-m-d', strtotime( '-' . rand( 1, 30 ) . ' days' ) )
+    private function fetch_facebook_recent_posts( $competitor ) {
+        $page_data = $this->fetch_facebook_page_data( $competitor );
+
+        if ( is_wp_error( $page_data ) ) {
+            return $page_data;
+        }
+
+        if ( empty( $page_data['id'] ) ) {
+            return new WP_Error(
+                'tts_facebook_missing_page_id',
+                __( 'Unable to determine the Facebook page ID for this competitor.', 'fp-publisher' )
             );
         }
-        
-        // Sort by engagement
-        usort( $top_content, function( $a, $b ) {
-            return $b['likes'] - $a['likes'];
-        });
-        
-        return $top_content;
+
+        $credentials = $this->get_facebook_credentials();
+        if ( is_wp_error( $credentials ) ) {
+            return $credentials;
+        }
+
+        $url = add_query_arg(
+            array(
+                'fields'       => 'id,message,permalink_url,created_time,shares,comments.summary(true),likes.summary(true)',
+                'limit'        => 10,
+                'access_token' => $credentials['access_token'],
+            ),
+            'https://graph.facebook.com/v18.0/' . rawurlencode( $page_data['id'] ) . '/posts'
+        );
+
+        $response = wp_remote_get( $url, array( 'timeout' => 20 ) );
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error( 'tts_facebook_request_failed', $response->get_error_message() );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( $code !== 200 || isset( $body['error'] ) ) {
+            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'Unable to retrieve Facebook posts.', 'fp-publisher' );
+            return new WP_Error( 'tts_facebook_http_error', $message, array( 'status' => $code, 'body' => $body ) );
+        }
+
+        $data  = $body['data'] ?? array();
+        $posts = array();
+
+        foreach ( $data as $item ) {
+            $posts[] = array(
+                'id'           => $item['id'] ?? '',
+                'message'      => $item['message'] ?? '',
+                'permalink'    => $item['permalink_url'] ?? '',
+                'created_time' => $item['created_time'] ?? '',
+                'likes'        => isset( $item['likes']['summary']['total_count'] ) ? (int) $item['likes']['summary']['total_count'] : null,
+                'comments'     => isset( $item['comments']['summary']['total_count'] ) ? (int) $item['comments']['summary']['total_count'] : null,
+                'shares'       => isset( $item['shares']['count'] ) ? (int) $item['shares']['count'] : null,
+            );
+        }
+
+        return $posts;
     }
 
     /**
-     * Analyze hashtag usage patterns.
+     * LinkedIn posts placeholder.
      *
-     * @param array $competitor Competitor data.
-     * @return array Hashtag analysis.
+     * @param array $competitor Competitor details.
+     * @return WP_Error
      */
-    private function analyze_hashtag_usage( $competitor ) {
-        // Simulate hashtag data
-        $popular_hashtags = array(
-            '#marketing' => rand( 20, 50 ),
-            '#business' => rand( 15, 40 ),
-            '#socialmedia' => rand( 10, 35 ),
-            '#digitalmarketing' => rand( 8, 30 ),
-            '#branding' => rand( 12, 25 ),
-            '#content' => rand( 10, 28 ),
-            '#growth' => rand( 8, 22 ),
-            '#strategy' => rand( 6, 20 ),
-            '#tips' => rand( 5, 18 ),
-            '#inspiration' => rand( 4, 15 )
-        );
-        
-        return array(
-            'avg_hashtags_per_post' => rand( 8, 25 ),
-            'most_used_hashtags' => $popular_hashtags,
-            'hashtag_performance' => array(
-                'high_performing' => array_slice( $popular_hashtags, 0, 3, true ),
-                'low_performing' => array_slice( $popular_hashtags, -2, 2, true )
-            ),
-            'branded_hashtags' => rand( 2, 5 ),
-            'hashtag_diversity' => rand( 60, 95 ) . '%'
+    private function fetch_linkedin_recent_posts( $competitor ) {
+        unset( $competitor );
+
+        return new WP_Error(
+            'tts_linkedin_integration_unavailable',
+            __( 'LinkedIn integration is not available. Connect a LinkedIn organization to track competitor posts.', 'fp-publisher' )
         );
     }
 
     /**
-     * Get audience insights for competitor.
+     * Twitter posts placeholder.
      *
-     * @param array $competitor Competitor data.
-     * @return array Audience insights.
+     * @param array $competitor Competitor details.
+     * @return WP_Error
      */
-    private function get_audience_insights( $competitor ) {
+    private function fetch_twitter_recent_posts( $competitor ) {
+        unset( $competitor );
+
+        return new WP_Error(
+            'tts_twitter_integration_unavailable',
+            __( 'Twitter/X integration is not available. Connect a Twitter account with elevated API access to track competitor posts.', 'fp-publisher' )
+        );
+    }
+
+    /**
+     * TikTok posts placeholder.
+     *
+     * @param array $competitor Competitor details.
+     * @return WP_Error
+     */
+    private function fetch_tiktok_recent_posts( $competitor ) {
+        $token = $this->get_client_platform_token( 'tiktok' );
+
+        if ( empty( $token ) ) {
+            return new WP_Error(
+                'tts_tiktok_not_connected',
+                __( 'TikTok integration is not configured. Connect TikTok to track competitor posts.', 'fp-publisher' )
+            );
+        }
+
+        unset( $competitor );
+
+        return new WP_Error(
+            'tts_tiktok_competitor_unavailable',
+            __( 'TikTok competitor post tracking is not supported in this installation.', 'fp-publisher' )
+        );
+    }
+
+    /**
+     * Execute an Instagram Business Discovery request.
+     *
+     * @param string $handle Competitor handle.
+     * @param string $fields Fields to request.
+     * @return array|WP_Error
+     */
+    private function fetch_instagram_business_discovery( $handle, $fields ) {
+        $credentials = $this->get_instagram_credentials();
+
+        if ( is_wp_error( $credentials ) ) {
+            return $credentials;
+        }
+
+        $username = $this->normalize_handle( $handle );
+        if ( '' === $username ) {
+            return new WP_Error(
+                'tts_instagram_invalid_handle',
+                __( 'Instagram handle is required for competitor analysis.', 'fp-publisher' )
+            );
+        }
+
+        $username = preg_replace( '/[^A-Za-z0-9_.]/', '', $username );
+        if ( '' === $username ) {
+            return new WP_Error(
+                'tts_instagram_invalid_handle',
+                __( 'Instagram handle is invalid. Provide the username associated with the business account.', 'fp-publisher' )
+            );
+        }
+
+        $endpoint = 'https://graph.facebook.com/v18.0/' . rawurlencode( $credentials['ig_user_id'] );
+        $url      = add_query_arg(
+            array(
+                'fields'       => sprintf( 'business_discovery.username(%s){%s}', $username, $fields ),
+                'access_token' => $credentials['access_token'],
+            ),
+            $endpoint
+        );
+
+        // The Graph API expects braces and parentheses to remain literal.
+        $url = str_replace(
+            array( '%7B', '%7D', '%28', '%29', '%2C' ),
+            array( '{', '}', '(', ')', ',' ),
+            $url
+        );
+
+        $response = wp_remote_get( $url, array( 'timeout' => 20 ) );
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error( 'tts_instagram_request_failed', $response->get_error_message() );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( $code !== 200 ) {
+            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'Unable to retrieve Instagram data.', 'fp-publisher' );
+            return new WP_Error( 'tts_instagram_http_error', $message, array( 'status' => $code, 'body' => $body ) );
+        }
+
+        if ( isset( $body['error'] ) ) {
+            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'Instagram API error.', 'fp-publisher' );
+            return new WP_Error( 'tts_instagram_api_error', $message, $body['error'] );
+        }
+
+        if ( empty( $body['business_discovery'] ) ) {
+            return new WP_Error(
+                'tts_instagram_business_discovery_unavailable',
+                __( 'Instagram Business Discovery data is unavailable. Ensure your Instagram account has the required permissions.', 'fp-publisher' )
+            );
+        }
+
+        return $body['business_discovery'];
+    }
+
+    /**
+     * Calculate Instagram engagement rate from media items.
+     *
+     * @param array $media_items Media items array.
+     * @param int   $followers   Total followers.
+     * @return float|null
+     */
+    private function calculate_instagram_engagement_rate( $media_items, $followers ) {
+        if ( empty( $media_items ) || empty( $followers ) ) {
+            return null;
+        }
+
+        $engagement_total = 0;
+        $count            = 0;
+
+        foreach ( $media_items as $item ) {
+            $likes    = isset( $item['like_count'] ) ? (int) $item['like_count'] : 0;
+            $comments = isset( $item['comments_count'] ) ? (int) $item['comments_count'] : 0;
+
+            $engagement_total += $likes + $comments;
+            $count++;
+        }
+
+        if ( 0 === $count || 0 === $followers ) {
+            return null;
+        }
+
+        $average = $engagement_total / $count;
+
+        return round( ( $average / $followers ) * 100, 2 );
+    }
+
+    /**
+     * Format Instagram media items for UI consumption.
+     *
+     * @param array $media_items Media items array.
+     * @return array
+     */
+    private function format_instagram_posts( $media_items ) {
+        $posts = array();
+
+        foreach ( $media_items as $item ) {
+            $posts[] = array(
+                'id'             => $item['id'] ?? '',
+                'caption'        => isset( $item['caption'] ) ? $item['caption'] : '',
+                'permalink'      => $item['permalink'] ?? '',
+                'timestamp'      => $item['timestamp'] ?? '',
+                'media_type'     => $item['media_type'] ?? '',
+                'like_count'     => isset( $item['like_count'] ) ? (int) $item['like_count'] : null,
+                'comments_count' => isset( $item['comments_count'] ) ? (int) $item['comments_count'] : null,
+            );
+        }
+
+        return array_slice( $posts, 0, 10 );
+    }
+
+    /**
+     * Retrieve Facebook page data for a competitor.
+     *
+     * @param array $competitor Competitor details.
+     * @return array|WP_Error
+     */
+    private function fetch_facebook_page_data( $competitor ) {
+        $credentials = $this->get_facebook_credentials();
+
+        if ( is_wp_error( $credentials ) ) {
+            return $credentials;
+        }
+
+        $handle = $this->normalize_handle( $competitor['handle'] ?? '' );
+        if ( '' === $handle ) {
+            return new WP_Error(
+                'tts_facebook_invalid_handle',
+                __( 'Facebook handle is required for competitor analysis.', 'fp-publisher' )
+            );
+        }
+
+        $url = add_query_arg(
+            array(
+                'fields'       => 'id,name,fan_count,followers_count,talking_about_count',
+                'access_token' => $credentials['access_token'],
+            ),
+            'https://graph.facebook.com/v18.0/' . rawurlencode( $handle )
+        );
+
+        $response = wp_remote_get( $url, array( 'timeout' => 20 ) );
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error( 'tts_facebook_request_failed', $response->get_error_message() );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( $code !== 200 || isset( $body['error'] ) ) {
+            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'Unable to retrieve Facebook data.', 'fp-publisher' );
+            return new WP_Error( 'tts_facebook_http_error', $message, array( 'status' => $code, 'body' => $body ) );
+        }
+
+        return $body;
+    }
+
+    /**
+     * Retrieve Instagram credentials from stored client settings.
+     *
+     * @return array|WP_Error
+     */
+    private function get_instagram_credentials() {
+        $token = $this->get_client_platform_token( 'instagram' );
+
+        if ( empty( $token ) ) {
+            return new WP_Error(
+                'tts_instagram_not_connected',
+                __( 'Instagram integration is not configured. Connect an Instagram business account to analyze competitors.', 'fp-publisher' )
+            );
+        }
+
+        $parts = array_map( 'trim', explode( '|', $token ) );
+
+        if ( count( $parts ) !== 2 || empty( $parts[0] ) || empty( $parts[1] ) ) {
+            return new WP_Error(
+                'tts_instagram_invalid_token',
+                __( 'Instagram token is malformed. Reconnect your Instagram account.', 'fp-publisher' )
+            );
+        }
+
         return array(
-            'demographics' => array(
-                'age_groups' => array(
-                    '18-24' => rand( 15, 25 ) . '%',
-                    '25-34' => rand( 25, 40 ) . '%',
-                    '35-44' => rand( 20, 30 ) . '%',
-                    '45-54' => rand( 10, 20 ) . '%',
-                    '55+' => rand( 5, 15 ) . '%'
-                ),
-                'gender' => array(
-                    'female' => rand( 45, 65 ) . '%',
-                    'male' => rand( 35, 55 ) . '%'
-                ),
-                'top_locations' => array( 'USA', 'UK', 'Canada', 'Australia', 'Germany' )
-            ),
-            'engagement_patterns' => array(
-                'most_active_time' => rand( 18, 21 ) . ':00',
-                'most_active_day' => array( 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday' )[ rand( 0, 4 ) ],
-                'avg_session_duration' => rand( 2, 8 ) . ' minutes'
-            ),
-            'interests' => array(
-                'business' => rand( 60, 85 ) . '%',
-                'technology' => rand( 45, 70 ) . '%',
-                'marketing' => rand( 55, 80 ) . '%',
-                'entrepreneurship' => rand( 40, 65 ) . '%',
-                'lifestyle' => rand( 30, 55 ) . '%'
+            'ig_user_id'   => $parts[0],
+            'access_token' => $parts[1],
+        );
+    }
+
+    /**
+     * Retrieve Facebook credentials from stored client settings.
+     *
+     * @return array|WP_Error
+     */
+    private function get_facebook_credentials() {
+        $token = $this->get_client_platform_token( 'facebook' );
+
+        if ( empty( $token ) ) {
+            return new WP_Error(
+                'tts_facebook_not_connected',
+                __( 'Facebook integration is not configured. Connect a Facebook page to analyze competitors.', 'fp-publisher' )
+            );
+        }
+
+        $parts = array_map( 'trim', explode( '|', $token ) );
+
+        if ( count( $parts ) !== 2 || empty( $parts[1] ) ) {
+            return new WP_Error(
+                'tts_facebook_invalid_token',
+                __( 'Facebook token is malformed. Reconnect your Facebook page.', 'fp-publisher' )
+            );
+        }
+
+        return array(
+            'page_id'      => $parts[0],
+            'access_token' => $parts[1],
+        );
+    }
+
+    /**
+     * Retrieve a stored platform token from the default client.
+     *
+     * @param string $platform Platform name.
+     * @return string
+     */
+    private function get_client_platform_token( $platform ) {
+        $meta_keys = array(
+            'facebook'  => '_tts_fb_token',
+            'instagram' => '_tts_ig_token',
+            'tiktok'    => '_tts_tt_token',
+        );
+
+        if ( ! isset( $meta_keys[ $platform ] ) ) {
+            return '';
+        }
+
+        $client_id = $this->get_default_client_id();
+
+        if ( ! $client_id ) {
+            return '';
+        }
+
+        return (string) get_post_meta( $client_id, $meta_keys[ $platform ], true );
+    }
+
+    /**
+     * Identify the default client post ID.
+     *
+     * @return int
+     */
+    private function get_default_client_id() {
+        if ( null !== $this->default_client_id ) {
+            return $this->default_client_id;
+        }
+
+        $clients = get_posts(
+            array(
+                'post_type'      => 'tts_client',
+                'post_status'    => array( 'publish', 'draft', 'pending', 'private' ),
+                'numberposts'    => 1,
+                'orderby'        => 'date',
+                'order'          => 'DESC',
+                'fields'         => 'ids',
+                'no_found_rows'  => true,
+                'suppress_filters' => true,
             )
+        );
+
+        $this->default_client_id = ! empty( $clients ) ? (int) $clients[0] : 0;
+
+        return $this->default_client_id;
+    }
+
+    /**
+     * Normalize a competitor handle to a slug or ID.
+     *
+     * @param string $handle Competitor handle.
+     * @return string
+     */
+    private function normalize_handle( $handle ) {
+        $handle = trim( (string) $handle );
+
+        if ( '' === $handle ) {
+            return '';
+        }
+
+        if ( filter_var( $handle, FILTER_VALIDATE_URL ) ) {
+            $path = parse_url( $handle, PHP_URL_PATH );
+            if ( $path ) {
+                $segments = array_values( array_filter( explode( '/', $path ) ) );
+                if ( ! empty( $segments ) ) {
+                    $handle = end( $segments );
+                }
+            }
+        }
+
+        if ( 0 === strpos( $handle, '@' ) ) {
+            $handle = substr( $handle, 1 );
+        }
+
+        return $handle;
+    }
+
+    /**
+     * Store the latest error for a competitor record.
+     *
+     * @param int             $competitor_id Competitor ID.
+     * @param string|WP_Error $error         Error instance or message.
+     */
+    private function store_competitor_error( $competitor_id, $error ) {
+        global $wpdb;
+
+        $message = $error instanceof WP_Error ? $error->get_error_message() : (string) $error;
+
+        $wpdb->update(
+            $wpdb->prefix . 'tts_competitors',
+            array(
+                'last_error'    => $message,
+                'last_analyzed' => current_time( 'mysql' ),
+            ),
+            array( 'id' => $competitor_id ),
+            array( '%s', '%s' ),
+            array( '%d' )
         );
     }
 
@@ -756,7 +1174,16 @@ class TTS_Competitor_Analysis {
 
         try {
             $posts = $this->get_competitor_recent_posts( $competitor_id );
-            
+
+            if ( is_wp_error( $posts ) ) {
+                wp_send_json_error(
+                    array(
+                        'message' => $posts->get_error_message(),
+                        'code'    => $posts->get_error_code(),
+                    )
+                );
+            }
+
             wp_send_json_success( array(
                 'posts' => $posts,
                 'message' => __( 'Competitor posts tracked successfully!', 'fp-publisher' )
@@ -787,32 +1214,13 @@ class TTS_Competitor_Analysis {
             throw new Exception( 'Competitor not found' );
         }
         
-        // Simulate recent posts (would use real APIs in production)
-        $posts = array();
-        $content_types = array( 'photo', 'video', 'carousel', 'story' );
-        $themes = array( 'educational', 'promotional', 'behind_scenes', 'trending' );
-        
-        for ( $i = 0; $i < 10; $i++ ) {
-            $posts[] = array(
-                'id' => 'post_' . $i,
-                'type' => $content_types[ rand( 0, count( $content_types ) - 1 ) ],
-                'theme' => $themes[ rand( 0, count( $themes ) - 1 ) ],
-                'content' => 'Sample post content for analysis ' . ( $i + 1 ),
-                'posted_date' => date( 'Y-m-d H:i:s', strtotime( '-' . rand( 1, 168 ) . ' hours' ) ),
-                'likes' => rand( 50, 1000 ),
-                'comments' => rand( 5, 100 ),
-                'shares' => rand( 2, 50 ),
-                'engagement_rate' => rand( 2, 8 ) . '%',
-                'hashtags' => array( '#marketing', '#business', '#socialmedia' ),
-                'performance_score' => rand( 60, 95 )
-            );
+        $posts = $this->fetch_competitor_posts( $competitor );
+
+        if ( is_wp_error( $posts ) ) {
+            $this->store_competitor_error( $competitor_id, $posts );
+            return $posts;
         }
-        
-        // Sort by posted date
-        usort( $posts, function( $a, $b ) {
-            return strtotime( $b['posted_date'] ) - strtotime( $a['posted_date'] );
-        });
-        
+
         return $posts;
     }
 
@@ -831,7 +1239,11 @@ class TTS_Competitor_Analysis {
         
         foreach ( $competitors as $competitor ) {
             try {
-                $this->analyze_competitor( $competitor['id'] );
+                $result = $this->analyze_competitor( $competitor['id'] );
+
+                if ( is_wp_error( $result ) ) {
+                    error_log( 'Daily competitor analysis failed for ID ' . $competitor['id'] . ': ' . $result->get_error_message() );
+                }
             } catch ( Exception $e ) {
                 error_log( 'Daily competitor analysis failed for ID ' . $competitor['id'] . ': ' . $e->getMessage() );
             }
