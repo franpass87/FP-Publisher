@@ -354,9 +354,16 @@ class TTSAdminUtils {
 
         // AJAX actions
         document.addEventListener('click', (e) => {
-            if (e.target.matches('[data-ajax-action]')) {
+            const target = e.target instanceof Element ? e.target : e.target.parentElement;
+            const ajaxElement = target?.closest('[data-ajax-action]');
+            if (ajaxElement) {
                 e.preventDefault();
-                this.handleAjaxAction(e.target);
+                if (typeof e.stopImmediatePropagation === 'function') {
+                    e.stopImmediatePropagation();
+                } else {
+                    e.stopPropagation();
+                }
+                this.handleAjaxAction(ajaxElement);
             }
         });
     }
@@ -520,8 +527,11 @@ class TTSAdminUtils {
         });
         
         // Add WordPress nonce
-        data.nonce = window.ajaxurl ? wp.ajax.settings.nonce : '';
-        
+        const nonce = window.tts_ajax?.nonce || window.TTS?.Core?.config?.nonce || '';
+        if (nonce && (!Object.prototype.hasOwnProperty.call(data, 'nonce') || !data.nonce)) {
+            data.nonce = nonce;
+        }
+
         return data;
     }
 
@@ -543,8 +553,28 @@ class TTSAdminUtils {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        const result = await response.json();
-        return result;
+        const rawText = await response.text();
+        const trimmedText = rawText.trim();
+
+        if (!trimmedText) {
+            return { success: false, data: 'Empty response from server.' };
+        }
+
+        try {
+            return JSON.parse(trimmedText);
+        } catch (parseError) {
+            if (trimmedText === '-1' || trimmedText === '0') {
+                return {
+                    success: false,
+                    data: 'Security check failed. Please refresh the page and try again.'
+                };
+            }
+
+            return {
+                success: false,
+                data: 'The server returned an unexpected response.'
+            };
+        }
     }
 
     openModalFromHtml(modalHtml) {
