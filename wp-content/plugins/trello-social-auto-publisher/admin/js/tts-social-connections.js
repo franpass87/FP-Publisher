@@ -5,6 +5,8 @@
 (function($) {
     'use strict';
 
+    const socialConfig = (typeof window !== 'undefined' && window.ttsSocialConnections) || {};
+
     // Social Connections specific functionality
     TTS.SocialConnections = {
         
@@ -108,12 +110,14 @@
          */
         handleTestConnection: function(e) {
             e.preventDefault();
-            
+
             const $button = $(e.currentTarget);
             const platform = $button.data('platform');
             const $platformConfig = $button.closest('.tts-platform-config');
             const $resultDiv = $(`#test-result-${platform}`);
-            
+            const ajaxUrl = socialConfig.ajaxUrl || TTS.Core.config.ajaxUrl;
+            const nonce = socialConfig.testConnectionNonce || TTS.Core.config.nonce;
+
             if (!platform) return;
 
             // Validate required fields first
@@ -131,11 +135,11 @@
             const credentials = this.getPlatformCredentials(platform);
             
             // Perform test
-            $.post(TTS.Core.config.ajaxUrl, {
+            $.post(ajaxUrl, {
                 action: this.config.testConnectionEndpoint,
                 platform: platform,
                 credentials: credentials,
-                nonce: TTS.Core.config.nonce
+                nonce: nonce
             })
             .done((response) => {
                 this.handleTestResponse(response, platform, $button, $resultDiv);
@@ -154,19 +158,21 @@
          */
         handleCheckLimits: function(e) {
             e.preventDefault();
-            
+
             const $button = $(e.currentTarget);
             const platform = $button.data('platform');
             const $container = $(`#rate-limit-${platform}`);
-            
+            const ajaxUrl = socialConfig.ajaxUrl || TTS.Core.config.ajaxUrl;
+            const nonce = socialConfig.checkRateLimitsNonce || TTS.Core.config.nonce;
+
             if (!platform) return;
 
             $button.prop('disabled', true).text('Checking...');
 
-            $.post(TTS.Core.config.ajaxUrl, {
+            $.post(ajaxUrl, {
                 action: this.config.checkLimitsEndpoint,
                 platform: platform,
-                nonce: TTS.Core.config.nonce
+                nonce: nonce
             })
             .done((response) => {
                 this.handleLimitsResponse(response, platform, $container);
@@ -326,22 +332,30 @@
          */
         handleTestResponse: function(response, platform, $button, $resultDiv) {
             const $platformConfig = $button.closest('.tts-platform-config');
-            
-            if (response.success) {
+
+            const isSuccess = response && response.success;
+            const responseData = isSuccess && response.data ? response.data : {};
+
+            if (isSuccess) {
+                const successMessage = responseData.message || 'Connection test succeeded';
+
                 $resultDiv.removeClass('error').addClass('success')
-                          .html('✅ ' + response.data.message).show();
+                          .html('✅ ' + successMessage).show();
                 $platformConfig.addClass('success');
-                
+
                 // Update connection status
-                const statusMessage = response && response.data ? response.data.message : '';
-                this.updateConnectionStatus(platform, 'connected', statusMessage);
-                
+                this.updateConnectionStatus(platform, 'connected', successMessage);
+
                 setTimeout(() => $platformConfig.removeClass('success'), 2000);
             } else {
+                const errorMessage = response && response.data && response.data.message
+                    ? response.data.message
+                    : 'Connection test failed';
+
                 $resultDiv.removeClass('success').addClass('error')
-                          .html('❌ ' + (response.data.message || 'Connection test failed')).show();
+                          .html('❌ ' + errorMessage).show();
                 $platformConfig.addClass('error');
-                
+
                 setTimeout(() => $platformConfig.removeClass('error'), 2000);
             }
         },
@@ -362,7 +376,7 @@
          * Handle limits response
          */
         handleLimitsResponse: function(response, platform, $container) {
-            if (response.success) {
+            if (response && response.success && response.data) {
                 const limits = response.data;
                 const html = `
                     <div class="tts-rate-limit-display">
@@ -372,10 +386,16 @@
                         Reset: ${limits.reset_time}
                     </div>
                 `;
-                
+
                 // Remove existing display
                 $container.find('.tts-rate-limit-display').remove();
                 $container.append(html);
+            } else {
+                const message = response && response.data && response.data.message
+                    ? response.data.message
+                    : 'Failed to retrieve API limits';
+
+                TTS.Core.showNotification(message, 'error');
             }
         },
 
@@ -470,7 +490,7 @@
                 nonce: TTS.Core.config.nonce
             })
             .done((response) => {
-                if (response.success && response.data) {
+                if (response && response.success && response.data) {
                     const statusMessage = response.data.message || '';
                     const status = response.data.status || '';
 

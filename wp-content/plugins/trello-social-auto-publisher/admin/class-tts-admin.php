@@ -518,6 +518,16 @@ class TTS_Admin {
             $js_version,
             true
         );
+
+        wp_localize_script(
+            'tts-social-connections',
+            'ttsSocialConnections',
+            array(
+                'ajaxUrl'              => admin_url( 'admin-ajax.php' ),
+                'testConnectionNonce'  => wp_create_nonce( 'tts_test_connection' ),
+                'checkRateLimitsNonce' => wp_create_nonce( 'tts_check_rate_limits' ),
+            )
+        );
     }
 
     /**
