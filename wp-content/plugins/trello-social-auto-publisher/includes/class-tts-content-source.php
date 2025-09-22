@@ -58,6 +58,12 @@ class TTS_Content_Source {
         wp_nonce_field( 'tts_content_source_meta', 'tts_content_source_nonce' );
         
         $source = get_post_meta( $post->ID, '_tts_content_source', true );
+        if ( empty( $source ) && isset( $_GET['content_source'] ) ) {
+            $requested_source = sanitize_key( wp_unslash( $_GET['content_source'] ) );
+            if ( array_key_exists( $requested_source, self::SOURCES ) ) {
+                $source = $requested_source;
+            }
+        }
         $source_reference = get_post_meta( $post->ID, '_tts_source_reference', true );
         
         echo '<table class="form-table">';
@@ -103,7 +109,13 @@ class TTS_Content_Source {
 
         // Save content source.
         if ( isset( $_POST['tts_content_source'] ) ) {
-            $source = sanitize_text_field( $_POST['tts_content_source'] );
+            $source = sanitize_key( wp_unslash( $_POST['tts_content_source'] ) );
+            if ( empty( $source ) && isset( $_GET['content_source'] ) ) {
+                $requested_source = sanitize_key( wp_unslash( $_GET['content_source'] ) );
+                if ( array_key_exists( $requested_source, self::SOURCES ) ) {
+                    $source = $requested_source;
+                }
+            }
             if ( array_key_exists( $source, self::SOURCES ) || empty( $source ) ) {
                 update_post_meta( $post_id, '_tts_content_source', $source );
             }
