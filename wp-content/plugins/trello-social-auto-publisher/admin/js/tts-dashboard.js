@@ -188,8 +188,14 @@ const Dashboard = () => {
 
     const fetchPosts = async () => {
         try {
-            const data = await apiFetch({ 
-                path: '/wp/v2/tts_social_post?per_page=100&status=any&_fields=id,title,meta,date' 
+            const statuses = ['publish', 'draft', 'pending', 'future', 'private'];
+            const nonPublicStatuses = ['draft', 'pending', 'future', 'private'];
+            const shouldIncludeContext = statuses.some((status) => nonPublicStatuses.includes(status));
+            const statusQuery = encodeURIComponent(statuses.join(','));
+            const contextQuery = shouldIncludeContext ? '&context=edit' : '';
+
+            const data = await apiFetch({
+                path: `/wp/v2/tts_social_post?per_page=100&status=${statusQuery}&_fields=id,title,meta,date${contextQuery}`
             });
             setPosts(data);
             setLastUpdate(new Date());
