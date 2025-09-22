@@ -1942,10 +1942,37 @@ class TTS_Admin {
         $yt_token = get_transient( 'tts_oauth_youtube_token' );
         $tt_token = get_transient( 'tts_oauth_tiktok_token' );
 
-        $trello_key   = isset( $_GET['trello_key'] ) ? sanitize_text_field( wp_unslash( $_GET['trello_key'] ) ) : '';
-        $trello_token = isset( $_GET['trello_token'] ) ? sanitize_text_field( wp_unslash( $_GET['trello_token'] ) ) : '';
-        $board        = isset( $_GET['trello_board'] ) ? sanitize_text_field( wp_unslash( $_GET['trello_board'] ) ) : '';
-        $channels     = isset( $_GET['channels'] ) ? array_map( 'sanitize_text_field', (array) $_GET['channels'] ) : array();
+        if ( isset( $_POST['trello_key'] ) ) {
+            $trello_key = sanitize_text_field( wp_unslash( $_POST['trello_key'] ) );
+        } elseif ( isset( $_GET['trello_key'] ) ) {
+            $trello_key = sanitize_text_field( wp_unslash( $_GET['trello_key'] ) );
+        } else {
+            $trello_key = '';
+        }
+
+        if ( isset( $_POST['trello_token'] ) ) {
+            $trello_token = sanitize_text_field( wp_unslash( $_POST['trello_token'] ) );
+        } elseif ( isset( $_GET['trello_token'] ) ) {
+            $trello_token = sanitize_text_field( wp_unslash( $_GET['trello_token'] ) );
+        } else {
+            $trello_token = '';
+        }
+
+        if ( isset( $_POST['trello_board'] ) ) {
+            $board = sanitize_text_field( wp_unslash( $_POST['trello_board'] ) );
+        } elseif ( isset( $_GET['trello_board'] ) ) {
+            $board = sanitize_text_field( wp_unslash( $_GET['trello_board'] ) );
+        } else {
+            $board = '';
+        }
+
+        if ( isset( $_POST['channels'] ) ) {
+            $channels = array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['channels'] ) );
+        } elseif ( isset( $_GET['channels'] ) ) {
+            $channels = array_map( 'sanitize_text_field', (array) wp_unslash( $_GET['channels'] ) );
+        } else {
+            $channels = array();
+        }
 
         if ( 1 === $step ) {
             echo '<form method="post" class="tts-wizard-step tts-step-1">';
