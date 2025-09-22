@@ -1,23 +1,30 @@
 jQuery(document).ready(function($){
+    var trelloEnabled = true;
+    if ( typeof ttsWizard !== 'undefined' && typeof ttsWizard.trelloEnabled !== 'undefined' ) {
+        trelloEnabled = !!ttsWizard.trelloEnabled;
+    }
+
     // Step 1 validation
-    $('.tts-step-1').on('submit', function(){
-        var key = $('input[name="trello_key"]').val();
-        var token = $('input[name="trello_token"]').val();
-        if(!key || !token){
-            // Show user-friendly error message instead of alert
-            var $errorDiv = $('.tts-step-1 .error-message');
-            if($errorDiv.length === 0) {
-                $errorDiv = $('<div class="error-message notice notice-error"><p>Trello key and token are required</p></div>');
-                $('.tts-step-1').prepend($errorDiv);
+    if ( trelloEnabled ) {
+        $('.tts-step-1').on('submit', function(){
+            var key = $('input[name="trello_key"]').val();
+            var token = $('input[name="trello_token"]').val();
+            if(!key || !token){
+                // Show user-friendly error message instead of alert
+                var $errorDiv = $('.tts-step-1 .error-message');
+                if($errorDiv.length === 0) {
+                    $errorDiv = $('<div class="error-message notice notice-error"><p>Trello key and token are required</p></div>');
+                    $('.tts-step-1').prepend($errorDiv);
+                }
+                $errorDiv.show();
+                return false;
             }
-            $errorDiv.show();
-            return false;
-        }
-    });
+        });
+    }
 
     // Dynamic Trello lists loading for step 3
     var $lists = $('#tts-lists');
-    if($lists.length){
+    if(trelloEnabled && $lists.length){
         var data = {
             action: 'tts_get_lists',
             nonce: ttsWizard.nonce,
