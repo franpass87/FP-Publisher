@@ -1653,16 +1653,44 @@ class TTS_Admin {
             echo '<div class="tts-connection-quick-status">';
             foreach ( $clients as $client ) {
                 $title = get_the_title( $client->ID );
-                $facebook_token = get_post_meta( $client->ID, '_tts_fb_token', true );
-                $instagram_token = get_post_meta( $client->ID, '_tts_ig_token', true );
-                $connected_count = 0;
-                
-                if ( $facebook_token ) $connected_count++;
-                if ( $instagram_token ) $connected_count++;
-                
+
+                $platform_labels = array(
+                    'facebook'  => __( 'Facebook', 'fp-publisher' ),
+                    'instagram' => __( 'Instagram', 'fp-publisher' ),
+                    'youtube'   => __( 'YouTube', 'fp-publisher' ),
+                    'tiktok'    => __( 'TikTok', 'fp-publisher' ),
+                );
+
+                $connected_platforms = array();
+
+                foreach ( $platform_labels as $platform => $label ) {
+                    $meta_key = $this->get_platform_token_meta_key( $platform );
+
+                    if ( empty( $meta_key ) ) {
+                        continue;
+                    }
+
+                    $token = get_post_meta( $client->ID, $meta_key, true );
+
+                    if ( ! empty( $token ) ) {
+                        $connected_platforms[ $platform ] = $label;
+                    }
+                }
+
+                $connected_count = count( $connected_platforms );
+
                 echo '<div class="tts-client-status">';
                 echo '<strong>' . esc_html( wp_trim_words( $title, 3 ) ) . '</strong><br>';
                 echo '<small>' . sprintf( esc_html__( '%d platforms connected', 'fp-publisher' ), $connected_count ) . '</small>';
+
+                if ( ! empty( $connected_platforms ) ) {
+                    echo '<div class="tts-platform-badges" style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">';
+                    foreach ( $connected_platforms as $label ) {
+                        echo '<span class="tts-platform-badge" style="background: #f0f0f1; border-radius: 12px; padding: 2px 8px; font-size: 11px;">' . esc_html( $label ) . '</span>';
+                    }
+                    echo '</div>';
+                }
+
                 echo '</div>';
             }
             echo '</div>';
