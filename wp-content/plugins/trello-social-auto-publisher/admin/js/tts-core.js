@@ -209,8 +209,19 @@
             }
 
             const formData = new FormData($form[0]);
-            formData.append('action', action);
-            formData.append('nonce', this.config.nonce);
+
+            if (action === 'tts_export_data') {
+                $form.find('input[type="checkbox"]').each((index, checkbox) => {
+                    if (!checkbox.name) {
+                        return;
+                    }
+
+                    formData.set(checkbox.name, checkbox.checked ? 'true' : 'false');
+                });
+            }
+
+            formData.set('action', action);
+            formData.set('nonce', this.config.nonce);
 
             // Set loading state
             $submitBtn.addClass(this.config.loadingClass).prop('disabled', true);
