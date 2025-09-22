@@ -3834,7 +3834,51 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         }
         
         $file = $_FILES['import_file'];
-        $import_data = json_decode( file_get_contents( $file['tmp_name'] ), true );
+
+        if ( ! isset( $file['error'] ) || UPLOAD_ERR_OK !== $file['error'] ) {
+            $error_message = __( 'File upload failed.', 'fp-publisher' );
+
+            if ( isset( $file['error'] ) ) {
+                switch ( $file['error'] ) {
+                    case UPLOAD_ERR_INI_SIZE:
+                    case UPLOAD_ERR_FORM_SIZE:
+                        $error_message = __( 'The uploaded file exceeds the maximum allowed size.', 'fp-publisher' );
+                        break;
+                    case UPLOAD_ERR_PARTIAL:
+                        $error_message = __( 'The uploaded file was only partially uploaded.', 'fp-publisher' );
+                        break;
+                    case UPLOAD_ERR_NO_FILE:
+                        $error_message = __( 'No file was uploaded.', 'fp-publisher' );
+                        break;
+                    case UPLOAD_ERR_NO_TMP_DIR:
+                        $error_message = __( 'Missing a temporary folder on the server.', 'fp-publisher' );
+                        break;
+                    case UPLOAD_ERR_CANT_WRITE:
+                        $error_message = __( 'Failed to write the uploaded file to disk.', 'fp-publisher' );
+                        break;
+                    case UPLOAD_ERR_EXTENSION:
+                        $error_message = __( 'File upload stopped by a PHP extension.', 'fp-publisher' );
+                        break;
+                    default:
+                        $error_message = __( 'File upload failed due to an unknown error.', 'fp-publisher' );
+                        break;
+                }
+            }
+
+            wp_send_json_error( array( 'message' => $error_message ) );
+        }
+
+        if ( ! isset( $file['tmp_name'] ) || ! is_uploaded_file( $file['tmp_name'] ) ) {
+            wp_send_json_error( array( 'message' => __( 'Invalid uploaded file.', 'fp-publisher' ) ) );
+        }
+
+        $file_contents = file_get_contents( $file['tmp_name'] );
+
+        if ( false === $file_contents ) {
+            wp_send_json_error( array( 'message' => __( 'Unable to read the uploaded file.', 'fp-publisher' ) ) );
+        }
+
+        $import_data = json_decode( $file_contents, true );
         
         if ( json_last_error() !== JSON_ERROR_NONE ) {
             wp_send_json_error( array( 'message' => __( 'Invalid JSON file', 'fp-publisher' ) ) );
