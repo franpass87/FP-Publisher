@@ -1989,10 +1989,27 @@ class TTS_Admin {
             $channels = array();
         }
 
+        if ( isset( $_POST['client_name'] ) ) {
+            $client_name = sanitize_text_field( wp_unslash( $_POST['client_name'] ) );
+        } elseif ( isset( $_GET['client_name'] ) ) {
+            $client_name = sanitize_text_field( wp_unslash( $_GET['client_name'] ) );
+        } else {
+            $client_name = '';
+        }
+        $client_name = trim( $client_name );
+
+        $client_name_error = '';
+        $required_step     = $trello_enabled ? 3 : 4;
+        if ( $post_step >= $required_step && '' === $client_name ) {
+            $client_name_error = __( 'Please provide a client name.', 'fp-publisher' );
+            $step              = 2;
+        }
+
         if ( $trello_enabled && 1 === $step ) {
             echo '<form method="post" class="tts-wizard-step tts-step-1">';
             wp_nonce_field( 'tts_client_wizard', 'tts_wizard_nonce' );
             echo '<input type="hidden" name="step" value="2" />';
+            echo '<input type="hidden" name="client_name" value="' . esc_attr( $client_name ) . '" />';
             echo '<p><label>' . esc_html__( 'Trello API Key', 'fp-publisher' ) . '<br />';
             echo '<input type="text" name="trello_key" value="' . esc_attr( $trello_key ) . '"' . ( $trello_enabled ? ' required' : '' ) . ' /></label></p>';
             echo '<p><label>' . esc_html__( 'Trello Token', 'fp-publisher' ) . '<br />';
@@ -2030,6 +2047,12 @@ class TTS_Admin {
                 echo '<input type="hidden" name="trello_token" value="' . esc_attr( $trello_token ) . '" />';
                 echo '<input type="hidden" name="trello_board" value="' . esc_attr( $board ) . '" />';
             }
+
+            if ( $client_name_error ) {
+                echo '<div class="notice notice-error"><p>' . esc_html( $client_name_error ) . '</p></div>';
+            }
+            echo '<p><label>' . esc_html__( 'Client Name', 'fp-publisher' ) . '<br />';
+            echo '<input type="text" name="client_name" value="' . esc_attr( $client_name ) . '" required /></label></p>';
 
             $opts = array(
                 'facebook'  => __( 'Facebook', 'fp-publisher' ),
@@ -2105,6 +2128,7 @@ class TTS_Admin {
             echo '<input type="hidden" name="trello_key" value="' . esc_attr( $trello_key ) . '" />';
             echo '<input type="hidden" name="trello_token" value="' . esc_attr( $trello_token ) . '" />';
             echo '<input type="hidden" name="trello_board" value="' . esc_attr( $board ) . '" />';
+            echo '<input type="hidden" name="client_name" value="' . esc_attr( $client_name ) . '" />';
             foreach ( $channels as $ch ) {
                 echo '<input type="hidden" name="channels[]" value="' . esc_attr( $ch ) . '" />';
             }
@@ -2115,11 +2139,12 @@ class TTS_Admin {
             echo '</form>';
         } else {
             if ( isset( $_POST['finalize'] ) ) {
-                $post_id = wp_insert_post(
+                $final_client_name = $client_name ? $client_name : sanitize_text_field( __( 'Client', 'fp-publisher' ) );
+                $post_id           = wp_insert_post(
                     array(
                         'post_type'   => 'tts_client',
                         'post_status' => 'publish',
-                        'post_title'  => trim( 'Client ' . ( $trello_enabled && $board ? $board : '' ) ),
+                        'post_title'  => $final_client_name,
                     )
                 );
                 if ( $post_id ) {
@@ -2183,6 +2208,7 @@ class TTS_Admin {
             echo '<input type="hidden" name="trello_key" value="' . esc_attr( $trello_key ) . '" />';
             echo '<input type="hidden" name="trello_token" value="' . esc_attr( $trello_token ) . '" />';
             echo '<input type="hidden" name="trello_board" value="' . esc_attr( $board ) . '" />';
+            echo '<input type="hidden" name="client_name" value="' . esc_attr( $client_name ) . '" />';
             foreach ( $channels as $ch ) {
                 echo '<input type="hidden" name="channels[]" value="' . esc_attr( $ch ) . '" />';
             }
@@ -2193,6 +2219,7 @@ class TTS_Admin {
             }
 
             echo '<h2>' . esc_html__( 'Summary', 'fp-publisher' ) . '</h2>';
+            echo '<p>' . esc_html__( 'Client Name:', 'fp-publisher' ) . ' ' . esc_html( $client_name ? $client_name : __( 'Client', 'fp-publisher' ) ) . '</p>';
             if ( $trello_enabled && $board ) {
                 echo '<p>' . esc_html__( 'Trello Board:', 'fp-publisher' ) . ' ' . esc_html( $board ) . '</p>';
             }
