@@ -1167,7 +1167,14 @@ class TTS_Advanced_Media {
 
         try {
             $photos = $this->search_stock_photos( $search_term, $provider, $per_page );
-            
+
+            if ( is_wp_error( $photos ) ) {
+                wp_send_json_error( array(
+                    'message' => $photos->get_error_message(),
+                    'code'    => $photos->get_error_code(),
+                ) );
+            }
+
             wp_send_json_success( array(
                 'photos' => $photos,
                 'message' => __( 'Stock photos retrieved successfully!', 'fp-publisher' )
@@ -1184,30 +1191,173 @@ class TTS_Advanced_Media {
      * @param string $search_term Search term.
      * @param string $provider Provider name.
      * @param int $per_page Results per page.
-     * @return array Stock photos.
+     * @return array|WP_Error Stock photos or error.
      */
     private function search_stock_photos( $search_term, $provider, $per_page ) {
-        // Simulate stock photo search (would integrate with real APIs in production)
-        $photos = array();
-        
-        for ( $i = 0; $i < $per_page; $i++ ) {
-            $photos[] = array(
-                'id' => 'stock_' . $i,
-                'title' => ucfirst( $search_term ) . ' Photo ' . ( $i + 1 ),
-                'description' => 'Beautiful ' . $search_term . ' image from ' . $provider,
-                'url' => 'https://picsum.photos/800/600?random=' . $i,
-                'thumbnail_url' => 'https://picsum.photos/200/150?random=' . $i,
-                'width' => 800,
-                'height' => 600,
-                'photographer' => 'Photographer ' . ( $i + 1 ),
-                'photographer_url' => '#',
-                'provider' => $provider,
-                'license' => 'Free for commercial use',
-                'download_url' => 'https://picsum.photos/800/600?random=' . $i,
-                'tags' => array( $search_term, 'stock', 'photo', 'free' )
+        $provider = strtolower( $provider );
+        $per_page = max( 1, absint( $per_page ) );
+
+        $settings = get_option( 'tts_settings', array() );
+        $args     = array(
+            'timeout' => 15,
+            'headers' => array(
+                'Accept' => 'application/json',
+            ),
+        );
+
+        switch ( $provider ) {
+            case 'pexels':
+                $api_key = isset( $settings['pexels_api_key'] ) ? trim( $settings['pexels_api_key'] ) : '';
+
+                if ( empty( $api_key ) ) {
+                    return new WP_Error(
+                        'tts_missing_api_key',
+                        __( 'Pexels API key is not configured. Please add it in the plugin settings.', 'fp-publisher' )
+                    );
+                }
+
+                $endpoint = add_query_arg(
+                    array(
+                        'query'   => $search_term,
+                        'per_page'=> min( $per_page, 80 ),
+                    ),
+                    'https://api.pexels.com/v1/search'
+                );
+
+                $args['headers']['Authorization'] = $api_key;
+                $provider_name                     = 'pexels';
+                break;
+
+            case 'unsplash':
+            default:
+                $api_key = isset( $settings['unsplash_access_key'] ) ? trim( $settings['unsplash_access_key'] ) : '';
+
+                if ( empty( $api_key ) ) {
+                    return new WP_Error(
+                        'tts_missing_api_key',
+                        __( 'Unsplash access key is not configured. Please add it in the plugin settings.', 'fp-publisher' )
+                    );
+                }
+
+                $endpoint = add_query_arg(
+                    array(
+                        'query'    => $search_term,
+                        'per_page' => min( $per_page, 30 ),
+                    ),
+                    'https://api.unsplash.com/search/photos'
+                );
+
+                $args['headers']['Authorization'] = 'Client-ID ' . $api_key;
+                $provider_name                     = 'unsplash';
+                break;
+        }
+
+        $response = wp_remote_get( esc_url_raw( $endpoint ), $args );
+
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error(
+                'tts_stock_api_request_failed',
+                __( 'Unable to contact the stock photo provider. Please try again later.', 'fp-publisher' ),
+                $response->get_error_message()
             );
         }
-        
+
+        $status_code = wp_remote_retrieve_response_code( $response );
+
+        if ( 200 !== $status_code ) {
+            $message = __( 'Unexpected response from the stock photo provider. Please try again later.', 'fp-publisher' );
+
+            if ( in_array( $status_code, array( 401, 403 ), true ) ) {
+                $message = __( 'Authentication with the stock photo provider failed. Please verify your API key.', 'fp-publisher' );
+            } elseif ( 429 === $status_code ) {
+                $message = __( 'The stock photo provider rate limit has been reached. Please wait before trying again.', 'fp-publisher' );
+            }
+
+            return new WP_Error(
+                'tts_stock_api_http_error',
+                $message,
+                array( 'status_code' => $status_code )
+            );
+        }
+
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        if ( null === $data || JSON_ERROR_NONE !== json_last_error() ) {
+            return new WP_Error(
+                'tts_stock_api_invalid_json',
+                __( 'The stock photo provider returned an invalid response. Please try again.', 'fp-publisher' )
+            );
+        }
+
+        $photos = array();
+
+        if ( 'pexels' === $provider_name ) {
+            if ( empty( $data['photos'] ) || ! is_array( $data['photos'] ) ) {
+                return array();
+            }
+
+            foreach ( $data['photos'] as $photo ) {
+                $title   = ! empty( $photo['alt'] ) ? $photo['alt'] : sprintf( __( '%s photo', 'fp-publisher' ), ucfirst( $search_term ) );
+                $tags    = array( $search_term, 'pexels' );
+                $photos[] = array(
+                    'id'               => isset( $photo['id'] ) ? (string) $photo['id'] : '',
+                    'title'            => $title,
+                    'description'      => $photo['alt'] ?? '',
+                    'url'              => $photo['src']['large2x'] ?? $photo['src']['large'] ?? $photo['src']['original'] ?? '',
+                    'thumbnail_url'    => $photo['src']['medium'] ?? $photo['src']['small'] ?? '',
+                    'width'            => isset( $photo['width'] ) ? intval( $photo['width'] ) : 0,
+                    'height'           => isset( $photo['height'] ) ? intval( $photo['height'] ) : 0,
+                    'photographer'     => $photo['photographer'] ?? '',
+                    'photographer_url' => $photo['photographer_url'] ?? '',
+                    'provider'         => 'pexels',
+                    'license'          => 'Pexels License',
+                    'download_url'     => $photo['src']['original'] ?? '',
+                    'tags'             => array_values( array_filter( array_unique( $tags ) ) ),
+                );
+            }
+
+            return $photos;
+        }
+
+        if ( empty( $data['results'] ) || ! is_array( $data['results'] ) ) {
+            return array();
+        }
+
+        foreach ( $data['results'] as $photo ) {
+            $description = $photo['description'] ?? $photo['alt_description'] ?? '';
+            $title       = $description ? $description : sprintf( __( '%s photo', 'fp-publisher' ), ucfirst( $search_term ) );
+
+            $tags = array();
+            if ( ! empty( $photo['tags'] ) && is_array( $photo['tags'] ) ) {
+                foreach ( $photo['tags'] as $tag ) {
+                    if ( is_array( $tag ) && isset( $tag['title'] ) ) {
+                        $tags[] = $tag['title'];
+                    } elseif ( is_string( $tag ) ) {
+                        $tags[] = $tag;
+                    }
+                }
+            }
+            $tags[] = $search_term;
+            $tags[] = 'unsplash';
+
+            $photos[] = array(
+                'id'               => isset( $photo['id'] ) ? (string) $photo['id'] : '',
+                'title'            => $title,
+                'description'      => $photo['alt_description'] ?? $photo['description'] ?? '',
+                'url'              => $photo['urls']['regular'] ?? $photo['urls']['full'] ?? '',
+                'thumbnail_url'    => $photo['urls']['small'] ?? $photo['urls']['thumb'] ?? '',
+                'width'            => isset( $photo['width'] ) ? intval( $photo['width'] ) : 0,
+                'height'           => isset( $photo['height'] ) ? intval( $photo['height'] ) : 0,
+                'photographer'     => $photo['user']['name'] ?? '',
+                'photographer_url' => $photo['user']['links']['html'] ?? '',
+                'provider'         => 'unsplash',
+                'license'          => 'Unsplash License',
+                'download_url'     => $photo['links']['download'] ?? $photo['urls']['full'] ?? '',
+                'tags'             => array_values( array_filter( array_unique( $tags ) ) ),
+            );
+        }
+
         return $photos;
     }
 
