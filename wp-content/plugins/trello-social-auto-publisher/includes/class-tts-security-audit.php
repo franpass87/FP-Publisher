@@ -381,13 +381,22 @@ class TTS_Security_Audit {
      */
     public function monitor_file_access() {
         $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+
+        if ( empty( $request_uri ) ) {
+            return;
+        }
+
+        if ( ( function_exists( 'is_admin' ) && is_admin() ) ||
+             ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ||
+             false !== strpos( $request_uri, '/wp-admin/' ) ) {
+            return;
+        }
+
         $suspicious_patterns = array(
-            '\.php$',
             'wp-config',
             '\.sql$',
             '\.log$',
             'backup',
-            'admin\.php',
             'install\.php'
         );
         
