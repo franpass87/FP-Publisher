@@ -629,6 +629,7 @@ class TTS_Admin {
             array(
                 'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                 'nonce'   => wp_create_nonce( 'tts_wizard' ),
+                'trelloEnabled' => (bool) get_option( 'tts_trello_enabled', 1 ),
                 'strings' => array(
                     'validating' => __( 'Validating...', 'fp-publisher' ),
                     'connecting' => __( 'Connecting...', 'fp-publisher' ),
@@ -806,6 +807,10 @@ class TTS_Admin {
         // Check user capabilities
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( __( 'You do not have permission to perform this action.', 'fp-publisher' ) );
+        }
+
+        if ( ! (bool) get_option( 'tts_trello_enabled', 1 ) ) {
+            wp_send_json_error( __( 'Trello integration is disabled.', 'fp-publisher' ) );
         }
 
         $board = isset( $_POST['board'] ) ? sanitize_text_field( $_POST['board'] ) : '';
@@ -1906,6 +1911,8 @@ class TTS_Admin {
             session_start();
         }
 
+        $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
+
         $post_step = 0;
         if ( isset( $_POST['step'] ) ) {
             $post_step = absint( wp_unslash( $_POST['step'] ) );
@@ -1922,6 +1929,14 @@ class TTS_Admin {
             $step = $post_step;
         } else {
             $step = isset( $_GET['step'] ) ? absint( wp_unslash( $_GET['step'] ) ) : 1;
+        }
+
+        if ( ! $trello_enabled ) {
+            if ( $step <= 1 ) {
+                $step = 2;
+            } elseif ( 3 === $step ) {
+                $step = 4;
+            }
         }
 
         echo '<div class="wrap tts-client-wizard">';
@@ -1974,14 +1989,14 @@ class TTS_Admin {
             $channels = array();
         }
 
-        if ( 1 === $step ) {
+        if ( $trello_enabled && 1 === $step ) {
             echo '<form method="post" class="tts-wizard-step tts-step-1">';
             wp_nonce_field( 'tts_client_wizard', 'tts_wizard_nonce' );
             echo '<input type="hidden" name="step" value="2" />';
             echo '<p><label>' . esc_html__( 'Trello API Key', 'fp-publisher' ) . '<br />';
-            echo '<input type="text" name="trello_key" value="' . esc_attr( $trello_key ) . '" required /></label></p>';
+            echo '<input type="text" name="trello_key" value="' . esc_attr( $trello_key ) . '"' . ( $trello_enabled ? ' required' : '' ) . ' /></label></p>';
             echo '<p><label>' . esc_html__( 'Trello Token', 'fp-publisher' ) . '<br />';
-            echo '<input type="text" name="trello_token" value="' . esc_attr( $trello_token ) . '" required /></label></p>';
+            echo '<input type="text" name="trello_token" value="' . esc_attr( $trello_token ) . '"' . ( $trello_enabled ? ' required' : '' ) . ' /></label></p>';
 
             $boards = array();
             if ( $trello_key && $trello_token ) {
@@ -2008,10 +2023,13 @@ class TTS_Admin {
         } elseif ( 2 === $step ) {
             echo '<form method="post" class="tts-wizard-step tts-step-2">';
             wp_nonce_field( 'tts_client_wizard', 'tts_wizard_nonce' );
-            echo '<input type="hidden" name="step" value="3" />';
-            echo '<input type="hidden" name="trello_key" value="' . esc_attr( $trello_key ) . '" />';
-            echo '<input type="hidden" name="trello_token" value="' . esc_attr( $trello_token ) . '" />';
-            echo '<input type="hidden" name="trello_board" value="' . esc_attr( $board ) . '" />';
+            $next_step = $trello_enabled ? 3 : 4;
+            echo '<input type="hidden" name="step" value="' . esc_attr( $next_step ) . '" />';
+            if ( $trello_enabled ) {
+                echo '<input type="hidden" name="trello_key" value="' . esc_attr( $trello_key ) . '" />';
+                echo '<input type="hidden" name="trello_token" value="' . esc_attr( $trello_token ) . '" />';
+                echo '<input type="hidden" name="trello_board" value="' . esc_attr( $board ) . '" />';
+            }
 
             $opts = array(
                 'facebook'  => __( 'Facebook', 'fp-publisher' ),
@@ -2070,7 +2088,7 @@ class TTS_Admin {
 
             echo '<p><button type="submit" class="button button-primary">' . esc_html__( 'Next', 'fp-publisher' ) . '</button></p>';
             echo '</form>';
-        } elseif ( 3 === $step ) {
+        } elseif ( $trello_enabled && 3 === $step ) {
             echo '<form method="post" class="tts-wizard-step tts-step-3">';
             $nonce_field = wp_nonce_field( 'tts_client_wizard', 'tts_wizard_nonce', true, false );
             if ( isset( $_POST['tts_wizard_nonce'] ) ) {
@@ -2090,7 +2108,9 @@ class TTS_Admin {
             foreach ( $channels as $ch ) {
                 echo '<input type="hidden" name="channels[]" value="' . esc_attr( $ch ) . '" />';
             }
-            echo '<div id="tts-lists" data-board="' . esc_attr( $board ) . '" data-key="' . esc_attr( $trello_key ) . '" data-token="' . esc_attr( $trello_token ) . '"></div>';
+            if ( $trello_enabled ) {
+                echo '<div id="tts-lists" data-board="' . esc_attr( $board ) . '" data-key="' . esc_attr( $trello_key ) . '" data-token="' . esc_attr( $trello_token ) . '"></div>';
+            }
             echo '<p><button type="submit" class="button button-primary">' . esc_html__( 'Next', 'fp-publisher' ) . '</button></p>';
             echo '</form>';
         } else {
@@ -2099,12 +2119,14 @@ class TTS_Admin {
                     array(
                         'post_type'   => 'tts_client',
                         'post_status' => 'publish',
-                        'post_title'  => 'Client ' . $board,
+                        'post_title'  => trim( 'Client ' . ( $trello_enabled && $board ? $board : '' ) ),
                     )
                 );
                 if ( $post_id ) {
-                    update_post_meta( $post_id, '_tts_trello_key', $trello_key );
-                    update_post_meta( $post_id, '_tts_trello_token', $trello_token );
+                    if ( $trello_enabled ) {
+                        update_post_meta( $post_id, '_tts_trello_key', $trello_key );
+                        update_post_meta( $post_id, '_tts_trello_token', $trello_token );
+                    }
                     if ( $fb_token ) {
                         update_post_meta( $post_id, '_tts_fb_token', $fb_token );
                     }
@@ -2117,7 +2139,7 @@ class TTS_Admin {
                     if ( $tt_token ) {
                         update_post_meta( $post_id, '_tts_tt_token', $tt_token );
                     }
-                    if ( isset( $_POST['tts_trello_map'] ) && is_array( $_POST['tts_trello_map'] ) ) {
+                    if ( $trello_enabled && isset( $_POST['tts_trello_map'] ) && is_array( $_POST['tts_trello_map'] ) ) {
                         $map = array();
                         foreach ( $_POST['tts_trello_map'] as $id_list => $row ) {
                             if ( empty( $row['canale_social'] ) ) {
@@ -2164,14 +2186,16 @@ class TTS_Admin {
             foreach ( $channels as $ch ) {
                 echo '<input type="hidden" name="channels[]" value="' . esc_attr( $ch ) . '" />';
             }
-            if ( isset( $_POST['tts_trello_map'] ) && is_array( $_POST['tts_trello_map'] ) ) {
+            if ( $trello_enabled && isset( $_POST['tts_trello_map'] ) && is_array( $_POST['tts_trello_map'] ) ) {
                 foreach ( $_POST['tts_trello_map'] as $id_list => $row ) {
                     echo '<input type="hidden" name="tts_trello_map[' . esc_attr( $id_list ) . '][canale_social]" value="' . esc_attr( $row['canale_social'] ) . '" />';
                 }
             }
 
             echo '<h2>' . esc_html__( 'Summary', 'fp-publisher' ) . '</h2>';
-            echo '<p>' . esc_html__( 'Trello Board:', 'fp-publisher' ) . ' ' . esc_html( $board ) . '</p>';
+            if ( $trello_enabled && $board ) {
+                echo '<p>' . esc_html__( 'Trello Board:', 'fp-publisher' ) . ' ' . esc_html( $board ) . '</p>';
+            }
             echo '<p>' . esc_html__( 'Channels:', 'fp-publisher' ) . ' ' . esc_html( implode( ', ', $channels ) ) . '</p>';
             echo '<p><button type="submit" class="button button-primary">' . esc_html__( 'Create Client', 'fp-publisher' ) . '</button></p>';
             echo '</form>';
