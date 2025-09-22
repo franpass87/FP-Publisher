@@ -542,7 +542,14 @@ function tts_sanitize_settings( $input ) {
         return $output;
     }
 
-    $text_keys = array( 'trello_api_key', 'trello_api_token', 'social_access_token', 'bitly_token' );
+    $text_keys = array(
+        'trello_api_key',
+        'trello_api_token',
+        'social_access_token',
+        'bitly_token',
+        'unsplash_access_key',
+        'pexels_api_key',
+    );
 
     foreach ( $text_keys as $key ) {
         if ( isset( $input[ $key ] ) ) {
