@@ -4006,7 +4006,8 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         ?>
         <div class="tts-modal-content">
             <h2><?php esc_html_e( 'Export Data', 'fp-publisher' ); ?></h2>
-            <form id="tts-export-form">
+            <form id="tts-export-form" class="tts-ajax-form" data-ajax-action="tts_export_data">
+                <input type="hidden" name="nonce" value="<?php echo esc_attr( wp_create_nonce( 'tts_ajax_nonce' ) ); ?>">
                 <div class="tts-export-options">
                     <p class="description">
                         <?php esc_html_e( 'Sensitive credentials are excluded unless you explicitly include them below.', 'fp-publisher' ); ?>
