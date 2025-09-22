@@ -530,7 +530,7 @@ class TTSAdminUtils {
         
         // Add WordPress nonce
         const nonce = window.tts_ajax?.nonce || window.TTS?.Core?.config?.nonce || '';
-        if (nonce && (!Object.prototype.hasOwnProperty.call(data, 'nonce') || !data.nonce)) {
+        if (nonce && (!Object.hasOwn(data, 'nonce') || !data.nonce)) {
             data.nonce = nonce;
         }
 
