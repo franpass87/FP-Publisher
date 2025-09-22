@@ -289,6 +289,3 @@ class TTS_Content_Source {
         return 0;
     }
 }
-
-// Initialize the content source system.
-new TTS_Content_Source();
