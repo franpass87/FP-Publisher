@@ -4133,7 +4133,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         echo '<div class="actions-grid">';
         
         if ( $trello_enabled ) {
-            echo '<button class="tts-btn primary" data-action="sync-all">';
+            echo '<button class="tts-btn primary" data-action="sync-all" data-source="all">';
             echo '<span class="dashicons dashicons-update"></span>';
             echo esc_html__( 'Sync All Sources', 'fp-publisher' );
             echo '</button>';
@@ -4287,7 +4287,26 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         .tts-widget-actions { margin-top: 15px; }
         </style>
         
+        <?php
+        $syncable_sources = array();
+        $potential_sources = array( 'trello', 'google_drive', 'dropbox' );
+
+        foreach ( $potential_sources as $sync_source ) {
+            if ( 'trello' === $sync_source && ! get_option( 'tts_trello_enabled', 1 ) ) {
+                continue;
+            }
+
+            if ( array_key_exists( $sync_source, TTS_Content_Source::SOURCES ) ) {
+                $syncable_sources[] = $sync_source;
+            }
+        }
+
+        $sync_nonce = wp_create_nonce( 'tts_admin_nonce' );
+        ?>
         <script>
+        const ttsSyncSources = <?php echo wp_json_encode( array_values( $syncable_sources ) ); ?>;
+        const ttsSyncNonce = '<?php echo esc_js( $sync_nonce ); ?>';
+
         jQuery(document).ready(function($) {
             // Tab switching
             $('.nav-tab').on('click', function(e) {
@@ -4325,24 +4344,124 @@ class TTS_Social_Posts_Table extends WP_List_Table {
                 }
             });
             
+            function toggleLoading($button, isLoading) {
+                if (!$button || !$button.length) {
+                    return;
+                }
+
+                $button.prop('disabled', isLoading);
+
+                var $icon = $button.find('.dashicons');
+                if (isLoading) {
+                    $icon.addClass('fa-spin');
+                } else {
+                    $icon.removeClass('fa-spin');
+                }
+            }
+
             function handleSync(source) {
-                var $btn = $('[data-action="sync"][data-source="' + source + '"]');
-                $btn.prop('disabled', true).find('.dashicons').addClass('fa-spin');
-                
-                $.post(ajaxurl, {
-                    action: 'tts_sync_content_sources',
-                    source: source,
-                    nonce: '<?php echo wp_create_nonce( "tts_admin_nonce" ); ?>'
-                }, function(response) {
-                    if (response.success) {
-                        alert(response.data.message);
+                var queue = [];
+
+                if (source === 'all') {
+                    queue = Array.isArray(ttsSyncSources) ? ttsSyncSources.slice() : [];
+                } else if (source) {
+                    queue = [source];
+                }
+
+                if (!queue.length) {
+                    return;
+                }
+
+                var $triggerBtn = (source === 'all')
+                    ? $('[data-action="sync-all"][data-source="all"]')
+                    : $('[data-action="sync"][data-source="' + source + '"]');
+
+                if (!$triggerBtn.length) {
+                    return;
+                }
+
+                var successMessages = [];
+                var errorMessages = [];
+
+                toggleLoading($triggerBtn, true);
+
+                var processNext = function() {
+                    if (!queue.length) {
+                        toggleLoading($triggerBtn, false);
+
+                        if (errorMessages.length) {
+                            alert(errorMessages.join('\n'));
+                            return;
+                        }
+
+                        if (successMessages.length) {
+                            alert(successMessages.join('\n'));
+                        }
+
                         location.reload();
-                    } else {
-                        alert('Error: ' + response.data);
+                        return;
                     }
-                }).always(function() {
-                    $btn.prop('disabled', false).find('.dashicons').removeClass('fa-spin');
-                });
+
+                    var currentSource = queue.shift();
+                    var $sourceButton = (source === 'all')
+                        ? $('[data-action="sync"][data-source="' + currentSource + '"]')
+                        : $triggerBtn;
+
+                    toggleLoading($sourceButton, true);
+
+                    $.post(ajaxurl, {
+                        action: 'tts_sync_content_sources',
+                        source: currentSource,
+                        nonce: ttsSyncNonce
+                    }, function(response) {
+                        if (response && response.success) {
+                            var message = '';
+
+                            if (response.data) {
+                                if (typeof response.data === 'string') {
+                                    message = response.data;
+                                } else if (response.data.message) {
+                                    message = response.data.message;
+                                }
+                            }
+
+                            if (!message) {
+                                message = '<?php echo esc_js( __( 'Sync completed successfully.', 'fp-publisher' ) ); ?>';
+                            }
+
+                            successMessages.push(message);
+                        } else {
+                            var errorText = '';
+
+                            if (response && response.data) {
+                                if (typeof response.data === 'string') {
+                                    errorText = response.data;
+                                } else if (response.data.message) {
+                                    errorText = response.data.message;
+                                } else {
+                                    try {
+                                        errorText = JSON.stringify(response.data);
+                                    } catch (err) {
+                                        errorText = '';
+                                    }
+                                }
+                            }
+
+                            if (!errorText) {
+                                errorText = '<?php echo esc_js( __( 'Unknown error', 'fp-publisher' ) ); ?>';
+                            }
+
+                            errorMessages.push('<?php echo esc_js( __( 'Error syncing source', 'fp-publisher' ) ); ?> ' + currentSource + ': ' + errorText);
+                        }
+                    }).fail(function() {
+                        errorMessages.push('<?php echo esc_js( __( 'Error syncing source', 'fp-publisher' ) ); ?> ' + currentSource + ': <?php echo esc_js( __( 'Request failed', 'fp-publisher' ) ); ?>');
+                    }).always(function() {
+                        toggleLoading($sourceButton, false);
+                        processNext();
+                    });
+                };
+
+                processNext();
             }
             
             function handleAddContent(source) {
