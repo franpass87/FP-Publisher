@@ -2819,7 +2819,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         foreach ( $social_apps as $platform => $settings ) {
             $platform = sanitize_key( $platform );
             $sanitized_apps[$platform] = array();
-            
+
             foreach ( $settings as $key => $value ) {
                 $key = sanitize_key( $key );
                 $sanitized_apps[$platform][$key] = sanitize_text_field( $value );
@@ -2830,29 +2830,37 @@ class TTS_Social_Posts_Table extends WP_List_Table {
     }
 
     /**
+     * Retrieve the token meta key for a given platform.
+     *
+     * @param string $platform Platform identifier.
+     * @return string Token meta key or empty string if unsupported.
+     */
+    private function get_platform_token_meta_key( $platform ) {
+        $meta_keys = array(
+            'facebook'  => '_tts_fb_token',
+            'instagram' => '_tts_ig_token',
+            'youtube'   => '_tts_yt_token',
+            'tiktok'    => '_tts_tt_token',
+        );
+
+        $platform = sanitize_key( $platform );
+
+        return isset( $meta_keys[ $platform ] ) ? $meta_keys[ $platform ] : '';
+    }
+
+    /**
      * Check the connection status for a platform.
      *
      * @param string $platform Platform name.
      * @return array Status information.
      */
     private function check_platform_connection_status( $platform ) {
+        $platform = sanitize_key( $platform );
         $settings = get_option( 'tts_social_apps', array() );
-        $platform_settings = isset( $settings[$platform] ) ? $settings[$platform] : array();
+        $platform_settings = isset( $settings[ $platform ] ) ? $settings[ $platform ] : array();
 
         // Check if app credentials are configured
-        $required_fields = array();
-        switch ( $platform ) {
-            case 'facebook':
-            case 'instagram':
-                $required_fields = array( 'app_id', 'app_secret' );
-                break;
-            case 'youtube':
-                $required_fields = array( 'client_id', 'client_secret' );
-                break;
-            case 'tiktok':
-                $required_fields = array( 'client_key', 'client_secret' );
-                break;
-        }
+        $required_fields = $this->get_required_platform_fields( $platform );
 
         $configured = true;
         foreach ( $required_fields as $field ) {
@@ -2869,22 +2877,38 @@ class TTS_Social_Posts_Table extends WP_List_Table {
             );
         }
 
-        // Check if there are any connected accounts
-        $connected_clients = get_posts( array(
-            'post_type' => 'tts_client',
-            'meta_query' => array(
-                array(
-                    'key' => '_tts_' . substr( $platform, 0, 2 ) . '_token',
-                    'compare' => 'EXISTS'
-                )
-            ),
-            'fields' => 'ids'
-        ) );
+        $meta_key = $this->get_platform_token_meta_key( $platform );
+        $connected_clients = 0;
 
-        if ( ! empty( $connected_clients ) ) {
+        if ( $meta_key ) {
+            global $wpdb;
+
+            $query = $wpdb->prepare(
+                "
+                SELECT COUNT(DISTINCT p.ID)
+                FROM {$wpdb->posts} AS p
+                INNER JOIN {$wpdb->postmeta} AS pm
+                    ON pm.post_id = p.ID
+                WHERE p.post_type = %s
+                    AND p.post_status NOT IN ('trash', 'auto-draft')
+                    AND pm.meta_key = %s
+                    AND pm.meta_value <> ''
+                ",
+                'tts_client',
+                $meta_key
+            );
+
+            $connected_clients = absint( $wpdb->get_var( $query ) );
+        }
+
+        if ( $connected_clients > 0 ) {
+            $message = ( 1 === $connected_clients )
+                ? __( 'Account connected', 'fp-publisher' )
+                : sprintf( __( '%d accounts connected', 'fp-publisher' ), $connected_clients );
+
             return array(
                 'status' => 'connected',
-                'message' => sprintf( __( '%d account(s) connected', 'fp-publisher' ), count( $connected_clients ) )
+                'message' => $message
             );
         }
 
@@ -3687,8 +3711,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
             wp_die( 'Security check failed' );
         }
         
-        $platform = sanitize_text_field( $_POST['platform'] );
-        $social_apps = get_option( 'tts_social_apps', array() );
+        $platform = isset( $_POST['platform'] ) ? sanitize_key( $_POST['platform'] ) : '';
 
         $status_messages = array(
             'not-configured' => __( 'App credentials not configured', 'fp-publisher' ),
@@ -3697,36 +3720,26 @@ class TTS_Social_Posts_Table extends WP_List_Table {
             'error' => __( 'Connection error. Please try again.', 'fp-publisher' ),
         );
 
-        if ( ! isset( $social_apps[$platform] ) ) {
+        if ( empty( $platform ) ) {
             wp_send_json_success(
                 array(
-                    'status'  => 'not-configured',
-                    'message' => $status_messages['not-configured'],
+                    'status'  => 'error',
+                    'message' => $status_messages['error'],
                 )
             );
             return;
         }
 
-        $settings = $social_apps[$platform];
-        $required_fields = $this->get_required_platform_fields( $platform );
+        $connection_status = $this->check_platform_connection_status( $platform );
+        $status = isset( $connection_status['status'] ) ? $connection_status['status'] : 'error';
+        $message = isset( $connection_status['message'] ) && '' !== $connection_status['message']
+            ? $connection_status['message']
+            : ( isset( $status_messages[ $status ] ) ? $status_messages[ $status ] : $status_messages['error'] );
 
-        foreach ( $required_fields as $field ) {
-            if ( empty( $settings[$field] ) ) {
-                wp_send_json_success(
-                    array(
-                        'status'  => 'not-configured',
-                        'message' => $status_messages['not-configured'],
-                    )
-                );
-                return;
-            }
-        }
-
-        // Quick validation - just check if credentials are present
         wp_send_json_success(
             array(
-                'status'  => 'configured',
-                'message' => $status_messages['configured'],
+                'status'  => $status,
+                'message' => $message,
             )
         );
     }
