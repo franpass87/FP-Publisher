@@ -419,6 +419,190 @@ class TTS_Scheduler {
     }
 
     /**
+     * Check the status of the Action Scheduler queue used for publishing.
+     *
+     * @return string|WP_Error Human readable status message or error describing issues.
+     */
+    public static function check_queue() {
+        if ( ! class_exists( 'ActionScheduler' ) && ! class_exists( 'ActionScheduler_Store' ) && ! function_exists( 'as_get_scheduled_actions' ) ) {
+            return new WP_Error( 'action_scheduler_missing', __( 'Action Scheduler non è disponibile.', 'fp-publisher' ) );
+        }
+
+        $hook           = 'tts_publish_social_post';
+        $store          = null;
+        $pending_status = 'pending';
+        $failed_status  = 'failed';
+
+        if ( class_exists( 'ActionScheduler' ) && is_callable( array( 'ActionScheduler', 'store' ) ) ) {
+            $store = ActionScheduler::store();
+        } elseif ( class_exists( 'ActionScheduler_Store' ) && is_callable( array( 'ActionScheduler_Store', 'instance' ) ) ) {
+            $store = ActionScheduler_Store::instance();
+        }
+
+        if ( class_exists( 'ActionScheduler_Store' ) ) {
+            if ( defined( 'ActionScheduler_Store::STATUS_PENDING' ) ) {
+                $pending_status = ActionScheduler_Store::STATUS_PENDING;
+            }
+            if ( defined( 'ActionScheduler_Store::STATUS_FAILED' ) ) {
+                $failed_status = ActionScheduler_Store::STATUS_FAILED;
+            }
+        }
+
+        $pending_count     = 0;
+        $failed_count      = 0;
+        $oldest_pending_id = 0;
+
+        if ( $store && method_exists( $store, 'query_actions' ) ) {
+            $pending_count = (int) $store->query_actions(
+                array(
+                    'hook'   => $hook,
+                    'status' => $pending_status,
+                ),
+                'count'
+            );
+
+            $failed_count = (int) $store->query_actions(
+                array(
+                    'hook'   => $hook,
+                    'status' => $failed_status,
+                ),
+                'count'
+            );
+
+            $oldest_ids = $store->query_actions(
+                array(
+                    'hook'    => $hook,
+                    'status'  => $pending_status,
+                    'orderby' => 'date',
+                    'order'   => 'ASC',
+                    'per_page' => 1,
+                )
+            );
+
+            if ( is_array( $oldest_ids ) && ! empty( $oldest_ids ) ) {
+                $oldest_pending_id = (int) reset( $oldest_ids );
+            } elseif ( is_numeric( $oldest_ids ) ) {
+                $oldest_pending_id = (int) $oldest_ids;
+            }
+        } elseif ( function_exists( 'as_get_scheduled_actions' ) ) {
+            $pending_actions = as_get_scheduled_actions(
+                array(
+                    'hook'          => $hook,
+                    'status'        => $pending_status,
+                    'return_format' => 'ids',
+                    'orderby'       => 'date',
+                    'order'         => 'ASC',
+                    'per_page'      => 100,
+                )
+            );
+
+            $failed_actions = as_get_scheduled_actions(
+                array(
+                    'hook'          => $hook,
+                    'status'        => $failed_status,
+                    'return_format' => 'ids',
+                    'per_page'      => 100,
+                )
+            );
+
+            if ( is_array( $pending_actions ) ) {
+                $pending_count = count( $pending_actions );
+                $first_pending = reset( $pending_actions );
+                if ( $first_pending ) {
+                    $oldest_pending_id = (int) $first_pending;
+                }
+            }
+
+            if ( is_array( $failed_actions ) ) {
+                $failed_count = count( $failed_actions );
+            }
+        } else {
+            return new WP_Error( 'action_scheduler_unavailable', __( 'Impossibile interrogare Action Scheduler.', 'fp-publisher' ) );
+        }
+
+        $oldest_pending_age = 0;
+
+        if ( $oldest_pending_id && $store && method_exists( $store, 'get_date' ) ) {
+            try {
+                $oldest_date = $store->get_date( $oldest_pending_id );
+                if ( $oldest_date instanceof \DateTime ) {
+                    $oldest_pending_age = max( 0, time() - $oldest_date->getTimestamp() );
+                }
+            } catch ( \Exception $e ) {
+                // If we cannot retrieve the date we skip the stale queue check.
+            }
+        }
+
+        $pending_threshold = (int) apply_filters( 'tts_scheduler_pending_threshold', 25 );
+        $failed_threshold  = (int) apply_filters( 'tts_scheduler_failed_threshold', 0 );
+        $stale_threshold   = (int) apply_filters( 'tts_scheduler_pending_stale_threshold', 15 * MINUTE_IN_SECONDS );
+
+        if ( $failed_count > $failed_threshold ) {
+            return new WP_Error(
+                'action_scheduler_failed_jobs',
+                sprintf(
+                    _n( 'La coda ha %d azione fallita.', 'La coda ha %d azioni fallite.', $failed_count, 'fp-publisher' ),
+                    $failed_count
+                )
+            );
+        }
+
+        if ( $oldest_pending_age > $stale_threshold && $pending_count > 0 ) {
+            $minutes = (int) ceil( $oldest_pending_age / MINUTE_IN_SECONDS );
+
+            return new WP_Error(
+                'action_scheduler_queue_stale',
+                sprintf(
+                    _n(
+                        'L\'azione più vecchia è in attesa da %d minuto.',
+                        'L\'azione più vecchia è in attesa da %d minuti.',
+                        $minutes,
+                        'fp-publisher'
+                    ),
+                    $minutes
+                )
+            );
+        }
+
+        if ( $pending_count > $pending_threshold ) {
+            return new WP_Error(
+                'action_scheduler_queue_backlog',
+                sprintf(
+                    _n( 'Ci sono %d azione in attesa.', 'Ci sono %d azioni in attesa.', $pending_count, 'fp-publisher' ),
+                    $pending_count
+                )
+            );
+        }
+
+        $message = sprintf(
+            __( 'Coda regolare: %1$d in attesa, %2$d fallite.', 'fp-publisher' ),
+            $pending_count,
+            $failed_count
+        );
+
+        if ( function_exists( 'as_next_scheduled_action' ) ) {
+            $next_timestamp = as_next_scheduled_action( $hook );
+
+            if ( $next_timestamp ) {
+                $now = time();
+
+                if ( $next_timestamp <= $now ) {
+                    $message .= ' ' . __( 'Una nuova azione è pronta per l\'esecuzione.', 'fp-publisher' );
+                } else {
+                    $message .= ' ' . sprintf(
+                        __( 'Prossima esecuzione tra %s.', 'fp-publisher' ),
+                        human_time_diff( $now, $next_timestamp )
+                    );
+                }
+            } elseif ( 0 === $pending_count ) {
+                $message .= ' ' . __( 'Nessuna azione pianificata al momento.', 'fp-publisher' );
+            }
+        }
+
+        return $message;
+    }
+
+    /**
      * Calculate delay for retry attempts in minutes.
      *
      * @param int $attempt Current attempt number.
