@@ -4076,7 +4076,8 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         ?>
         <div class="tts-modal-content">
             <h2><?php esc_html_e( 'Import Data', 'fp-publisher' ); ?></h2>
-            <form id="tts-import-form" enctype="multipart/form-data">
+            <form id="tts-import-form" class="tts-ajax-form" data-ajax-action="tts_import_data" enctype="multipart/form-data">
+                <input type="hidden" name="nonce" value="<?php echo esc_attr( wp_create_nonce( 'tts_ajax_nonce' ) ); ?>">
                 <div class="tts-import-file">
                     <label for="import_file">
                         <?php esc_html_e( 'Select Export File:', 'fp-publisher' ); ?>
