@@ -155,40 +155,115 @@ class TTS_Performance {
      */
     private static function get_active_channels_optimized() {
         global $wpdb;
-        
+
         $cache_key = 'tts_active_channels_stats';
         $cached = get_transient( $cache_key );
-        
+
         if ( false !== $cached ) {
             return $cached;
         }
-        
-        $channels = $wpdb->get_results("
-            SELECT 
-                pm.meta_value as channel,
-                COUNT(*) as post_count,
-                COUNT(CASE WHEN p.post_status = 'publish' THEN 1 END) as published_count,
-                MAX(p.post_date) as last_activity
+
+        $rows = $wpdb->get_results("
+            SELECT
+                pm.post_id,
+                pm.meta_value,
+                p.post_status,
+                p.post_date
             FROM {$wpdb->postmeta} pm
             INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID
             WHERE pm.meta_key = '_tts_social_channel'
             AND p.post_type = 'tts_social_post'
             AND p.post_status != 'trash'
-            GROUP BY pm.meta_value
-            ORDER BY post_count DESC
         ", ARRAY_A );
-        
-        $result = array_map( function( $channel ) {
-            return array(
-                'name' => $channel['channel'],
-                'posts' => (int) $channel['post_count'],
-                'published' => (int) $channel['published_count'],
-                'last_activity' => $channel['last_activity'],
-                'success_rate' => $channel['post_count'] > 0 ? 
-                    round( ( $channel['published_count'] / $channel['post_count'] ) * 100, 1 ) : 0
+
+        $channel_labels = array(
+            'facebook'  => __( 'Facebook', 'fp-publisher' ),
+            'instagram' => __( 'Instagram', 'fp-publisher' ),
+            'youtube'   => __( 'YouTube', 'fp-publisher' ),
+            'tiktok'    => __( 'TikTok', 'fp-publisher' ),
+        );
+
+        $accumulators = array();
+
+        foreach ( (array) $rows as $row ) {
+            $meta_value = maybe_unserialize( $row['meta_value'] );
+
+            if ( empty( $meta_value ) ) {
+                continue;
+            }
+
+            if ( ! is_array( $meta_value ) ) {
+                $meta_value = array( $meta_value );
+            }
+
+            $channel_slugs = array();
+
+            foreach ( $meta_value as $slug ) {
+                if ( is_scalar( $slug ) ) {
+                    $normalized_slug = sanitize_key( $slug );
+
+                    if ( '' !== $normalized_slug ) {
+                        $channel_slugs[] = $normalized_slug;
+                    }
+                }
+            }
+
+            if ( empty( $channel_slugs ) ) {
+                continue;
+            }
+
+            $channel_slugs   = array_unique( $channel_slugs );
+            $post_status     = $row['post_status'];
+            $post_date       = $row['post_date'];
+            $post_timestamp  = $post_date ? strtotime( $post_date ) : false;
+
+            foreach ( $channel_slugs as $slug ) {
+                if ( ! isset( $accumulators[ $slug ] ) ) {
+                    $accumulators[ $slug ] = array(
+                        'posts'                => 0,
+                        'published'            => 0,
+                        'last_activity'        => null,
+                        'last_activity_timestamp' => 0,
+                    );
+                }
+
+                $accumulators[ $slug ]['posts']++;
+
+                if ( 'publish' === $post_status ) {
+                    $accumulators[ $slug ]['published']++;
+                }
+
+                if ( $post_timestamp && $post_timestamp > $accumulators[ $slug ]['last_activity_timestamp'] ) {
+                    $accumulators[ $slug ]['last_activity_timestamp'] = $post_timestamp;
+                    $accumulators[ $slug ]['last_activity']           = $post_date;
+                }
+            }
+        }
+
+        $result = array();
+
+        foreach ( $accumulators as $slug => $data ) {
+            $name = isset( $channel_labels[ $slug ] )
+                ? $channel_labels[ $slug ]
+                : ucwords( str_replace( array( '-', '_' ), ' ', $slug ) );
+
+            $posts     = (int) $data['posts'];
+            $published = (int) $data['published'];
+
+            $result[] = array(
+                'name'          => $name,
+                'slug'          => $slug,
+                'posts'         => $posts,
+                'published'     => $published,
+                'last_activity' => $data['last_activity'],
+                'success_rate'  => $posts > 0 ? round( ( $published / $posts ) * 100, 1 ) : 0,
             );
-        }, $channels );
-        
+        }
+
+        usort( $result, function( $a, $b ) {
+            return $b['posts'] <=> $a['posts'];
+        } );
+
         set_transient( $cache_key, $result, 15 * MINUTE_IN_SECONDS );
         return $result;
     }
