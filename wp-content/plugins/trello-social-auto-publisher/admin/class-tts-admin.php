@@ -435,9 +435,8 @@ class TTS_Admin {
      * @return bool
      */
     private function dashboard_needs_react_components() {
-        // Check if current user has capabilities that require React components
-        return current_user_can( 'manage_options' ) && 
-               get_option( 'tts_enable_advanced_ui', false );
+        // Load the React bundle for users who can manage the plugin.
+        return current_user_can( 'manage_options' );
     }
 
     /**
