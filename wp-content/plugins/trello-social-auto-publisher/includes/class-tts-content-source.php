@@ -58,9 +58,10 @@ class TTS_Content_Source {
         wp_nonce_field( 'tts_content_source_meta', 'tts_content_source_nonce' );
         
         $source = get_post_meta( $post->ID, '_tts_content_source', true );
-        if ( empty( $source ) && isset( $_GET['content_source'] ) ) {
-            $requested_source = sanitize_key( wp_unslash( $_GET['content_source'] ) );
-            if ( array_key_exists( $requested_source, self::SOURCES ) ) {
+
+        if ( empty( $source ) ) {
+            $requested_source = $this->get_requested_source();
+            if ( '' !== $requested_source ) {
                 $source = $requested_source;
             }
         }
@@ -97,7 +98,7 @@ class TTS_Content_Source {
      */
     public function save_content_source_meta( $post_id ) {
         // Verify nonce.
-        if ( ! isset( $_POST['tts_content_source_nonce'] ) || 
+        if ( ! isset( $_POST['tts_content_source_nonce'] ) ||
              ! wp_verify_nonce( $_POST['tts_content_source_nonce'], 'tts_content_source_meta' ) ) {
             return;
         }
@@ -108,17 +109,20 @@ class TTS_Content_Source {
         }
 
         // Save content source.
+        $source = null;
         if ( isset( $_POST['tts_content_source'] ) ) {
             $source = sanitize_key( wp_unslash( $_POST['tts_content_source'] ) );
-            if ( empty( $source ) && isset( $_GET['content_source'] ) ) {
-                $requested_source = sanitize_key( wp_unslash( $_GET['content_source'] ) );
-                if ( array_key_exists( $requested_source, self::SOURCES ) ) {
-                    $source = $requested_source;
-                }
+        }
+
+        if ( null === $source || '' === $source ) {
+            $requested_source = $this->get_requested_source();
+            if ( '' !== $requested_source ) {
+                $source = $requested_source;
             }
-            if ( array_key_exists( $source, self::SOURCES ) || empty( $source ) ) {
-                update_post_meta( $post_id, '_tts_content_source', $source );
-            }
+        }
+
+        if ( null !== $source && ( '' === $source || array_key_exists( $source, self::SOURCES ) ) ) {
+            update_post_meta( $post_id, '_tts_content_source', $source );
         }
 
         // Save source reference.
@@ -126,6 +130,25 @@ class TTS_Content_Source {
             $reference = sanitize_text_field( $_POST['tts_source_reference'] );
             update_post_meta( $post_id, '_tts_source_reference', $reference );
         }
+    }
+
+    /**
+     * Retrieve the requested content source from the query string when valid.
+     *
+     * @return string The requested source key or an empty string when invalid.
+     */
+    private function get_requested_source() {
+        if ( ! isset( $_GET['content_source'] ) ) {
+            return '';
+        }
+
+        $requested_source = sanitize_key( wp_unslash( $_GET['content_source'] ) );
+
+        if ( ! array_key_exists( $requested_source, self::SOURCES ) ) {
+            return '';
+        }
+
+        return $requested_source;
     }
 
     /**
