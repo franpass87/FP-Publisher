@@ -461,26 +461,40 @@ class TTSAdminUtils {
 
         try {
             const response = await this.ajaxRequest(action, data);
-            
+
             if (response.success) {
-                window.TTSNotifications.success(response.data.message || 'Action completed successfully');
-                
+                const responseData = response.data || {};
+                let modalHandled = false;
+
+                if (responseData.modal_html) {
+                    const modalOverlay = this.openModalFromHtml(responseData.modal_html);
+                    modalHandled = !!modalOverlay;
+                }
+
+                if (!modalHandled) {
+                    if (window.TTSNotifications) {
+                        window.TTSNotifications.success(responseData.message || 'Action completed successfully');
+                    }
+                } else if (responseData.message && window.TTSNotifications) {
+                    window.TTSNotifications.success(responseData.message);
+                }
+
                 // Handle redirect
-                if (response.data.redirect) {
-                    window.location.href = response.data.redirect;
+                if (responseData.redirect) {
+                    window.location.href = responseData.redirect;
                     return;
                 }
-                
+
                 // Handle refresh
-                if (response.data.refresh) {
+                if (responseData.refresh) {
                     window.location.reload();
                     return;
                 }
-                
+
                 // Handle custom callback
                 const callback = element.getAttribute('data-success-callback');
                 if (callback && window[callback]) {
-                    window[callback](response.data);
+                    window[callback](responseData);
                 }
             } else {
                 throw new Error(response.data || 'Action failed');
@@ -514,7 +528,7 @@ class TTSAdminUtils {
     async ajaxRequest(action, data = {}) {
         const formData = new FormData();
         formData.append('action', action);
-        
+
         Object.keys(data).forEach(key => {
             formData.append(key, data[key]);
         });
@@ -531,6 +545,41 @@ class TTSAdminUtils {
 
         const result = await response.json();
         return result;
+    }
+
+    openModalFromHtml(modalHtml) {
+        if (!modalHtml) {
+            return null;
+        }
+
+        const tempContainer = document.createElement('div');
+        tempContainer.innerHTML = modalHtml.trim();
+
+        const heading = tempContainer.querySelector('h1, h2, h3');
+        let title = '';
+
+        if (heading) {
+            title = heading.textContent.trim();
+            heading.remove();
+        }
+
+        const overlay = this.createModal({
+            title: title || '',
+            body: tempContainer.innerHTML
+        });
+
+        if (!overlay) {
+            return null;
+        }
+
+        this.showModal(overlay);
+
+        const focusable = overlay.querySelector('input, select, textarea, button:not([disabled])');
+        if (focusable) {
+            focusable.focus();
+        }
+
+        return overlay;
     }
 
     createModal({ title, body, buttons = [] }) {
@@ -566,7 +615,12 @@ class TTSAdminUtils {
         });
 
         // Bind close events
-        modal.querySelector('.tts-modal-close').onclick = () => this.closeModal(overlay);
+        modal.querySelectorAll('.tts-modal-close').forEach(closeBtn => {
+            closeBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                this.closeModal(overlay);
+            });
+        });
         overlay.onclick = (e) => {
             if (e.target === overlay) {
                 this.closeModal(overlay);

@@ -237,15 +237,29 @@
          * Handle AJAX responses
          */
         handleAjaxResponse: function(response, $element) {
+            const responseData = response && response.data ? response.data : {};
+
             if (response.success) {
-                this.showNotification(response.data.message || 'Action completed successfully', 'success');
-                
+                let modalHandled = false;
+
+                if (responseData.modal_html && window.TTSAdminUtils && typeof window.TTSAdminUtils.openModalFromHtml === 'function') {
+                    const modalOverlay = window.TTSAdminUtils.openModalFromHtml(responseData.modal_html);
+                    modalHandled = !!modalOverlay;
+                }
+
+                if (!modalHandled) {
+                    this.showNotification(responseData.message || 'Action completed successfully', 'success');
+                } else if (responseData.message) {
+                    this.showNotification(responseData.message, 'success');
+                }
+
                 // Handle specific response actions
-                if (response.data.action) {
-                    this.handleResponseAction(response.data.action, response.data, $element);
+                if (responseData.action) {
+                    this.handleResponseAction(responseData.action, responseData, $element);
                 }
             } else {
-                this.showNotification(response.data.message || 'Action failed', 'error');
+                const errorMessage = responseData.message || 'Action failed';
+                this.showNotification(errorMessage, 'error');
             }
         },
 
