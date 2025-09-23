@@ -25,6 +25,12 @@ Il plugin ora utilizza una struttura di menu consolidata per migliorare la navig
 
 Vedi [MENU_STRUCTURE.md](MENU_STRUCTURE.md) per la documentazione completa della nuova struttura.
 
+## ✅ Manual QA
+
+1. Commenta temporaneamente il metodo `render_content_management_page()` in `admin/class-tts-admin.php`.
+2. Accedi alla dashboard di WordPress e visita la voce di menu **FP Publisher**.
+3. Verifica che venga mostrato un avviso amministratore chiudibile che segnala l'impossibilità di caricare la pagina "Content Management" e che non vengano generati errori fatali PHP.
+
 ## 🔄 Esportazione e Importazione
 
 - I segreti (app/client secrets, access token, refresh token) vengono esclusi automaticamente e nell'export risultano come `[REDACTED]`.
