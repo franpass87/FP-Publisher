@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Handles third-party integrations and API connections.
  */
-class TTS_Integration_Hub {
+class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
 
     /**
      * Current database schema version.
@@ -151,9 +151,38 @@ class TTS_Integration_Hub {
     );
 
     /**
-     * Initialize integration hub.
+     * Credential provisioner dependency.
+     *
+     * @var TTS_Credential_Provisioner_Interface|null
      */
-    public function __construct() {
+    private $credential_provisioner;
+
+    /**
+     * Observability channel dependency.
+     *
+     * @var TTS_Observability_Channel_Interface|null
+     */
+    private $telemetry_channel;
+
+    /**
+     * Initialize integration hub.
+     *
+     * @param TTS_Credential_Provisioner_Interface|null $credential_provisioner Credential provisioner.
+     * @param TTS_Observability_Channel_Interface|null  $telemetry_channel      Telemetry channel.
+     */
+    public function __construct( $credential_provisioner = null, $telemetry_channel = null ) {
+        if ( $credential_provisioner instanceof TTS_Credential_Provisioner_Interface ) {
+            $this->credential_provisioner = $credential_provisioner;
+        } else {
+            $this->credential_provisioner = null;
+        }
+
+        if ( $telemetry_channel instanceof TTS_Observability_Channel_Interface ) {
+            $this->telemetry_channel = $telemetry_channel;
+        } else {
+            $this->telemetry_channel = null;
+        }
+
         add_action( 'wp_ajax_tts_connect_integration', array( $this, 'ajax_connect_integration' ) );
         add_action( 'wp_ajax_tts_disconnect_integration', array( $this, 'ajax_disconnect_integration' ) );
         add_action( 'wp_ajax_tts_test_integration', array( $this, 'ajax_test_integration' ) );
@@ -166,6 +195,61 @@ class TTS_Integration_Hub {
         add_action( 'init', array( $this, 'schedule_integration_sync' ) );
         add_action( 'tts_integration_sync', array( $this, 'run_integration_sync' ) );
         add_action( 'tts_integration_sync_single', array( $this, 'run_single_integration_sync' ), 10, 1 );
+
+        $this->maybe_record_event(
+            'debug',
+            __( 'Integration Hub initialized.', 'fp-publisher' ),
+            array(
+                'hooks_registered' => true,
+            )
+        );
+    }
+
+    /**
+     * Dispatch an integration message from other modules.
+     *
+     * @param TTS_Integration_Message $message Integration message payload.
+     */
+    public function dispatch_message( TTS_Integration_Message $message ) {
+        $integration_id = $message->get_integration_id();
+        $operation      = $message->get_operation();
+        $payload        = $message->get_payload();
+
+        if ( 'sync_now' === $operation && $integration_id ) {
+            $this->run_single_integration_sync( $integration_id );
+        } elseif ( 'schedule_sync' === $operation && $integration_id ) {
+            if ( function_exists( 'as_schedule_single_action' ) ) {
+                as_schedule_single_action( time(), 'tts_integration_sync_single', array( $integration_id ) );
+            }
+        } elseif ( 'publication_sync' === $operation ) {
+            if ( isset( $payload['integration_ids'] ) && is_array( $payload['integration_ids'] ) ) {
+                foreach ( $payload['integration_ids'] as $id ) {
+                    $id = absint( $id );
+                    if ( $id ) {
+                        $this->trigger_integration_sync( $id );
+                    }
+                }
+            } elseif ( $integration_id ) {
+                $this->trigger_integration_sync( $integration_id );
+            }
+        }
+
+        $credential_request = $message->get_credential_request();
+        if ( $credential_request instanceof TTS_Credential_Request && $this->credential_provisioner instanceof TTS_Credential_Provisioner_Interface ) {
+            $this->credential_provisioner->issue_secret( $credential_request );
+        }
+
+        $this->maybe_record_event(
+            'info',
+            sprintf( __( 'Dispatched integration operation: %s', 'fp-publisher' ), $operation ),
+            array_merge(
+                array(
+                    'integration_id' => $integration_id,
+                    'operation'      => $operation,
+                ),
+                $message->get_context()
+            )
+        );
     }
 
     /**
@@ -2025,6 +2109,22 @@ class TTS_Integration_Hub {
     private function trigger_integration_sync( $integration_id ) {
         // Schedule immediate sync
         wp_schedule_single_event( time() + 60, 'tts_integration_sync_single', array( $integration_id ) );
+    }
+
+    /**
+     * Emit an observability event if telemetry is configured.
+     *
+     * @param string $level   Severity level.
+     * @param string $message Message body.
+     * @param array  $context Context payload.
+     */
+    private function maybe_record_event( $level, $message, $context = array() ) {
+        if ( ! $this->telemetry_channel instanceof TTS_Observability_Channel_Interface ) {
+            return;
+        }
+
+        $event = new TTS_Observability_Event( 'integration-hub', $level, $message, $context );
+        $this->telemetry_channel->record_event( $event );
     }
 }
 

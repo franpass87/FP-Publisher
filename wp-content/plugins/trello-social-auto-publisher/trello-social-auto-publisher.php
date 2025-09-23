@@ -79,6 +79,7 @@ add_action( 'plugins_loaded', function () {
         'class-tts-notifier.php',
         'class-tts-performance.php',
         'class-tts-rate-limiter.php',
+        'class-tts-operating-contracts.php',
         'class-tts-scheduler.php',
         'class-tts-security-audit.php',
         'class-tts-settings.php',
