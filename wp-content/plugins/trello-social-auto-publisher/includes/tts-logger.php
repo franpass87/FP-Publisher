@@ -138,7 +138,7 @@ class TTS_Logger {
      * @return string
      */
     private static function normalize_component_name( $component ) {
-        $component = preg_replace( '/^TTS[_\\]/', '', $component );
+        $component = preg_replace( '/^TTS(?:_|\\\\)/', '', $component );
         $component = strtolower( preg_replace( '/[^a-z0-9]+/i', '_', (string) $component ) );
         $component = trim( $component, '_' );
 
