@@ -46,10 +46,10 @@ $tests = array(
             (object) array( 'source' => 'local_upload', 'count' => 1 ),
         );
 
-        $table = new TTS_Social_Posts_Table();
+        $admin = new TTS_Admin();
 
         ob_start();
-        $table->render_content_management_page();
+        $admin->render_content_management_page();
         $output = ob_get_clean();
 
         tts_assert_not_contains( 'data-tab="trello"', $output, 'Trello tab should be removed when disabled.' );
