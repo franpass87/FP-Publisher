@@ -5,6 +5,19 @@ require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/helpers/assertions.php';
 require_once __DIR__ . '/../includes/class-tts-security-audit.php';
 
+class TTS_Test_REST_Request {
+    /** @var string */
+    private $route;
+
+    public function __construct( string $route ) {
+        $this->route = $route;
+    }
+
+    public function get_route() : string {
+        return $this->route;
+    }
+}
+
 class TTS_Security_Audit_Test_Double extends TTS_Security_Audit {
     /** @var array<int, array<string, mixed>> */
     public $logged_events = array();
@@ -117,6 +130,103 @@ $tests = array(
             0,
             count( $GLOBALS['tts_json_responses'] ),
             'No success responses should be recorded when the nonce is invalid.'
+        );
+    },
+    'rest_api_monitoring_ignores_core_routes' => function () {
+        tts_reset_test_state();
+
+        $_SERVER['REMOTE_ADDR'] = '198.51.100.10';
+
+        $audit   = new TTS_Security_Audit_Test_Double();
+        $request = new TTS_Test_REST_Request( '/wp/v2/posts' );
+
+        $audit->monitor_api_requests( null, array(), $request );
+
+        tts_assert_equals(
+            0,
+            count( $audit->logged_events ),
+            'Core REST API routes should not trigger plugin abuse monitoring.'
+        );
+
+        tts_assert_equals(
+            array(),
+            $GLOBALS['tts_test_transients'],
+            'No transient counters should be stored for non-plugin routes.'
+        );
+    },
+    'rest_api_monitoring_skips_authenticated_editors' => function () {
+        tts_reset_test_state();
+
+        $_SERVER['REMOTE_ADDR']           = '198.51.100.20';
+        $GLOBALS['tts_is_user_logged_in'] = true;
+        $GLOBALS['tts_current_user_caps'] = array( 'edit_posts' => true );
+
+        $audit   = new TTS_Security_Audit_Test_Double();
+        $request = new TTS_Test_REST_Request( '/tts/v1/secure-endpoint' );
+
+        $audit->monitor_api_requests( null, array(), $request );
+
+        tts_assert_equals(
+            0,
+            count( $audit->logged_events ),
+            'Authenticated editors should not be counted toward abuse detection.'
+        );
+
+        tts_assert_equals(
+            array(),
+            $GLOBALS['tts_test_transients'],
+            'No abuse counters should be stored for trusted editor traffic.'
+        );
+    },
+    'rest_api_monitoring_detects_abuse_for_plugin_routes' => function () {
+        tts_reset_test_state();
+
+        $_SERVER['REMOTE_ADDR'] = '198.51.100.30';
+
+        $audit   = new TTS_Security_Audit_Test_Double();
+        $request = new TTS_Test_REST_Request( '/tts/v1/overuse' );
+
+        $reflection = new ReflectionClass( TTS_Security_Audit::class );
+        $property   = $reflection->getProperty( 'api_abuse_threshold' );
+        $property->setAccessible( true );
+        $threshold = (int) $property->getValue( $audit );
+
+        for ( $i = 0; $i <= $threshold; $i++ ) {
+            $audit->monitor_api_requests( null, array(), $request );
+        }
+
+        tts_assert_equals(
+            1,
+            count( $audit->logged_events ),
+            'Exceeding the abuse threshold should log a single high-risk event.'
+        );
+
+        $event = end( $audit->logged_events );
+
+        tts_assert_equals(
+            TTS_Security_Audit::EVENT_API_ABUSE,
+            $event['event_type'],
+            'High-volume plugin traffic should be flagged as API abuse.'
+        );
+
+        tts_assert_equals(
+            '/tts/v1/overuse',
+            $event['data']['endpoint'],
+            'The audit entry should reference the offending REST route.'
+        );
+
+        tts_assert_equals(
+            $threshold + 1,
+            $event['data']['api_calls_per_hour'],
+            'The stored request count should reflect the threshold breach.'
+        );
+
+        $expected_key = 'tts_api_calls_' . md5( '198.51.100.30' . '|/tts/v1/overuse' );
+
+        tts_assert_equals(
+            $threshold + 1,
+            get_transient( $expected_key ),
+            'The per-route counter should be tracked in a transient.'
         );
     },
     'subscriber_profile_access_is_ignored_but_restricted_menu_is_logged' => function () {
