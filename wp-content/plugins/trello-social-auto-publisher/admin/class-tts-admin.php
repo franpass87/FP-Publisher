@@ -3895,8 +3895,11 @@ class TTS_Admin {
      * AJAX handler for data import.
      */
     public function ajax_import_data() {
-        if ( ! wp_verify_nonce( $_POST['nonce'], 'tts_ajax_nonce' ) ) {
-            wp_die( 'Security check failed' );
+        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
+                403
+            );
         }
         
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -3981,8 +3984,11 @@ class TTS_Admin {
      * AJAX handler for system maintenance.
      */
     public function ajax_system_maintenance() {
-        if ( ! wp_verify_nonce( $_POST['nonce'], 'tts_ajax_nonce' ) ) {
-            wp_die( 'Security check failed' );
+        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
+                403
+            );
         }
         
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -4013,8 +4019,11 @@ class TTS_Admin {
      * AJAX handler for system report generation.
      */
     public function ajax_generate_report() {
-        if ( ! wp_verify_nonce( $_POST['nonce'], 'tts_ajax_nonce' ) ) {
-            wp_die( 'Security check failed' );
+        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
+                403
+            );
         }
         
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -4033,8 +4042,11 @@ class TTS_Admin {
      * AJAX handler for quick connection check.
      */
     public function ajax_quick_connection_check() {
-        if ( ! wp_verify_nonce( $_POST['nonce'], 'tts_ajax_nonce' ) ) {
-            wp_die( 'Security check failed' );
+        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
+                403
+            );
         }
         
         $platform = isset( $_POST['platform'] ) ? sanitize_key( $_POST['platform'] ) : '';
@@ -4091,8 +4103,11 @@ class TTS_Admin {
      * AJAX handler for health check refresh.
      */
     public function ajax_refresh_health() {
-        if ( ! wp_verify_nonce( $_POST['nonce'], 'tts_ajax_nonce' ) ) {
-            wp_die( 'Security check failed' );
+        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
+                403
+            );
         }
         
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -4112,8 +4127,11 @@ class TTS_Admin {
      * AJAX handler for showing export modal.
      */
     public function ajax_show_export_modal() {
-        if ( ! wp_verify_nonce( $_POST['nonce'], 'tts_ajax_nonce' ) ) {
-            wp_die( 'Security check failed' );
+        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
+                403
+            );
         }
         
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -4182,8 +4200,11 @@ class TTS_Admin {
      * AJAX handler for showing import modal.
      */
     public function ajax_show_import_modal() {
-        if ( ! wp_verify_nonce( $_POST['nonce'], 'tts_ajax_nonce' ) ) {
-            wp_die( 'Security check failed' );
+        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
+                403
+            );
         }
         
         if ( ! current_user_can( 'manage_options' ) ) {
