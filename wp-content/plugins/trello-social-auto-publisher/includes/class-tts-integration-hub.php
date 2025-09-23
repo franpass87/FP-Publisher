@@ -274,15 +274,26 @@ class TTS_Integration_Hub {
         }
 
         try {
-            $integration_id = $this->connect_integration( $integration_type, $integration_name, $credentials, $settings );
-            
-            wp_send_json_success( array(
-                'integration_id' => $integration_id,
-                'message' => __( 'Integration connected successfully!', 'fp-publisher' )
-            ) );
+            $connection_result = $this->connect_integration( $integration_type, $integration_name, $credentials, $settings );
+
+            $success_message = ! empty( $connection_result['message'] ) ? $connection_result['message'] : __( 'Integration connected successfully!', 'fp-publisher' );
+
+            wp_send_json_success(
+                array(
+                    'integration_id' => $connection_result['integration_id'],
+                    'message' => $success_message,
+                    'test_result' => $connection_result['details'],
+                )
+            );
         } catch ( Exception $e ) {
             error_log( 'TTS Integration Connection Error: ' . $e->getMessage() );
-            wp_send_json_error( array( 'message' => __( 'Failed to connect integration. Please check your credentials and try again.', 'fp-publisher' ) ) );
+
+            $message = $e->getMessage();
+            if ( empty( $message ) ) {
+                $message = __( 'Failed to connect integration. Please check your credentials and try again.', 'fp-publisher' );
+            }
+
+            wp_send_json_error( array( 'message' => $message ) );
         }
     }
 
@@ -317,9 +328,9 @@ class TTS_Integration_Hub {
         // Test connection
         $test_result = $this->test_integration_connection( $integration_type, $integration_name, $credentials );
         
-        if ( ! $test_result['success'] ) {
-            $error_message = isset( $test_result['error'] ) ? $test_result['error'] : 'Unknown connection error';
-            throw new Exception( 'Connection test failed: ' . $error_message );
+        if ( ! isset( $test_result['success'] ) || true !== $test_result['success'] ) {
+            $error_message = isset( $test_result['error'] ) ? $test_result['error'] : __( 'Unknown connection error', 'fp-publisher' );
+            throw new Exception( sprintf( __( 'Connection test failed: %s', 'fp-publisher' ), $error_message ) );
         }
         
         // Encrypt credentials for storage
@@ -375,8 +386,14 @@ class TTS_Integration_Hub {
         
         // Trigger initial data sync
         $this->trigger_integration_sync( $integration_id );
-        
-        return $integration_id;
+
+        $success_message = isset( $test_result['message'] ) ? $test_result['message'] : __( 'Integration connected successfully!', 'fp-publisher' );
+
+        return array(
+            'integration_id' => $integration_id,
+            'message' => $success_message,
+            'details' => $test_result,
+        );
     }
 
     /**
@@ -388,7 +405,6 @@ class TTS_Integration_Hub {
      * @return array Test result.
      */
     private function test_integration_connection( $integration_type, $integration_name, $credentials ) {
-        // Simulate connection testing (would use real APIs in production)
         $test_methods = array(
             'hubspot' => array( $this, 'test_hubspot_connection' ),
             'salesforce' => array( $this, 'test_salesforce_connection' ),
@@ -397,15 +413,23 @@ class TTS_Integration_Hub {
             'google_analytics' => array( $this, 'test_google_analytics_connection' ),
             'zapier' => array( $this, 'test_zapier_connection' )
         );
-        
+
         if ( isset( $test_methods[ $integration_name ] ) ) {
-            return call_user_func( $test_methods[ $integration_name ], $credentials );
+            $result = call_user_func( $test_methods[ $integration_name ], $credentials );
+
+            if ( ! is_array( $result ) || ! array_key_exists( 'success', $result ) ) {
+                return array(
+                    'success' => false,
+                    'error' => __( 'Unexpected response from integration validator.', 'fp-publisher' ),
+                );
+            }
+
+            return $result;
         }
-        
-        // Generic test for unsupported integrations
+
         return array(
-            'success' => true,
-            'message' => 'Connection test passed (simulated)'
+            'success' => false,
+            'error' => sprintf( __( 'The %s integration does not yet support connection testing.', 'fp-publisher' ), $integration_name ),
         );
     }
 
@@ -416,22 +440,81 @@ class TTS_Integration_Hub {
      * @return array Test result.
      */
     private function test_hubspot_connection( $credentials ) {
-        // Simulate HubSpot API test
-        if ( empty( $credentials['api_key'] ) || strlen( $credentials['api_key'] ) < 30 ) {
+        $api_key = isset( $credentials['api_key'] ) ? trim( $credentials['api_key'] ) : '';
+
+        if ( empty( $api_key ) ) {
             return array(
                 'success' => false,
-                'error' => 'Invalid HubSpot API key format'
+                'error' => __( 'A HubSpot API key or private app token is required.', 'fp-publisher' ),
             );
         }
-        
+
+        $endpoint = 'https://api.hubapi.com/integrations/v1/me';
+        $args = array(
+            'timeout' => 20,
+            'headers' => array(
+                'Accept' => 'application/json',
+            ),
+        );
+
+        $use_private_token = 0 === strpos( $api_key, 'pat-' );
+
+        if ( $use_private_token ) {
+            $args['headers']['Authorization'] = 'Bearer ' . $api_key;
+        } else {
+            $endpoint = add_query_arg( 'hapikey', $api_key, $endpoint );
+        }
+
+        $response = wp_remote_get( $endpoint, $args );
+
+        if ( ! $use_private_token && ! is_wp_error( $response ) && 401 === wp_remote_retrieve_response_code( $response ) ) {
+            // Attempt fallback using Authorization header in case a private token was provided without the "pat-" prefix.
+            $args['headers']['Authorization'] = 'Bearer ' . $api_key;
+            $endpoint = 'https://api.hubapi.com/integrations/v1/me';
+            $response = wp_remote_get( $endpoint, $args );
+        }
+
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'HubSpot request failed: %s', 'fp-publisher' ), $response->get_error_message() ),
+            );
+        }
+
+        $status_code = wp_remote_retrieve_response_code( $response );
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        if ( 200 !== $status_code ) {
+            $error_message = __( 'Unexpected response from HubSpot.', 'fp-publisher' );
+
+            if ( is_array( $data ) && isset( $data['message'] ) ) {
+                $error_message = $data['message'];
+            } elseif ( ! empty( $body ) ) {
+                $error_message = $body;
+            }
+
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'HubSpot responded with HTTP %1$d: %2$s', 'fp-publisher' ), $status_code, $error_message ),
+            );
+        }
+
+        $account_info = array();
+
+        if ( is_array( $data ) ) {
+            $account_info = array(
+                'portal_id' => $data['portalId'] ?? ( $credentials['portal_id'] ?? '' ),
+                'portal_name' => $data['portalName'] ?? '',
+                'time_zone' => $data['timezone'] ?? '',
+                'app_id' => $data['appId'] ?? '',
+            );
+        }
+
         return array(
             'success' => true,
-            'message' => 'HubSpot connection successful',
-            'account_info' => array(
-                'account_name' => 'Test Account',
-                'portal_id' => $credentials['portal_id'] ?? '12345',
-                'tier' => 'Professional'
-            )
+            'message' => __( 'HubSpot connection successful.', 'fp-publisher' ),
+            'account_info' => array_filter( $account_info ),
         );
     }
 
@@ -442,26 +525,88 @@ class TTS_Integration_Hub {
      * @return array Test result.
      */
     private function test_salesforce_connection( $credentials ) {
-        // Simulate Salesforce API test
-        $required_fields = array( 'username', 'password', 'security_token' );
-        
-        foreach ( $required_fields as $field ) {
-            if ( empty( $credentials[ $field ] ) ) {
-                return array(
-                    'success' => false,
-                    'error' => "Missing required field: {$field}"
-                );
-            }
+        $instance_url = isset( $credentials['instance_url'] ) ? trim( $credentials['instance_url'] ) : '';
+        $access_token = isset( $credentials['security_token'] ) ? trim( $credentials['security_token'] ) : '';
+
+        if ( empty( $instance_url ) ) {
+            return array(
+                'success' => false,
+                'error' => __( 'A Salesforce instance URL is required.', 'fp-publisher' ),
+            );
         }
-        
+
+        if ( ! preg_match( '#^https?://#i', $instance_url ) ) {
+            $instance_url = 'https://' . ltrim( $instance_url, '/' );
+        }
+
+        if ( ! wp_http_validate_url( $instance_url ) ) {
+            return array(
+                'success' => false,
+                'error' => __( 'The Salesforce instance URL is not valid.', 'fp-publisher' ),
+            );
+        }
+
+        if ( empty( $access_token ) ) {
+            return array(
+                'success' => false,
+                'error' => __( 'A Salesforce security token or access token is required.', 'fp-publisher' ),
+            );
+        }
+
+        $endpoint = trailingslashit( $instance_url ) . 'services/data/v57.0/limits';
+        $response = wp_remote_get(
+            $endpoint,
+            array(
+                'timeout' => 20,
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $access_token,
+                    'Accept' => 'application/json',
+                ),
+            )
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'Salesforce request failed: %s', 'fp-publisher' ), $response->get_error_message() ),
+            );
+        }
+
+        $status_code = wp_remote_retrieve_response_code( $response );
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        if ( 200 !== $status_code ) {
+            $error_message = __( 'Unexpected response from Salesforce.', 'fp-publisher' );
+
+            if ( is_array( $data ) && isset( $data[0]['message'] ) ) {
+                $error_message = $data[0]['message'];
+            } elseif ( is_array( $data ) && isset( $data['message'] ) ) {
+                $error_message = $data['message'];
+            } elseif ( ! empty( $body ) ) {
+                $error_message = $body;
+            }
+
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'Salesforce responded with HTTP %1$d: %2$s', 'fp-publisher' ), $status_code, $error_message ),
+            );
+        }
+
+        $limits_preview = array();
+
+        if ( is_array( $data ) ) {
+            $limits_preview = array_slice( $data, 0, 5, true );
+        }
+
         return array(
             'success' => true,
-            'message' => 'Salesforce connection successful',
+            'message' => __( 'Salesforce connection successful.', 'fp-publisher' ),
             'org_info' => array(
-                'org_name' => 'Test Organization',
-                'org_id' => '00D000000000001',
-                'instance_url' => $credentials['instance_url'] ?? 'https://test.salesforce.com'
-            )
+                'instance_url' => $instance_url,
+                'username' => $credentials['username'] ?? '',
+                'limits' => $limits_preview,
+            ),
         );
     }
 
@@ -472,22 +617,109 @@ class TTS_Integration_Hub {
      * @return array Test result.
      */
     private function test_woocommerce_connection( $credentials ) {
-        // Simulate WooCommerce API test
-        if ( empty( $credentials['consumer_key'] ) || empty( $credentials['consumer_secret'] ) ) {
+        $consumer_key = isset( $credentials['consumer_key'] ) ? trim( $credentials['consumer_key'] ) : '';
+        $consumer_secret = isset( $credentials['consumer_secret'] ) ? trim( $credentials['consumer_secret'] ) : '';
+        $store_url = isset( $credentials['store_url'] ) ? trim( $credentials['store_url'] ) : '';
+
+        if ( empty( $consumer_key ) || empty( $consumer_secret ) ) {
             return array(
                 'success' => false,
-                'error' => 'WooCommerce consumer key and secret are required'
+                'error' => __( 'WooCommerce consumer key and secret are required.', 'fp-publisher' ),
             );
         }
-        
+
+        if ( empty( $store_url ) ) {
+            return array(
+                'success' => false,
+                'error' => __( 'A WooCommerce store URL is required.', 'fp-publisher' ),
+            );
+        }
+
+        if ( ! preg_match( '#^https?://#i', $store_url ) ) {
+            $store_url = 'https://' . ltrim( $store_url, '/' );
+        }
+
+        if ( ! wp_http_validate_url( $store_url ) ) {
+            return array(
+                'success' => false,
+                'error' => __( 'The WooCommerce store URL is not valid.', 'fp-publisher' ),
+            );
+        }
+
+        $endpoint = trailingslashit( $store_url ) . 'wp-json/wc/v3/system_status';
+        $args = array(
+            'timeout' => 20,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode( $consumer_key . ':' . $consumer_secret ),
+                'Accept' => 'application/json',
+            ),
+        );
+
+        $response = wp_remote_get( $endpoint, $args );
+
+        if ( ! is_wp_error( $response ) ) {
+            $status_code = wp_remote_retrieve_response_code( $response );
+
+            if ( in_array( $status_code, array( 401, 403 ), true ) ) {
+                // Retry using query parameters for stores that do not accept Basic auth.
+                $query_endpoint = add_query_arg(
+                    array(
+                        'consumer_key' => $consumer_key,
+                        'consumer_secret' => $consumer_secret,
+                    ),
+                    $endpoint
+                );
+
+                $response = wp_remote_get(
+                    $query_endpoint,
+                    array(
+                        'timeout' => 20,
+                        'headers' => array( 'Accept' => 'application/json' ),
+                    )
+                );
+            }
+        }
+
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'WooCommerce request failed: %s', 'fp-publisher' ), $response->get_error_message() ),
+            );
+        }
+
+        $status_code = wp_remote_retrieve_response_code( $response );
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        if ( 200 !== $status_code ) {
+            $error_message = __( 'Unexpected response from WooCommerce.', 'fp-publisher' );
+
+            if ( is_array( $data ) && isset( $data['message'] ) ) {
+                $error_message = $data['message'];
+            } elseif ( ! empty( $body ) ) {
+                $error_message = $body;
+            }
+
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'WooCommerce responded with HTTP %1$d: %2$s', 'fp-publisher' ), $status_code, $error_message ),
+            );
+        }
+
+        $store_info = array();
+
+        if ( is_array( $data ) ) {
+            $store_info = array(
+                'environment' => $data['environment'] ?? array(),
+                'database' => $data['database'] ?? array(),
+                'theme' => $data['theme'] ?? array(),
+            );
+        }
+
         return array(
             'success' => true,
-            'message' => 'WooCommerce connection successful',
-            'store_info' => array(
-                'store_name' => 'Test Store',
-                'version' => '6.0.0',
-                'currency' => 'USD'
-            )
+            'message' => __( 'WooCommerce connection successful.', 'fp-publisher' ),
+            'store_info' => $store_info,
         );
     }
 
@@ -498,22 +730,81 @@ class TTS_Integration_Hub {
      * @return array Test result.
      */
     private function test_mailchimp_connection( $credentials ) {
-        // Simulate Mailchimp API test
-        if ( empty( $credentials['api_key'] ) || ! preg_match( '/^[a-f0-9]{32}-\w+\d+$/', $credentials['api_key'] ) ) {
+        $api_key = isset( $credentials['api_key'] ) ? trim( $credentials['api_key'] ) : '';
+        $server_prefix = isset( $credentials['server_prefix'] ) ? trim( $credentials['server_prefix'] ) : '';
+
+        if ( empty( $api_key ) ) {
             return array(
                 'success' => false,
-                'error' => 'Invalid Mailchimp API key format'
+                'error' => __( 'A Mailchimp API key is required.', 'fp-publisher' ),
             );
         }
-        
+
+        if ( empty( $server_prefix ) ) {
+            $parts = explode( '-', $api_key );
+            if ( count( $parts ) > 1 ) {
+                $server_prefix = end( $parts );
+            }
+        }
+
+        if ( empty( $server_prefix ) ) {
+            return array(
+                'success' => false,
+                'error' => __( 'Unable to determine the Mailchimp data center. Please provide the server prefix.', 'fp-publisher' ),
+            );
+        }
+
+        $endpoint = sprintf( 'https://%s.api.mailchimp.com/3.0/ping', $server_prefix );
+        $response = wp_remote_get(
+            $endpoint,
+            array(
+                'timeout' => 20,
+                'headers' => array(
+                    'Authorization' => 'Basic ' . base64_encode( 'trello:' . $api_key ),
+                    'Accept' => 'application/json',
+                ),
+            )
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'Mailchimp request failed: %s', 'fp-publisher' ), $response->get_error_message() ),
+            );
+        }
+
+        $status_code = wp_remote_retrieve_response_code( $response );
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        if ( 200 !== $status_code ) {
+            $error_message = __( 'Unexpected response from Mailchimp.', 'fp-publisher' );
+
+            if ( is_array( $data ) && isset( $data['detail'] ) ) {
+                $error_message = $data['detail'];
+            } elseif ( ! empty( $body ) ) {
+                $error_message = $body;
+            }
+
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'Mailchimp responded with HTTP %1$d: %2$s', 'fp-publisher' ), $status_code, $error_message ),
+            );
+        }
+
+        $account_info = array();
+
+        if ( is_array( $data ) ) {
+            $account_info = array(
+                'health_status' => $data['health_status'] ?? '',
+                'data_center' => $server_prefix,
+            );
+        }
+
         return array(
             'success' => true,
-            'message' => 'Mailchimp connection successful',
-            'account_info' => array(
-                'account_name' => 'Connected Account',
-                'total_subscribers' => 'Available via API',
-                'plan_type' => 'Connected'
-            )
+            'message' => __( 'Mailchimp connection successful.', 'fp-publisher' ),
+            'account_info' => array_filter( $account_info ),
         );
     }
 
@@ -524,22 +815,226 @@ class TTS_Integration_Hub {
      * @return array Test result.
      */
     private function test_google_analytics_connection( $credentials ) {
-        // Simulate Google Analytics API test
-        if ( empty( $credentials['tracking_id'] ) || ! preg_match( '/^UA-\d+-\d+$/', $credentials['tracking_id'] ) ) {
+        $service_account_json = isset( $credentials['service_account_json'] ) ? trim( $credentials['service_account_json'] ) : '';
+        $tracking_id = isset( $credentials['tracking_id'] ) ? trim( $credentials['tracking_id'] ) : '';
+        $view_id = isset( $credentials['view_id'] ) ? trim( $credentials['view_id'] ) : '';
+
+        if ( empty( $service_account_json ) ) {
             return array(
                 'success' => false,
-                'error' => 'Invalid Google Analytics tracking ID format'
+                'error' => __( 'Google service account credentials are required.', 'fp-publisher' ),
             );
         }
-        
+
+        if ( ! function_exists( 'openssl_sign' ) ) {
+            return array(
+                'success' => false,
+                'error' => __( 'The OpenSSL PHP extension is required to authenticate with Google Analytics.', 'fp-publisher' ),
+            );
+        }
+
+        $service_account = json_decode( $service_account_json, true );
+
+        if ( empty( $service_account ) || ! isset( $service_account['client_email'], $service_account['private_key'] ) ) {
+            return array(
+                'success' => false,
+                'error' => __( 'Invalid Google service account JSON.', 'fp-publisher' ),
+            );
+        }
+
+        $token_uri = $service_account['token_uri'] ?? 'https://oauth2.googleapis.com/token';
+        $scope = 'https://www.googleapis.com/auth/analytics.readonly';
+
+        $header_json = wp_json_encode( array( 'alg' => 'RS256', 'typ' => 'JWT' ) );
+
+        if ( false === $header_json ) {
+            return array(
+                'success' => false,
+                'error' => __( 'Failed to encode the Google authentication header.', 'fp-publisher' ),
+            );
+        }
+
+        $jwt_header = $this->base64_url_encode( $header_json );
+
+        $now = time();
+        $claims = array(
+            'iss' => $service_account['client_email'],
+            'scope' => $scope,
+            'aud' => $token_uri,
+            'exp' => $now + 3600,
+            'iat' => $now,
+        );
+
+        $claims_json = wp_json_encode( $claims );
+
+        if ( false === $claims_json ) {
+            return array(
+                'success' => false,
+                'error' => __( 'Failed to encode the Google authentication claims.', 'fp-publisher' ),
+            );
+        }
+
+        $jwt_claim = $this->base64_url_encode( $claims_json );
+
+        $signing_input = $jwt_header . '.' . $jwt_claim;
+        $signature = '';
+        $private_key_resource = openssl_pkey_get_private( $service_account['private_key'] );
+
+        if ( false === $private_key_resource ) {
+            return array(
+                'success' => false,
+                'error' => __( 'Unable to parse the Google private key.', 'fp-publisher' ),
+            );
+        }
+
+        $signature_success = openssl_sign( $signing_input, $signature, $private_key_resource, 'sha256WithRSAEncryption' );
+        openssl_free_key( $private_key_resource );
+
+        if ( ! $signature_success ) {
+            return array(
+                'success' => false,
+                'error' => __( 'Failed to sign the Google service account JWT.', 'fp-publisher' ),
+            );
+        }
+
+        $assertion = $signing_input . '.' . $this->base64_url_encode( $signature );
+
+        $token_response = wp_remote_post(
+            $token_uri,
+            array(
+                'timeout' => 20,
+                'headers' => array(
+                    'Content-Type' => 'application/x-www-form-urlencoded',
+                ),
+                'body' => array(
+                    'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                    'assertion' => $assertion,
+                ),
+            )
+        );
+
+        if ( is_wp_error( $token_response ) ) {
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'Google token request failed: %s', 'fp-publisher' ), $token_response->get_error_message() ),
+            );
+        }
+
+        $token_status = wp_remote_retrieve_response_code( $token_response );
+        $token_body = wp_remote_retrieve_body( $token_response );
+        $token_data = json_decode( $token_body, true );
+
+        if ( 200 !== $token_status || empty( $token_data['access_token'] ) ) {
+            $error_message = __( 'Unexpected response while obtaining a Google access token.', 'fp-publisher' );
+
+            if ( is_array( $token_data ) && isset( $token_data['error_description'] ) ) {
+                $error_message = $token_data['error_description'];
+            } elseif ( is_array( $token_data ) && isset( $token_data['error'] ) ) {
+                $error_message = $token_data['error'];
+            } elseif ( ! empty( $token_body ) ) {
+                $error_message = $token_body;
+            }
+
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'Google token endpoint responded with HTTP %1$d: %2$s', 'fp-publisher' ), $token_status, $error_message ),
+            );
+        }
+
+        $access_token = $token_data['access_token'];
+
+        $profiles_endpoint = add_query_arg(
+            'max-results',
+            1000,
+            'https://analytics.googleapis.com/analytics/v3/management/accounts/~all/webproperties/~all/profiles'
+        );
+
+        $profiles_response = wp_remote_get(
+            $profiles_endpoint,
+            array(
+                'timeout' => 20,
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $access_token,
+                    'Accept' => 'application/json',
+                ),
+            )
+        );
+
+        if ( is_wp_error( $profiles_response ) ) {
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'Google Analytics request failed: %s', 'fp-publisher' ), $profiles_response->get_error_message() ),
+            );
+        }
+
+        $profiles_status = wp_remote_retrieve_response_code( $profiles_response );
+        $profiles_body = wp_remote_retrieve_body( $profiles_response );
+        $profiles_data = json_decode( $profiles_body, true );
+
+        if ( 200 !== $profiles_status ) {
+            $error_message = __( 'Unexpected response from the Google Analytics Management API.', 'fp-publisher' );
+
+            if ( is_array( $profiles_data ) && isset( $profiles_data['error']['message'] ) ) {
+                $error_message = $profiles_data['error']['message'];
+            } elseif ( ! empty( $profiles_body ) ) {
+                $error_message = $profiles_body;
+            }
+
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'Google Analytics responded with HTTP %1$d: %2$s', 'fp-publisher' ), $profiles_status, $error_message ),
+            );
+        }
+
+        $matched_profile = null;
+        $profiles = array();
+
+        if ( is_array( $profiles_data ) && isset( $profiles_data['items'] ) && is_array( $profiles_data['items'] ) ) {
+            $profiles = $profiles_data['items'];
+
+            foreach ( $profiles as $profile ) {
+                if ( isset( $profile['id'] ) && (string) $profile['id'] === (string) $view_id ) {
+                    $matched_profile = $profile;
+                    break;
+                }
+            }
+        }
+
+        if ( ! empty( $view_id ) && null === $matched_profile ) {
+            return array(
+                'success' => false,
+                'error' => __( 'Authenticated with Google Analytics, but the specified View ID was not found.', 'fp-publisher' ),
+            );
+        }
+
+        if ( ! empty( $tracking_id ) && is_array( $matched_profile ) && isset( $matched_profile['webPropertyId'] ) && (string) $matched_profile['webPropertyId'] !== (string) $tracking_id ) {
+            return array(
+                'success' => false,
+                'error' => __( 'The provided tracking ID does not match the selected Google Analytics view.', 'fp-publisher' ),
+            );
+        }
+
+        $profile_summary = array();
+
+        if ( is_array( $matched_profile ) ) {
+            $profile_summary = array(
+                'profile_name' => $matched_profile['name'] ?? '',
+                'web_property_id' => $matched_profile['webPropertyId'] ?? '',
+                'timezone' => $matched_profile['timezone'] ?? '',
+            );
+        } elseif ( ! empty( $profiles ) ) {
+            $first_profile = reset( $profiles );
+            $profile_summary = array(
+                'profile_name' => $first_profile['name'] ?? '',
+                'web_property_id' => $first_profile['webPropertyId'] ?? '',
+                'timezone' => $first_profile['timezone'] ?? '',
+            );
+        }
+
         return array(
             'success' => true,
-            'message' => 'Google Analytics connection successful',
-            'property_info' => array(
-                'property_name' => 'Connected Property',
-                'tracking_id' => $credentials['tracking_id'],
-                'view_count' => 'Available via API'
-            )
+            'message' => __( 'Google Analytics connection successful.', 'fp-publisher' ),
+            'property_info' => array_filter( $profile_summary ),
         );
     }
 
@@ -550,18 +1045,91 @@ class TTS_Integration_Hub {
      * @return array Test result.
      */
     private function test_zapier_connection( $credentials ) {
-        // Simulate Zapier webhook test
-        if ( empty( $credentials['webhook_url'] ) || ! filter_var( $credentials['webhook_url'], FILTER_VALIDATE_URL ) ) {
+        $webhook_url = isset( $credentials['webhook_url'] ) ? trim( $credentials['webhook_url'] ) : '';
+
+        if ( empty( $webhook_url ) || ! wp_http_validate_url( $webhook_url ) ) {
             return array(
                 'success' => false,
-                'error' => 'Invalid webhook URL'
+                'error' => __( 'A valid Zapier webhook URL is required.', 'fp-publisher' ),
             );
         }
-        
+
+        $payload = array(
+            'test' => true,
+            'source' => 'tts_integration_hub',
+            'generated_at' => gmdate( 'c' ),
+        );
+
+        $payload_json = wp_json_encode( $payload );
+
+        if ( false === $payload_json ) {
+            return array(
+                'success' => false,
+                'error' => __( 'Failed to encode the Zapier test payload.', 'fp-publisher' ),
+            );
+        }
+
+        $request_args = array(
+            'timeout' => 20,
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ),
+            'body' => $payload_json,
+        );
+
+        if ( ! empty( $credentials['api_key'] ) ) {
+            $request_args['headers']['X-API-Key'] = $credentials['api_key'];
+        }
+
+        $response = wp_remote_post( $webhook_url, $request_args );
+
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'Zapier request failed: %s', 'fp-publisher' ), $response->get_error_message() ),
+            );
+        }
+
+        $status_code = wp_remote_retrieve_response_code( $response );
+        $body = wp_remote_retrieve_body( $response );
+
+        if ( $status_code < 200 || $status_code >= 300 ) {
+            $error_message = __( 'Unexpected response from Zapier.', 'fp-publisher' );
+
+            if ( ! empty( $body ) ) {
+                $error_message = $body;
+            }
+
+            return array(
+                'success' => false,
+                'error' => sprintf( __( 'Zapier responded with HTTP %1$d: %2$s', 'fp-publisher' ), $status_code, $error_message ),
+            );
+        }
+
+        $decoded_body = json_decode( $body, true );
+
         return array(
             'success' => true,
-            'message' => 'Zapier webhook connection successful'
+            'message' => __( 'Zapier webhook connection successful.', 'fp-publisher' ),
+            'response' => is_array( $decoded_body ) ? $decoded_body : $body,
         );
+    }
+
+    /**
+     * Encode a string using base64 URL-safe encoding without padding.
+     *
+     * @param string $data Data to encode.
+     * @return string Encoded string.
+     */
+    private function base64_url_encode( $data ) {
+        $encoded = base64_encode( $data );
+
+        if ( false === $encoded ) {
+            return '';
+        }
+
+        return rtrim( strtr( $encoded, '+/', '-_' ), '=' );
     }
 
     /**
