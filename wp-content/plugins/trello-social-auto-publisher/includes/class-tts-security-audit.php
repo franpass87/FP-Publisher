@@ -324,23 +324,79 @@ class TTS_Security_Audit {
      * Monitor admin access
      */
     public function monitor_admin_access() {
+        $current_screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        $requested_page = '';
+
+        if ( isset( $_REQUEST['page'] ) ) {
+            $requested_page = (string) $_REQUEST['page'];
+        }
+
+        $script_name = basename( $_SERVER['PHP_SELF'] ?? '' );
+
+        if ( '' === $script_name && isset( $_SERVER['SCRIPT_NAME'] ) ) {
+            $script_name = basename( (string) $_SERVER['SCRIPT_NAME'] );
+        }
+
+        $allowed_scripts = array( 'profile.php', 'index.php' );
+
+        $should_log_violation = false;
+
         if ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'edit_posts' ) ) {
+            $should_log_violation = true;
+
+            if ( $current_screen ) {
+                $is_entitled = in_array( $script_name, $allowed_scripts, true );
+
+                if ( ! $is_entitled && isset( $current_screen->base ) ) {
+                    $is_entitled = in_array( $current_screen->base, array( 'profile', 'dashboard' ), true );
+                }
+
+                if ( ! $is_entitled && isset( $current_screen->id ) ) {
+                    $is_entitled = in_array( $current_screen->id, array( 'profile', 'dashboard' ), true );
+                }
+
+                if ( ! $is_entitled && isset( $current_screen->cap ) ) {
+                    foreach ( (array) $current_screen->cap as $cap_key => $capability ) {
+                        if ( is_string( $capability ) && '' !== $capability && current_user_can( $capability ) ) {
+                            $is_entitled = true;
+                            break;
+                        }
+
+                        if ( is_string( $cap_key ) && '' !== $cap_key && current_user_can( $cap_key ) ) {
+                            $is_entitled = true;
+                            break;
+                        }
+                    }
+                }
+
+                if ( $is_entitled ) {
+                    $should_log_violation = false;
+                }
+            } else {
+                if ( in_array( $script_name, $allowed_scripts, true ) ) {
+                    $should_log_violation = false;
+                } elseif ( '' === $requested_page || 0 !== strpos( $requested_page, 'fp-publisher-' ) ) {
+                    $should_log_violation = false;
+                }
+            }
+        }
+
+        if ( $should_log_violation ) {
             $this->log_security_event(
                 self::EVENT_PERMISSION_VIOLATION,
                 'Unauthorized admin area access attempt',
                 self::RISK_HIGH,
                 array(
-                    'requested_page' => $_GET['page'] ?? 'unknown',
+                    'requested_page' => $requested_page ? sanitize_text_field( $requested_page ) : 'unknown',
                     'capabilities' => wp_get_current_user()->allcaps ?? array()
                 )
             );
         }
-        
+
         // Monitor sensitive page access
         $sensitive_pages = array( 'users.php', 'plugins.php', 'themes.php', 'options-general.php' );
-        $current_screen = get_current_screen();
-        
-        if ( $current_screen && in_array( $current_screen->base, $sensitive_pages ) ) {
+
+        if ( $current_screen && in_array( $current_screen->base, $sensitive_pages, true ) ) {
             $this->log_security_event(
                 self::EVENT_DATA_ACCESS,
                 sprintf( 'Access to sensitive admin page: %s', $current_screen->base ),
