@@ -15,6 +15,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Admin {
 
     /**
+     * Stores admin notices for missing menu callbacks.
+     *
+     * @var array<string, array{menu_title: string, method: string}>
+     */
+    private $missing_method_notices = array();
+
+    /**
      * Hook into WordPress actions.
      */
     public function __construct() {
@@ -49,6 +56,7 @@ class TTS_Admin {
         add_action( 'manage_tts_social_post_posts_custom_column', array( $this, 'render_approved_column' ), 10, 2 );
         add_filter( 'bulk_actions-edit-tts_social_post', array( $this, 'register_bulk_actions' ) );
         add_filter( 'handle_bulk_actions-edit-tts_social_post', array( $this, 'handle_bulk_actions' ), 10, 3 );
+        add_action( 'admin_notices', array( $this, 'render_missing_method_notices' ) );
     }
 
     /**
@@ -74,172 +82,280 @@ class TTS_Admin {
             'render_frequency_status_page'
         );
         
+        $available_methods = array();
+
         foreach ( $required_methods as $method ) {
-            if ( ! method_exists( $this, $method ) ) {
+            $method_exists = method_exists( $this, $method );
+            $is_callable   = $method_exists && is_callable( array( $this, $method ) );
+
+            $available_methods[ $method ] = array(
+                'exists'   => $method_exists,
+                'callable' => $is_callable,
+            );
+
+            if ( ! $method_exists ) {
                 error_log( "TTS_Admin: Missing method $method" );
+            } elseif ( ! $is_callable ) {
+                error_log( "TTS_Admin: Method $method exists but is not callable" );
             }
         }
-        
-        // Main menu page
-        add_menu_page(
-            __( 'FP Publisher', 'fp-publisher' ),
-            __( 'FP Publisher', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-main',
-            array( $this, 'render_dashboard_page' ),
-            'dashicons-share-alt',
-            25
-        );
 
-        // Dashboard as first submenu (same as main page)
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Dashboard', 'fp-publisher' ),
-            __( 'Dashboard', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-main',
-            array( $this, 'render_dashboard_page' )
-        );
+        $fp_publisher_title = __( 'FP Publisher', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_dashboard_page', 'fp-publisher-main', $fp_publisher_title, $available_methods ) ) {
+            add_menu_page(
+                $fp_publisher_title,
+                $fp_publisher_title,
+                'manage_options',
+                'fp-publisher-main',
+                array( $this, 'render_dashboard_page' ),
+                'dashicons-share-alt',
+                25
+            );
+        }
 
-        // Content Management submenu - NEW
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Content Management', 'fp-publisher' ),
-            __( 'Content Management', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-content',
-            array( $this, 'render_content_management_page' )
-        );
+        $dashboard_title = __( 'Dashboard', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_dashboard_page', 'fp-publisher-main', $dashboard_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $dashboard_title,
+                $dashboard_title,
+                'manage_options',
+                'fp-publisher-main',
+                array( $this, 'render_dashboard_page' )
+            );
+        }
 
-        // Clients submenu - moved under main menu properly
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Clienti', 'fp-publisher' ),
-            __( 'Clienti', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-clienti',
-            array( $this, 'render_clients_page' )
-        );
+        $content_management_title = __( 'Content Management', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_content_management_page', 'fp-publisher-content', $content_management_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $content_management_title,
+                $content_management_title,
+                'manage_options',
+                'fp-publisher-content',
+                array( $this, 'render_content_management_page' )
+            );
+        }
 
-        // Client Wizard submenu
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Client Wizard', 'fp-publisher' ),
-            __( 'Client Wizard', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-client-wizard',
-            array( $this, 'tts_render_client_wizard' )
-        );
+        $clients_title = __( 'Clienti', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_clients_page', 'fp-publisher-clienti', $clients_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $clients_title,
+                $clients_title,
+                'manage_options',
+                'fp-publisher-clienti',
+                array( $this, 'render_clients_page' )
+            );
+        }
 
-        // Social Posts submenu - moved under main menu properly
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Social Post', 'fp-publisher' ),
-            __( 'Social Post', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-social-posts',
-            array( $this, 'render_social_posts_page' )
-        );
+        $client_wizard_title = __( 'Client Wizard', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'tts_render_client_wizard', 'fp-publisher-client-wizard', $client_wizard_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $client_wizard_title,
+                $client_wizard_title,
+                'manage_options',
+                'fp-publisher-client-wizard',
+                array( $this, 'tts_render_client_wizard' )
+            );
+        }
 
-        // Connection Testing submenu - NEW
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Test Connections', 'fp-publisher' ),
-            __( 'Test Connections', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-test-connections',
-            array( $this, 'render_connection_test_page' )
-        );
+        $social_post_title = __( 'Social Post', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_social_posts_page', 'fp-publisher-social-posts', $social_post_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $social_post_title,
+                $social_post_title,
+                'manage_options',
+                'fp-publisher-social-posts',
+                array( $this, 'render_social_posts_page' )
+            );
+        }
 
-        // Settings submenu
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Settings', 'fp-publisher' ),
-            __( 'Settings', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-settings',
-            array( $this, 'render_settings_page' )
-        );
+        $test_connections_title = __( 'Test Connections', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_connection_test_page', 'fp-publisher-test-connections', $test_connections_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $test_connections_title,
+                $test_connections_title,
+                'manage_options',
+                'fp-publisher-test-connections',
+                array( $this, 'render_connection_test_page' )
+            );
+        }
 
-        // Social Connections submenu
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Social Connections', 'fp-publisher' ),
-            __( 'Social Connections', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-social-connections',
-            array( $this, 'render_social_connections_page' )
-        );
+        $settings_title = __( 'Settings', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_settings_page', 'fp-publisher-settings', $settings_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $settings_title,
+                $settings_title,
+                'manage_options',
+                'fp-publisher-settings',
+                array( $this, 'render_settings_page' )
+            );
+        }
 
-        // Help submenu
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Help & Setup', 'fp-publisher' ),
-            __( 'Help & Setup', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-help',
-            array( $this, 'render_help_page' )
-        );
+        $social_connections_title = __( 'Social Connections', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_social_connections_page', 'fp-publisher-social-connections', $social_connections_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $social_connections_title,
+                $social_connections_title,
+                'manage_options',
+                'fp-publisher-social-connections',
+                array( $this, 'render_social_connections_page' )
+            );
+        }
 
-        // Calendar submenu
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Calendario', 'fp-publisher' ),
-            __( 'Calendario', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-calendar',
-            array( $this, 'render_calendar_page' )
-        );
+        $help_title = __( 'Help & Setup', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_help_page', 'fp-publisher-help', $help_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $help_title,
+                $help_title,
+                'manage_options',
+                'fp-publisher-help',
+                array( $this, 'render_help_page' )
+            );
+        }
 
-        // Analytics submenu
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Analytics', 'fp-publisher' ),
-            __( 'Analytics', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-analytics',
-            array( $this, 'render_analytics_page' )
-        );
+        $calendar_title = __( 'Calendario', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_calendar_page', 'fp-publisher-calendar', $calendar_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $calendar_title,
+                $calendar_title,
+                'manage_options',
+                'fp-publisher-calendar',
+                array( $this, 'render_calendar_page' )
+            );
+        }
 
-        // Health Status submenu
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Stato', 'fp-publisher' ),
-            __( 'Stato', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-health',
-            array( $this, 'render_health_page' )
-        );
+        $analytics_title = __( 'Analytics', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_analytics_page', 'fp-publisher-analytics', $analytics_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $analytics_title,
+                $analytics_title,
+                'manage_options',
+                'fp-publisher-analytics',
+                array( $this, 'render_analytics_page' )
+            );
+        }
 
-        // Log submenu
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Log', 'fp-publisher' ),
-            __( 'Log', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-log',
-            array( $this, 'render_log_page' )
-        );
+        $health_title = __( 'Stato', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_health_page', 'fp-publisher-health', $health_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $health_title,
+                $health_title,
+                'manage_options',
+                'fp-publisher-health',
+                array( $this, 'render_health_page' )
+            );
+        }
 
-        // AI Features submenu
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'AI & Advanced Features', 'fp-publisher' ),
-            __( 'AI & Advanced Features', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-ai-features',
-            array( $this, 'render_ai_features_page' )
-        );
+        $log_title = __( 'Log', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_log_page', 'fp-publisher-log', $log_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $log_title,
+                $log_title,
+                'manage_options',
+                'fp-publisher-log',
+                array( $this, 'render_log_page' )
+            );
+        }
 
-        // Frequency Status submenu
-        add_submenu_page(
-            'fp-publisher-main',
-            __( 'Publishing Status', 'fp-publisher' ),
-            __( 'Publishing Status', 'fp-publisher' ),
-            'manage_options',
-            'fp-publisher-frequency-status',
-            array( $this, 'render_frequency_status_page' )
+        $ai_features_title = __( 'AI & Advanced Features', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_ai_features_page', 'fp-publisher-ai-features', $ai_features_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $ai_features_title,
+                $ai_features_title,
+                'manage_options',
+                'fp-publisher-ai-features',
+                array( $this, 'render_ai_features_page' )
+            );
+        }
+
+        $frequency_status_title = __( 'Publishing Status', 'fp-publisher' );
+        if ( $this->can_register_menu_callback( 'render_frequency_status_page', 'fp-publisher-frequency-status', $frequency_status_title, $available_methods ) ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $frequency_status_title,
+                $frequency_status_title,
+                'manage_options',
+                'fp-publisher-frequency-status',
+                array( $this, 'render_frequency_status_page' )
+            );
+        }
+    }
+
+    /**
+     * Determine if a menu callback can be registered.
+     *
+     * @param string $method            Callback method name.
+     * @param string $slug              Menu slug.
+     * @param string $menu_title        Menu title displayed to the user.
+     * @param array  $available_methods Map of available methods and their callability.
+     *
+     * @return bool
+     */
+    private function can_register_menu_callback( $method, $slug, $menu_title, array $available_methods ) {
+        if (
+            isset( $available_methods[ $method ] )
+            && ! empty( $available_methods[ $method ]['callable'] )
+        ) {
+            return true;
+        }
+
+        $this->add_missing_method_notice( $slug, $menu_title, $method );
+
+        return false;
+    }
+
+    /**
+     * Store a notice for missing menu callbacks.
+     *
+     * @param string $slug       Menu slug.
+     * @param string $menu_title Menu title used for the admin notice.
+     * @param string $method     Callback method name.
+     */
+    private function add_missing_method_notice( $slug, $menu_title, $method ) {
+        $key = $slug . '|' . $menu_title;
+
+        if ( isset( $this->missing_method_notices[ $key ] ) ) {
+            return;
+        }
+
+        $this->missing_method_notices[ $key ] = array(
+            'menu_title' => $menu_title,
+            'method'     => $method,
         );
+    }
+
+    /**
+     * Render admin notices for missing or invalid menu callbacks.
+     */
+    public function render_missing_method_notices() {
+        if ( empty( $this->missing_method_notices ) ) {
+            return;
+        }
+
+        foreach ( $this->missing_method_notices as $notice ) {
+            printf(
+                '<div class="notice notice-error is-dismissible"><p>%s</p></div>',
+                sprintf(
+                    /* translators: 1: Menu title. 2: Callback method name. */
+                    esc_html__( 'The "%1$s" admin page could not be loaded because the callback "%2$s" is missing or not callable.', 'fp-publisher' ),
+                    esc_html( $notice['menu_title'] ),
+                    esc_html( $notice['method'] )
+                )
+            );
+        }
     }
 
     /**
