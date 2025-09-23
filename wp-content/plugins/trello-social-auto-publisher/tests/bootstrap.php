@@ -10,14 +10,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Global containers used by the tests.
-$GLOBALS['tts_test_options']        = array();
-$GLOBALS['tts_test_post_meta']      = array();
-$GLOBALS['tts_test_client_posts']   = array();
-$GLOBALS['tts_test_wpdb_results']   = array();
-$GLOBALS['tts_localized_scripts']   = array();
-$GLOBALS['tts_enqueued_scripts']    = array();
-$GLOBALS['tts_registered_actions']  = array();
-$GLOBALS['tts_registered_filters']  = array();
+$GLOBALS['tts_test_options']         = array();
+$GLOBALS['tts_test_post_meta']       = array();
+$GLOBALS['tts_test_client_posts']    = array();
+$GLOBALS['tts_test_wpdb_results']    = array();
+$GLOBALS['tts_localized_scripts']    = array();
+$GLOBALS['tts_enqueued_scripts']     = array();
+$GLOBALS['tts_registered_actions']   = array();
+$GLOBALS['tts_registered_filters']   = array();
+$GLOBALS['tts_action_callbacks']     = array();
+$GLOBALS['tts_filter_callbacks']     = array();
+$GLOBALS['tts_json_responses']       = array();
+$GLOBALS['tts_json_errors']          = array();
+$GLOBALS['tts_scheduled_events']     = array();
+$GLOBALS['tts_nonce_check_results']  = array();
 
 if ( ! function_exists( '__' ) ) {
     function __( $text, $domain = null ) {
@@ -163,12 +169,60 @@ if ( ! function_exists( 'wp_enqueue_script' ) ) {
 if ( ! function_exists( 'add_action' ) ) {
     function add_action( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
         $GLOBALS['tts_registered_actions'][] = array( $hook, $callback, $priority, $accepted_args );
+        $GLOBALS['tts_action_callbacks'][ $hook ][ $priority ][] = array(
+            'callback'      => $callback,
+            'accepted_args' => $accepted_args,
+        );
     }
 }
 
 if ( ! function_exists( 'add_filter' ) ) {
     function add_filter( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
         $GLOBALS['tts_registered_filters'][] = array( $hook, $callback, $priority, $accepted_args );
+        $GLOBALS['tts_filter_callbacks'][ $hook ][ $priority ][] = array(
+            'callback'      => $callback,
+            'accepted_args' => $accepted_args,
+        );
+    }
+}
+
+if ( ! function_exists( 'do_action' ) ) {
+    function do_action( $hook, ...$args ) {
+        if ( empty( $GLOBALS['tts_action_callbacks'][ $hook ] ) ) {
+            return;
+        }
+
+        ksort( $GLOBALS['tts_action_callbacks'][ $hook ] );
+
+        foreach ( $GLOBALS['tts_action_callbacks'][ $hook ] as $priority => $callbacks ) {
+            foreach ( $callbacks as $callback ) {
+                $call_args = array_slice( $args, 0, $callback['accepted_args'] );
+                call_user_func_array( $callback['callback'], $call_args );
+            }
+        }
+    }
+}
+
+if ( ! function_exists( 'apply_filters' ) ) {
+    function apply_filters( $hook, $value, ...$args ) {
+        if ( empty( $GLOBALS['tts_filter_callbacks'][ $hook ] ) ) {
+            return $value;
+        }
+
+        ksort( $GLOBALS['tts_filter_callbacks'][ $hook ] );
+        $filtered = $value;
+
+        foreach ( $GLOBALS['tts_filter_callbacks'][ $hook ] as $priority => $callbacks ) {
+            foreach ( $callbacks as $callback ) {
+                $callback_args = array_merge(
+                    array( $filtered ),
+                    array_slice( $args, 0, max( 0, $callback['accepted_args'] - 1 ) )
+                );
+                $filtered = call_user_func_array( $callback['callback'], $callback_args );
+            }
+        }
+
+        return $filtered;
     }
 }
 
@@ -188,13 +242,117 @@ if ( ! function_exists( 'current_user_can' ) ) {
 
 if ( ! function_exists( 'check_ajax_referer' ) ) {
     function check_ajax_referer( $action = -1, $query_arg = false, $die = true ) {
+        $field = '_ajax_nonce';
+
+        if ( false !== $query_arg && null !== $query_arg ) {
+            $field = (string) $query_arg;
+        } elseif ( isset( $_REQUEST['_ajax_nonce'] ) ) {
+            $field = '_ajax_nonce';
+        } elseif ( isset( $_REQUEST['_wpnonce'] ) ) {
+            $field = '_wpnonce';
+        }
+
+        $nonce_value = null;
+        if ( isset( $_REQUEST[ $field ] ) ) {
+            $nonce_value = (string) $_REQUEST[ $field ];
+        }
+
+        $is_valid = null;
+
+        if ( isset( $GLOBALS['tts_nonce_check_results'][ $action ] ) ) {
+            $override = $GLOBALS['tts_nonce_check_results'][ $action ];
+            if ( is_callable( $override ) ) {
+                $is_valid = (bool) call_user_func( $override, $nonce_value, $field, $action );
+            } else {
+                $is_valid = (bool) $override;
+            }
+        } elseif ( null !== $nonce_value ) {
+            $is_valid = ( $nonce_value === 'nonce-' . $action );
+        } else {
+            $is_valid = false;
+        }
+
+        if ( $is_valid ) {
+            return 1;
+        }
+
+        if ( $die ) {
+            wp_die( -1, '', array( 'response' => 403 ) );
+        }
+
+        return false;
+    }
+}
+
+if ( ! function_exists( 'wp_send_json_success' ) ) {
+    function wp_send_json_success( $data = null, $status_code = 200 ) {
+        $response = array(
+            'success'     => true,
+            'data'        => $data,
+            'status_code' => $status_code,
+        );
+
+        $GLOBALS['tts_json_responses'][] = $response;
+
+        return $response;
+    }
+}
+
+if ( ! function_exists( 'wp_send_json_error' ) ) {
+    function wp_send_json_error( $data = null, $status_code = 200 ) {
+        $response = array(
+            'success'     => false,
+            'data'        => $data,
+            'status_code' => $status_code,
+        );
+
+        $GLOBALS['tts_json_errors'][] = $response;
+
+        return $response;
+    }
+}
+
+if ( ! function_exists( 'wp_send_json' ) ) {
+    function wp_send_json( $response, $status_code = 200 ) {
+        $GLOBALS['tts_json_responses'][] = array(
+            'success'     => is_array( $response ) && isset( $response['success'] ) ? (bool) $response['success'] : true,
+            'data'        => $response,
+            'status_code' => $status_code,
+        );
+
+        return $response;
+    }
+}
+
+if ( ! function_exists( 'wp_next_scheduled' ) ) {
+    function wp_next_scheduled( $hook ) {
+        return false;
+    }
+}
+
+if ( ! function_exists( 'wp_schedule_event' ) ) {
+    function wp_schedule_event( $timestamp, $recurrence, $hook, $args = array() ) {
+        $GLOBALS['tts_scheduled_events'][] = array(
+            'hook'       => $hook,
+            'timestamp'  => $timestamp,
+            'recurrence' => $recurrence,
+            'args'       => $args,
+        );
+
         return true;
     }
 }
 
 if ( ! function_exists( 'wp_die' ) ) {
-    function wp_die( $message = '' ) {
-        throw new RuntimeException( $message ?: 'wp_die called during tests' );
+    function wp_die( $message = '', $title = '', $args = array() ) {
+        do_action( 'wp_die', $message, $title, $args );
+
+        $error_message = $message;
+        if ( is_array( $message ) || is_object( $message ) || '' === (string) $message ) {
+            $error_message = 'wp_die called during tests';
+        }
+
+        throw new RuntimeException( (string) $error_message );
     }
 }
 
@@ -368,6 +526,16 @@ function tts_reset_test_state() {
     $GLOBALS['tts_enqueued_scripts']    = array();
     $GLOBALS['tts_registered_actions']  = array();
     $GLOBALS['tts_registered_filters']  = array();
+    $GLOBALS['tts_action_callbacks']    = array();
+    $GLOBALS['tts_filter_callbacks']    = array();
+    $GLOBALS['tts_json_responses']      = array();
+    $GLOBALS['tts_json_errors']         = array();
+    $GLOBALS['tts_nonce_check_results'] = array();
+    $GLOBALS['tts_scheduled_events']    = array();
+
+    $_GET     = array();
+    $_POST    = array();
+    $_REQUEST = array();
 }
 
 tts_reset_test_state();
