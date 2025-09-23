@@ -119,6 +119,64 @@ $tests = array(
             'No success responses should be recorded when the nonce is invalid.'
         );
     },
+    'subscriber_profile_access_is_ignored_but_restricted_menu_is_logged' => function () {
+        tts_reset_test_state();
+
+        $GLOBALS['tts_current_user_caps'] = array(
+            'read' => true,
+        );
+
+        $_SERVER['PHP_SELF'] = '/wp-admin/profile.php';
+        unset( $_REQUEST['page'], $_GET['page'], $_POST['page'] );
+
+        $GLOBALS['tts_current_screen'] = (object) array(
+            'id'   => 'profile',
+            'base' => 'profile',
+            'cap'  => array( 'read' ),
+        );
+
+        $audit = new TTS_Security_Audit_Test_Double();
+
+        $audit->monitor_admin_access();
+
+        tts_assert_equals(
+            0,
+            count( $audit->logged_events ),
+            'Visiting profile.php as a subscriber should not log a permission violation.'
+        );
+
+        $_SERVER['PHP_SELF'] = '/wp-admin/admin.php';
+        $_GET['page']        = 'fp-publisher-settings';
+        $_REQUEST['page']    = 'fp-publisher-settings';
+
+        $GLOBALS['tts_current_screen'] = (object) array(
+            'id'   => 'toplevel_page_fp-publisher-settings',
+            'base' => 'toplevel_page_fp-publisher-settings',
+            'cap'  => array( 'manage_options' ),
+        );
+
+        $audit->monitor_admin_access();
+
+        tts_assert_equals(
+            1,
+            count( $audit->logged_events ),
+            'Attempts to open restricted FP Publisher menus should be logged.'
+        );
+
+        $event = end( $audit->logged_events );
+
+        tts_assert_equals(
+            TTS_Security_Audit::EVENT_PERMISSION_VIOLATION,
+            $event['event_type'],
+            'Restricted menu access should register as a permission violation.'
+        );
+
+        tts_assert_equals(
+            'fp-publisher-settings',
+            $event['data']['requested_page'],
+            'The logged event should store the restricted menu slug.'
+        );
+    },
 );
 
 $failures = 0;

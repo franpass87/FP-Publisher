@@ -24,6 +24,9 @@ $GLOBALS['tts_json_responses']       = array();
 $GLOBALS['tts_json_errors']          = array();
 $GLOBALS['tts_scheduled_events']     = array();
 $GLOBALS['tts_nonce_check_results']  = array();
+$GLOBALS['tts_current_user_caps']    = array();
+$GLOBALS['tts_current_user']         = null;
+$GLOBALS['tts_current_screen']       = null;
 
 if ( ! function_exists( '__' ) ) {
     function __( $text, $domain = null ) {
@@ -236,7 +239,45 @@ if ( ! function_exists( 'add_submenu_page' ) ) {
 
 if ( ! function_exists( 'current_user_can' ) ) {
     function current_user_can( $capability ) {
-        return true;
+        $caps = $GLOBALS['tts_current_user_caps'] ?? null;
+
+        if ( ! is_array( $caps ) || empty( $caps ) ) {
+            return true;
+        }
+
+        if ( array_key_exists( $capability, $caps ) ) {
+            return (bool) $caps[ $capability ];
+        }
+
+        $granted_caps = array_keys( array_filter( $caps ) );
+
+        return in_array( $capability, $granted_caps, true );
+    }
+}
+
+if ( ! function_exists( 'wp_get_current_user' ) ) {
+    function wp_get_current_user() {
+        if ( isset( $GLOBALS['tts_current_user'] ) && null !== $GLOBALS['tts_current_user'] ) {
+            return $GLOBALS['tts_current_user'];
+        }
+
+        $caps = $GLOBALS['tts_current_user_caps'] ?? array();
+
+        $user = (object) array(
+            'ID'       => 1,
+            'user_login' => 'test-user',
+            'allcaps'  => $caps,
+        );
+
+        $GLOBALS['tts_current_user'] = $user;
+
+        return $user;
+    }
+}
+
+if ( ! function_exists( 'get_current_screen' ) ) {
+    function get_current_screen() {
+        return $GLOBALS['tts_current_screen'] ?? null;
     }
 }
 
@@ -532,6 +573,9 @@ function tts_reset_test_state() {
     $GLOBALS['tts_json_errors']         = array();
     $GLOBALS['tts_nonce_check_results'] = array();
     $GLOBALS['tts_scheduled_events']    = array();
+    $GLOBALS['tts_current_user_caps']   = array();
+    $GLOBALS['tts_current_user']        = null;
+    $GLOBALS['tts_current_screen']      = null;
 
     $_GET     = array();
     $_POST    = array();
