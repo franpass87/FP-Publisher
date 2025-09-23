@@ -2662,104 +2662,7 @@ class TTS_Admin {
             'weekly_average' => $weekly_average,
             'performance_metrics' => TTS_Performance::get_performance_metrics(),
         );
-    }
-}
-
-if ( ! class_exists( 'WP_List_Table' ) ) {
-    require_once ABSPATH . 'wp-admin/includes/class-wp-list-table.php';
-}
-
-/**
- * WP_List_Table implementation for social posts.
- */
-class TTS_Social_Posts_Table extends WP_List_Table {
-
-    /**
-     * Retrieve table columns.
-     *
-     * @return array
-     */
-    public function get_columns() {
-        return array(
-            'title'        => __( 'Titolo', 'fp-publisher' ),
-            'channel'      => __( 'Canale', 'fp-publisher' ),
-            'publish_date' => __( 'Data Pubblicazione', 'fp-publisher' ),
-            'status'       => __( 'Stato', 'fp-publisher' ),
-        );
-    }
-
-    /**
-     * Prepare the table items.
-     */
-    public function prepare_items() {
-        $posts = get_posts(
-            array(
-                'post_type'      => 'tts_social_post',
-                'post_status'    => 'any',
-                'posts_per_page' => -1,
-            )
-        );
-
-        $data = array();
-        foreach ( $posts as $post ) {
-            $channel = get_post_meta( $post->ID, '_tts_social_channel', true );
-            $publish = get_post_meta( $post->ID, '_tts_publish_at', true );
-            $status  = get_post_meta( $post->ID, '_published_status', true );
-
-            $data[] = array(
-                'ID'          => $post->ID,
-                'title'       => $post->post_title,
-                'channel'     => is_array( $channel ) ? implode( ', ', $channel ) : $channel,
-                'publish_date'=> $publish ? date_i18n( 'Y-m-d H:i', strtotime( $publish ) ) : '',
-                'status'      => $status ? $status : __( 'scheduled', 'fp-publisher' ),
-            );
-        }
-
-        $this->items = $data;
-    }
-
-    /**
-     * Render title column with row actions.
-     *
-     * @param array $item Current row.
-     *
-     * @return string
-     */
-    public function column_title( $item ) {
-        $publish_url = wp_nonce_url(
-            add_query_arg(
-                array(
-                    'page'   => 'fp-publisher-social-posts',
-                    'action' => 'publish',
-                    'post'   => $item['ID'],
-                ),
-                admin_url( 'admin.php' )
-            ),
-            'tts_publish_social_post_' . $item['ID']
-        );
-
-        $actions = array(
-            'publish'  => sprintf( '<a href="%s">%s</a>', esc_url( $publish_url ), __( 'Publish Now', 'fp-publisher' ) ),
-            'edit'     => sprintf( '<a href="%s">%s</a>', get_edit_post_link( $item['ID'] ), __( 'Edit', 'fp-publisher' ) ),
-            'view_log' => sprintf( '<a href="%s">%s</a>', esc_url( add_query_arg( array( 'page' => 'fp-publisher-social-posts', 'action' => 'log', 'post' => $item['ID'] ), admin_url( 'admin.php' ) ) ), __( 'View Log', 'fp-publisher' ) ),
-        );
-
-        return sprintf( '<strong>%1$s</strong>%2$s', esc_html( $item['title'] ), $this->row_actions( $actions ) );
-    }
-
-    /**
-     * Default column rendering.
-     *
-     * @param array  $item        Row item.
-     * @param string $column_name Column name.
-     *
-     * @return string
-     */
-    public function column_default( $item, $column_name ) {
-        return isset( $item[ $column_name ] ) ? esc_html( $item[ $column_name ] ) : '';
-    }
-
-    /**
+    }    /**
      * Simple rate limiting for AJAX endpoints.
      *
      * @param string $action Action being performed.
@@ -5609,4 +5512,102 @@ class TTS_Social_Posts_Table extends WP_List_Table {
             $tts_frequency_status_page->render_page();
         }
     }
+
+
+}
+
+if ( ! class_exists( 'WP_List_Table' ) ) {
+    require_once ABSPATH . 'wp-admin/includes/class-wp-list-table.php';
+}
+
+/**
+ * WP_List_Table implementation for social posts.
+ */
+class TTS_Social_Posts_Table extends WP_List_Table {
+
+    /**
+     * Retrieve table columns.
+     *
+     * @return array
+     */
+    public function get_columns() {
+        return array(
+            'title'        => __( 'Titolo', 'fp-publisher' ),
+            'channel'      => __( 'Canale', 'fp-publisher' ),
+            'publish_date' => __( 'Data Pubblicazione', 'fp-publisher' ),
+            'status'       => __( 'Stato', 'fp-publisher' ),
+        );
+    }
+
+    /**
+     * Prepare the table items.
+     */
+    public function prepare_items() {
+        $posts = get_posts(
+            array(
+                'post_type'      => 'tts_social_post',
+                'post_status'    => 'any',
+                'posts_per_page' => -1,
+            )
+        );
+
+        $data = array();
+        foreach ( $posts as $post ) {
+            $channel = get_post_meta( $post->ID, '_tts_social_channel', true );
+            $publish = get_post_meta( $post->ID, '_tts_publish_at', true );
+            $status  = get_post_meta( $post->ID, '_published_status', true );
+
+            $data[] = array(
+                'ID'          => $post->ID,
+                'title'       => $post->post_title,
+                'channel'     => is_array( $channel ) ? implode( ', ', $channel ) : $channel,
+                'publish_date'=> $publish ? date_i18n( 'Y-m-d H:i', strtotime( $publish ) ) : '',
+                'status'      => $status ? $status : __( 'scheduled', 'fp-publisher' ),
+            );
+        }
+
+        $this->items = $data;
+    }
+
+    /**
+     * Render title column with row actions.
+     *
+     * @param array $item Current row.
+     *
+     * @return string
+     */
+    public function column_title( $item ) {
+        $publish_url = wp_nonce_url(
+            add_query_arg(
+                array(
+                    'page'   => 'fp-publisher-social-posts',
+                    'action' => 'publish',
+                    'post'   => $item['ID'],
+                ),
+                admin_url( 'admin.php' )
+            ),
+            'tts_publish_social_post_' . $item['ID']
+        );
+
+        $actions = array(
+            'publish'  => sprintf( '<a href="%s">%s</a>', esc_url( $publish_url ), __( 'Publish Now', 'fp-publisher' ) ),
+            'edit'     => sprintf( '<a href="%s">%s</a>', get_edit_post_link( $item['ID'] ), __( 'Edit', 'fp-publisher' ) ),
+            'view_log' => sprintf( '<a href="%s">%s</a>', esc_url( add_query_arg( array( 'page' => 'fp-publisher-social-posts', 'action' => 'log', 'post' => $item['ID'] ), admin_url( 'admin.php' ) ) ), __( 'View Log', 'fp-publisher' ) ),
+        );
+
+        return sprintf( '<strong>%1$s</strong>%2$s', esc_html( $item['title'] ), $this->row_actions( $actions ) );
+    }
+
+    /**
+     * Default column rendering.
+     *
+     * @param array  $item        Row item.
+     * @param string $column_name Column name.
+     *
+     * @return string
+     */
+    public function column_default( $item, $column_name ) {
+        return isset( $item[ $column_name ] ) ? esc_html( $item[ $column_name ] ) : '';
+    }
+
 }
