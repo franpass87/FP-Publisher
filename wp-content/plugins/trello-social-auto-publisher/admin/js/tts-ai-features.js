@@ -22,6 +22,28 @@
         return getString(key, fallback);
     };
 
+    const formatSuggestionMeta = function(suggestion) {
+        const metaParts = [];
+
+        if (suggestion && suggestion.platform) {
+            metaParts.push(getString('platform', 'Platform:') + ' ' + suggestion.platform);
+        }
+
+        const hasPerformance = suggestion && typeof suggestion.estimated_performance === 'number' && !isNaN(suggestion.estimated_performance);
+
+        if (hasPerformance) {
+            metaParts.push(getString('estimated_performance', 'Est. Performance:') + ' ' + suggestion.estimated_performance + '%');
+        } else {
+            metaParts.push(getString('performance_data_unavailable', 'Performance data unavailable'));
+        }
+
+        if (suggestion && suggestion.is_example) {
+            metaParts.push(getString('example_trend_label', 'Example trend (no live data)'));
+        }
+
+        return metaParts.join(' | ');
+    };
+
     $(function() {
         const $overlay = $('#tts-loading-overlay');
 
@@ -146,7 +168,7 @@
                         response.data.suggestions.forEach(function(suggestion) {
                             html += '<div class="suggestion-item">';
                             html += '<div class="suggestion-title">' + suggestion.title + '</div>';
-                            html += '<div class="suggestion-meta">' + getString('platform', 'Platform:') + ' ' + suggestion.platform + ' | ' + getString('estimated_performance', 'Est. Performance:') + ' ' + suggestion.estimated_performance + '%</div>';
+                            html += '<div class="suggestion-meta">' + formatSuggestionMeta(suggestion) + '</div>';
                             html += '</div>';
                         });
                         $('#suggestion-results').html(html);

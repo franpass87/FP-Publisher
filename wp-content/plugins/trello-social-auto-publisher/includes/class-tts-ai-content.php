@@ -608,7 +608,10 @@ class TTS_AI_Content {
      */
     private function generate_content_suggestions( $platform, $topic = '' ) {
         $suggestions = array();
-        
+
+        $dataset = $this->collect_platform_dataset( $platform );
+        $summary = $this->summarize_dataset_performance( $dataset );
+
         // Platform-specific content templates
         $templates = array(
             'instagram' => array(
@@ -656,48 +659,288 @@ class TTS_AI_Content {
         );
         
         $platform_templates = $templates[ $platform ] ?? $templates['instagram'];
-        
+
         // Generate suggestions
         foreach ( $platform_templates as $template ) {
             $suggestion = $topic ? str_replace( '{topic}', $topic, $template ) : str_replace( ' {topic}', '', $template );
-            $suggestions[] = array(
+            $entry = array(
                 'title' => $suggestion,
                 'platform' => $platform,
-                'estimated_performance' => rand( 60, 95 ),
-                'hashtags' => $this->generate_hashtags( $suggestion, $platform )
+                'hashtags' => $this->generate_hashtags( $suggestion, $platform ),
             );
+            $score = $this->calculate_performance_score( $summary );
+            if ( null !== $score ) {
+                $entry['estimated_performance'] = $score;
+            }
+            $suggestions[] = $entry;
         }
-        
+
         // Add trending content ideas
-        $trending_topics = $this->get_trending_topics( $platform );
-        foreach ( array_slice( $trending_topics, 0, 3 ) as $trend ) {
-            $suggestions[] = array(
-                'title' => "Jump on the {$trend} trend",
+        $trending_data   = $this->get_trending_topics( $platform, $dataset );
+        $trending_topics = isset( $trending_data['topics'] ) ? $trending_data['topics'] : array();
+        $mark_as_example = ! empty( $trending_data['is_example'] );
+
+        foreach ( array_slice( $trending_topics, 0, 3 ) as $trend_info ) {
+            $trend_label = is_array( $trend_info ) && isset( $trend_info['label'] ) ? $trend_info['label'] : $trend_info;
+
+            if ( empty( $trend_label ) ) {
+                continue;
+            }
+
+            $trend_weight = is_array( $trend_info ) && isset( $trend_info['weight'] ) ? (int) $trend_info['weight'] : null;
+            $trend_title  = sprintf( __( 'Jump on the %s trend', 'fp-publisher' ), $trend_label );
+
+            $trend_slug = sanitize_title_with_dashes( $trend_label );
+            if ( ! empty( $trend_slug ) ) {
+                $trend_slug = str_replace( '-', '', $trend_slug );
+            }
+
+            $trend_hashtags = array( '#trending', '#viral' );
+            if ( ! empty( $trend_slug ) ) {
+                array_unshift( $trend_hashtags, '#' . $trend_slug );
+            }
+
+            $trend_entry = array(
+                'title' => $trend_title,
                 'platform' => $platform,
-                'estimated_performance' => rand( 70, 90 ),
-                'hashtags' => array( "#{$trend}", '#trending', '#viral' )
+                'hashtags' => $trend_hashtags,
+            );
+
+            $trend_score = null;
+            if ( $mark_as_example || ( is_array( $trend_info ) && ! empty( $trend_info['is_example'] ) ) ) {
+                $trend_entry['is_example'] = true;
+            } else {
+                $trend_score = $this->calculate_performance_score( $summary, true, $trend_weight );
+            }
+
+            if ( null !== $trend_score ) {
+                $trend_entry['estimated_performance'] = $trend_score;
+            }
+
+            $suggestions[] = $trend_entry;
+        }
+
+        return $suggestions;
+    }
+
+    /**
+     * Collect recent performance data for a platform.
+     *
+     * @param string $platform Target platform.
+     * @return array
+     */
+    private function collect_platform_dataset( $platform ) {
+        $args = array(
+            'post_type'      => 'tts_social_post',
+            'post_status'    => 'publish',
+            'posts_per_page' => 50,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'meta_query'     => array(
+                array(
+                    'key'     => '_tts_metrics',
+                    'compare' => 'EXISTS',
+                ),
+            ),
+        );
+
+        $posts    = get_posts( $args );
+        $dataset  = array();
+
+        foreach ( $posts as $post ) {
+            $channels = get_post_meta( $post->ID, '_tts_social_channel', true );
+            $channels = is_array( $channels ) ? $channels : array_filter( array( $channels ) );
+
+            if ( empty( $channels ) || ! in_array( $platform, $channels, true ) ) {
+                continue;
+            }
+
+            $metrics = get_post_meta( $post->ID, '_tts_metrics', true );
+            if ( ! is_array( $metrics ) || ! isset( $metrics[ $platform ] ) ) {
+                continue;
+            }
+
+            $interactions = $this->sum_interactions( $metrics[ $platform ] );
+
+            $content = wp_strip_all_tags( (string) get_post_field( 'post_content', $post->ID ), true );
+            $title   = (string) get_the_title( $post->ID );
+            $text    = trim( $title . ' ' . $content );
+
+            $keywords = $text ? $this->extract_keywords( $text ) : array();
+
+            $dataset[] = array(
+                'post_id'      => $post->ID,
+                'interactions' => (int) $interactions,
+                'keywords'     => $keywords,
             );
         }
-        
-        return $suggestions;
+
+        return $dataset;
+    }
+
+    /**
+     * Summarize performance statistics from dataset.
+     *
+     * @param array $dataset Platform dataset.
+     * @return array
+     */
+    private function summarize_dataset_performance( array $dataset ) {
+        if ( empty( $dataset ) ) {
+            return array();
+        }
+
+        $interactions = array();
+        foreach ( $dataset as $entry ) {
+            if ( isset( $entry['interactions'] ) ) {
+                $interactions[] = (int) $entry['interactions'];
+            }
+        }
+
+        if ( empty( $interactions ) ) {
+            return array();
+        }
+
+        $max_interactions = max( $interactions );
+        $recent_slice     = array_slice( $interactions, 0, min( 5, count( $interactions ) ) );
+        $recent_average   = ! empty( $recent_slice ) ? array_sum( $recent_slice ) / count( $recent_slice ) : 0;
+        $overall_average  = array_sum( $interactions ) / count( $interactions );
+
+        return array(
+            'max_interactions' => $max_interactions,
+            'recent_average'   => $recent_average,
+            'overall_average'  => $overall_average,
+            'sample_size'      => count( $interactions ),
+        );
+    }
+
+    /**
+     * Calculate normalized performance score.
+     *
+     * @param array    $summary     Summary metrics.
+     * @param bool     $is_trending Whether score is for a trending topic.
+     * @param int|null $weight      Optional weight for the topic.
+     * @return int|null
+     */
+    private function calculate_performance_score( array $summary, $is_trending = false, $weight = null ) {
+        if ( empty( $summary ) || ! isset( $summary['max_interactions'] ) ) {
+            return null;
+        }
+
+        $max_interactions = (int) $summary['max_interactions'];
+
+        if ( $max_interactions <= 0 ) {
+            return 0;
+        }
+
+        $recent_average  = isset( $summary['recent_average'] ) ? (float) $summary['recent_average'] : 0;
+        $overall_average = isset( $summary['overall_average'] ) ? (float) $summary['overall_average'] : 0;
+        $baseline        = $recent_average > 0 ? $recent_average : $overall_average;
+
+        if ( $is_trending && null !== $weight && $weight > 0 ) {
+            $score = ( $weight / $max_interactions ) * 100;
+        } elseif ( $baseline > 0 ) {
+            $score = ( $baseline / $max_interactions ) * 100;
+        } else {
+            $score = 0;
+        }
+
+        if ( $is_trending && $score > 0 && null !== $weight && $weight > 0 ) {
+            $score = min( 100, $score + 5 );
+        }
+
+        return (int) round( max( 0, min( 100, $score ) ) );
+    }
+
+    /**
+     * Recursively sum interaction metrics.
+     *
+     * @param mixed $data Metrics data.
+     * @return int
+     */
+    private function sum_interactions( $data ) {
+        $total = 0;
+
+        foreach ( (array) $data as $value ) {
+            if ( is_array( $value ) ) {
+                $total += $this->sum_interactions( $value );
+            } elseif ( is_numeric( $value ) ) {
+                $total += (int) $value;
+            }
+        }
+
+        return $total;
     }
 
     /**
      * Get trending topics for platform.
      *
      * @param string $platform Target platform.
-     * @return array Trending topics.
+     * @param array  $dataset  Optional dataset to reuse metrics from.
+     * @return array {
+     *     @type array $topics     List of topics with labels and optional weights.
+     *     @type bool  $is_example Whether the topics are example placeholders.
+     * }
      */
-    private function get_trending_topics( $platform ) {
-        // Simulate trending topics (would use real APIs in production)
-        $topics = array(
+    private function get_trending_topics( $platform, $dataset = null ) {
+        if ( null === $dataset ) {
+            $dataset = $this->collect_platform_dataset( $platform );
+        }
+
+        $keyword_scores = array();
+
+        foreach ( $dataset as $entry ) {
+            if ( empty( $entry['keywords'] ) ) {
+                continue;
+            }
+
+            $weight = isset( $entry['interactions'] ) ? (int) $entry['interactions'] : 0;
+            if ( $weight <= 0 ) {
+                continue;
+            }
+
+            foreach ( array_unique( $entry['keywords'] ) as $keyword ) {
+                if ( ! isset( $keyword_scores[ $keyword ] ) ) {
+                    $keyword_scores[ $keyword ] = 0;
+                }
+                $keyword_scores[ $keyword ] += $weight;
+            }
+        }
+
+        if ( ! empty( $keyword_scores ) ) {
+            arsort( $keyword_scores );
+            $topics = array();
+
+            foreach ( array_slice( $keyword_scores, 0, 5, true ) as $keyword => $weight ) {
+                $topics[] = array(
+                    'label'  => $keyword,
+                    'weight' => (int) $weight,
+                );
+            }
+
+            return array(
+                'topics'     => $topics,
+                'is_example' => false,
+            );
+        }
+
+        $fallback = array(
             'ai', 'sustainability', 'wellness', 'productivity', 'technology',
             'remote work', 'digital marketing', 'social media', 'content creation',
             'entrepreneurship', 'innovation', 'mindfulness', 'fitness'
         );
-        
-        shuffle( $topics );
-        return array_slice( $topics, 0, 5 );
+
+        $topics = array();
+        foreach ( $fallback as $keyword ) {
+            $topics[] = array(
+                'label'  => $keyword,
+                'weight' => null,
+            );
+        }
+
+        return array(
+            'topics'     => $topics,
+            'is_example' => true,
+        );
     }
 }
 

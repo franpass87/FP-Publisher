@@ -74,6 +74,8 @@ class TTS_AI_Features_Page {
                     'suggestions_error'            => __( 'Error getting suggestions.', 'fp-publisher' ),
                     'platform'                     => __( 'Platform:', 'fp-publisher' ),
                     'estimated_performance'        => __( 'Est. Performance:', 'fp-publisher' ),
+                    'performance_data_unavailable' => __( 'Performance data unavailable', 'fp-publisher' ),
+                    'example_trend_label'          => __( 'Example trend (no live data)', 'fp-publisher' ),
                     'fill_all_fields'              => __( 'Please fill in all fields.', 'fp-publisher' ),
                     'add_competitor_error'         => __( 'Error adding competitor.', 'fp-publisher' ),
                     'competitor_report'            => __( 'Competitor Analysis Report:', 'fp-publisher' ),
