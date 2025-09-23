@@ -16,6 +16,7 @@ class TTS_Security_Audit {
 
     private $audit_table = 'tts_security_audit';
     private $max_log_entries = 10000;
+    private $api_abuse_threshold = 300;
 
     /**
      * Event types for security auditing
@@ -76,7 +77,7 @@ class TTS_Security_Audit {
         add_action( 'admin_init', array( $this, 'monitor_admin_access' ) );
         
         // Monitor API requests
-        add_action( 'rest_api_init', array( $this, 'monitor_api_requests' ) );
+        add_filter( 'rest_request_before_callbacks', array( $this, 'monitor_api_requests' ), 10, 3 );
     }
 
     /**
@@ -410,26 +411,55 @@ class TTS_Security_Audit {
     }
 
     /**
-     * Monitor API requests
+     * Monitor API requests.
+     *
+     * @param mixed $response Response generated before callbacks are executed.
+     * @param mixed $handler  Route handler details.
+     * @param mixed $request  The REST request object.
+     *
+     * @return mixed Unmodified REST response.
      */
-    public function monitor_api_requests() {
-        // Monitor REST API abuse
-        $api_calls = get_transient( 'tts_api_calls_' . $this->get_client_ip() ) ?: 0;
-        
-        if ( $api_calls > 100 ) { // More than 100 API calls per hour
+    public function monitor_api_requests( $response, $handler, $request ) {
+        if ( ! is_object( $request ) || ! method_exists( $request, 'get_route' ) ) {
+            return $response;
+        }
+
+        $route = (string) $request->get_route();
+
+        if ( '' === $route || 0 !== strpos( $route, '/tts/v1/' ) ) {
+            return $response;
+        }
+
+        if (
+            function_exists( 'is_user_logged_in' )
+            && is_user_logged_in()
+            && function_exists( 'current_user_can' )
+            && current_user_can( 'edit_posts' )
+        ) {
+            return $response;
+        }
+
+        $ip_address  = $this->get_client_ip();
+        $counter_key = 'tts_api_calls_' . md5( $ip_address . '|' . $route );
+        $api_calls   = (int) get_transient( $counter_key );
+        $api_calls++;
+
+        set_transient( $counter_key, $api_calls, HOUR_IN_SECONDS );
+
+        if ( $api_calls === $this->api_abuse_threshold + 1 ) {
             $this->log_security_event(
                 self::EVENT_API_ABUSE,
-                'Excessive API usage detected',
+                sprintf( 'Potential API abuse detected for %s', $route ),
                 self::RISK_HIGH,
                 array(
                     'api_calls_per_hour' => $api_calls,
-                    'endpoint' => $_SERVER['REQUEST_URI'] ?? 'unknown'
+                    'endpoint'           => $route,
+                    'ip_address'         => $ip_address,
                 )
             );
         }
-        
-        // Increment API call counter
-        set_transient( 'tts_api_calls_' . $this->get_client_ip(), $api_calls + 1, HOUR_IN_SECONDS );
+
+        return $response;
     }
 
     /**

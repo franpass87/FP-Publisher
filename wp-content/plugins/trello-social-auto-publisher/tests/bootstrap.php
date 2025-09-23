@@ -9,6 +9,18 @@ if ( ! defined( 'ABSPATH' ) ) {
     define( 'ABSPATH', __DIR__ . '/../' );
 }
 
+if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
+    define( 'MINUTE_IN_SECONDS', 60 );
+}
+
+if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
+    define( 'HOUR_IN_SECONDS', 60 * MINUTE_IN_SECONDS );
+}
+
+if ( ! defined( 'DAY_IN_SECONDS' ) ) {
+    define( 'DAY_IN_SECONDS', 24 * HOUR_IN_SECONDS );
+}
+
 // Global containers used by the tests.
 $GLOBALS['tts_test_options']         = array();
 $GLOBALS['tts_test_post_meta']       = array();
@@ -27,6 +39,8 @@ $GLOBALS['tts_nonce_check_results']  = array();
 $GLOBALS['tts_current_user_caps']    = array();
 $GLOBALS['tts_current_user']         = null;
 $GLOBALS['tts_current_screen']       = null;
+$GLOBALS['tts_test_transients']      = array();
+$GLOBALS['tts_is_user_logged_in']    = null;
 
 if ( ! function_exists( '__' ) ) {
     function __( $text, $domain = null ) {
@@ -189,6 +203,42 @@ if ( ! function_exists( 'add_filter' ) ) {
     }
 }
 
+if ( ! function_exists( 'get_transient' ) ) {
+    function get_transient( $key ) {
+        if ( ! isset( $GLOBALS['tts_test_transients'][ $key ] ) ) {
+            return false;
+        }
+
+        $stored = $GLOBALS['tts_test_transients'][ $key ];
+
+        if ( isset( $stored['expires'] ) && $stored['expires'] < time() ) {
+            unset( $GLOBALS['tts_test_transients'][ $key ] );
+            return false;
+        }
+
+        return $stored['value'];
+    }
+}
+
+if ( ! function_exists( 'set_transient' ) ) {
+    function set_transient( $key, $value, $expiration ) {
+        $GLOBALS['tts_test_transients'][ $key ] = array(
+            'value'   => $value,
+            'expires' => time() + (int) $expiration,
+        );
+
+        return true;
+    }
+}
+
+if ( ! function_exists( 'delete_transient' ) ) {
+    function delete_transient( $key ) {
+        unset( $GLOBALS['tts_test_transients'][ $key ] );
+
+        return true;
+    }
+}
+
 if ( ! function_exists( 'do_action' ) ) {
     function do_action( $hook, ...$args ) {
         if ( empty( $GLOBALS['tts_action_callbacks'][ $hook ] ) ) {
@@ -252,6 +302,22 @@ if ( ! function_exists( 'current_user_can' ) ) {
         $granted_caps = array_keys( array_filter( $caps ) );
 
         return in_array( $capability, $granted_caps, true );
+    }
+}
+
+if ( ! function_exists( 'is_user_logged_in' ) ) {
+    function is_user_logged_in() {
+        if ( isset( $GLOBALS['tts_is_user_logged_in'] ) && null !== $GLOBALS['tts_is_user_logged_in'] ) {
+            return (bool) $GLOBALS['tts_is_user_logged_in'];
+        }
+
+        if ( isset( $GLOBALS['tts_current_user'] ) && null !== $GLOBALS['tts_current_user'] ) {
+            return true;
+        }
+
+        $caps = $GLOBALS['tts_current_user_caps'] ?? array();
+
+        return ! empty( $caps );
     }
 }
 
@@ -576,6 +642,8 @@ function tts_reset_test_state() {
     $GLOBALS['tts_current_user_caps']   = array();
     $GLOBALS['tts_current_user']        = null;
     $GLOBALS['tts_current_screen']      = null;
+    $GLOBALS['tts_test_transients']     = array();
+    $GLOBALS['tts_is_user_logged_in']   = null;
 
     $_GET     = array();
     $_POST    = array();
