@@ -1121,6 +1121,16 @@ class TTS_Advanced_Media {
                         throw new Exception( 'Unknown operation: ' . $operation );
                 }
                 
+                if ( is_wp_error( $result ) ) {
+                    $results['failed']++;
+                    $results['details'][ $attachment_id ] = array(
+                        'status' => 'failed',
+                        'error'  => $result->get_error_message(),
+                        'code'   => $result->get_error_code(),
+                    );
+                    continue;
+                }
+
                 if ( $result ) {
                     $results['processed']++;
                     $results['details'][ $attachment_id ] = array(
@@ -1447,7 +1457,15 @@ class TTS_Advanced_Media {
 
         try {
             $compression_info = $this->compress_media_file( $attachment_id, $quality );
-            
+
+            if ( is_wp_error( $compression_info ) ) {
+                wp_send_json_error( array(
+                    'message' => $compression_info->get_error_message(),
+                    'code'    => $compression_info->get_error_code(),
+                ) );
+                return;
+            }
+
             wp_send_json_success( array(
                 'compression_info' => $compression_info,
                 'message' => __( 'Media compressed successfully!', 'fp-publisher' )
@@ -1463,79 +1481,306 @@ class TTS_Advanced_Media {
      *
      * @param int $attachment_id Attachment ID.
      * @param string $quality Quality setting.
-     * @return array Compression information.
+     * @return array|WP_Error Compression information or error details.
      */
     private function compress_media_file( $attachment_id, $quality ) {
         $file_path = get_attached_file( $attachment_id );
-        
+
         if ( ! $file_path || ! file_exists( $file_path ) ) {
-            throw new Exception( 'Media file not found' );
+            return new WP_Error(
+                'tts_missing_media',
+                __( 'Media file not found.', 'fp-publisher' )
+            );
         }
-        
+
         $original_size = filesize( $file_path );
+        if ( false === $original_size ) {
+            return new WP_Error(
+                'tts_media_filesize',
+                __( 'Unable to determine the size of the original media file.', 'fp-publisher' )
+            );
+        }
+
         $mime_type = get_post_mime_type( $attachment_id );
-        
+        if ( empty( $mime_type ) && function_exists( 'mime_content_type' ) ) {
+            $mime_type = mime_content_type( $file_path );
+        }
+
         // Quality settings
         $quality_levels = array(
-            'low' => 0.6,
+            'low'    => 0.6,
             'medium' => 0.8,
-            'high' => 0.9
+            'high'   => 0.9,
         );
-        
+
         $compression_ratio = $quality_levels[ $quality ] ?? $quality_levels['medium'];
-        
-        if ( strpos( $mime_type, 'image' ) === 0 ) {
-            // Compress image
-            $image_editor = wp_get_image_editor( $file_path );
-            
-            if ( is_wp_error( $image_editor ) ) {
-                throw new Exception( 'Failed to load image editor: ' . $image_editor->get_error_message() );
-            }
-            
-            // Set quality
-            $image_editor->set_quality( intval( $compression_ratio * 100 ) );
-            
-            // Generate compressed filename
-            $path_info = pathinfo( $file_path );
-            $compressed_filename = $path_info['dirname'] . '/' . $path_info['filename'] . '-compressed.' . $path_info['extension'];
-            
-            // Save compressed image
-            $saved = $image_editor->save( $compressed_filename );
-            
-            if ( is_wp_error( $saved ) ) {
-                throw new Exception( 'Failed to save compressed image: ' . $saved->get_error_message() );
-            }
-            
-            $compressed_size = filesize( $saved['path'] );
-            
+
+        if ( 0 === strpos( (string) $mime_type, 'image/' ) ) {
+            $handler_result = $this->compress_image_file( $file_path, $compression_ratio );
+        } elseif ( 0 === strpos( (string) $mime_type, 'video/' ) ) {
+            $handler_result = $this->compress_video_file( $file_path, $quality );
         } else {
-            // For non-image files, simulate compression
-            $compressed_size = round( $original_size * $compression_ratio );
+            $type = $mime_type ? sanitize_text_field( $mime_type ) : __( 'this media type', 'fp-publisher' );
+
+            return new WP_Error(
+                'tts_unsupported_media_type',
+                sprintf(
+                    /* translators: %s: MIME type. */
+                    __( 'Compression is not supported for %s.', 'fp-publisher' ),
+                    $type
+                )
+            );
         }
-        
+
+        if ( is_wp_error( $handler_result ) ) {
+            return $handler_result;
+        }
+
+        $compressed_path = $handler_result['compressed_path'] ?? '';
+
+        if ( empty( $compressed_path ) || ! file_exists( $compressed_path ) ) {
+            return new WP_Error(
+                'tts_missing_compressed_file',
+                __( 'The compressed media file could not be located.', 'fp-publisher' )
+            );
+        }
+
+        $compressed_size = filesize( $compressed_path );
+        if ( false === $compressed_size ) {
+            return new WP_Error(
+                'tts_compressed_filesize',
+                __( 'Unable to determine the compressed file size.', 'fp-publisher' )
+            );
+        }
+
         $savings = $original_size - $compressed_size;
-        $savings_percentage = round( ( $savings / $original_size ) * 100, 1 );
-        
+        if ( $savings < 0 ) {
+            $savings = 0;
+        }
+
+        $savings_percentage = 0;
+        if ( $original_size > 0 ) {
+            $savings_percentage = round( ( $savings / $original_size ) * 100, 1 );
+        }
+
         $compression_info = array(
-            'original_size' => $original_size,
-            'compressed_size' => $compressed_size,
-            'savings' => $savings,
+            'original_size'      => $original_size,
+            'compressed_size'    => $compressed_size,
+            'savings'            => $savings,
             'savings_percentage' => $savings_percentage,
-            'quality_used' => $quality,
-            'compression_ratio' => $compression_ratio,
-            'compressed_at' => current_time( 'mysql' )
+            'quality_used'       => $quality,
+            'compression_ratio'  => $handler_result['compression_ratio'] ?? ( $original_size > 0 ? round( $compressed_size / $original_size, 4 ) : 0 ),
+            'compressed_at'      => current_time( 'mysql' ),
+            'compressed_path'    => $compressed_path,
         );
-        
-        // Store compression metadata
+
+        if ( ! empty( $handler_result['compressed_url'] ) ) {
+            $compression_info['compressed_url'] = $handler_result['compressed_url'];
+        } else {
+            $upload_dir = wp_upload_dir();
+
+            if ( ! empty( $upload_dir['basedir'] ) && ! empty( $upload_dir['baseurl'] ) && 0 === strpos( $compressed_path, $upload_dir['basedir'] ) ) {
+                $compression_info['compressed_url'] = str_replace( $upload_dir['basedir'], $upload_dir['baseurl'], $compressed_path );
+            }
+        }
+
+        // Store compression metadata only when a new file exists.
         $metadata = wp_get_attachment_metadata( $attachment_id );
-        if ( ! isset( $metadata['tts_compression'] ) ) {
+        if ( ! is_array( $metadata ) ) {
+            $metadata = array();
+        }
+
+        if ( ! isset( $metadata['tts_compression'] ) || ! is_array( $metadata['tts_compression'] ) ) {
             $metadata['tts_compression'] = array();
         }
-        
+
         $metadata['tts_compression'][] = $compression_info;
         wp_update_attachment_metadata( $attachment_id, $metadata );
-        
+
         return $compression_info;
+    }
+
+    /**
+     * Compress an image file using the WordPress image editor.
+     *
+     * @param string $file_path         Absolute path to the image.
+     * @param float  $compression_ratio Compression ratio between 0 and 1.
+     * @return array|WP_Error Compression details or error.
+     */
+    private function compress_image_file( $file_path, $compression_ratio ) {
+        $image_editor = wp_get_image_editor( $file_path );
+
+        if ( is_wp_error( $image_editor ) ) {
+            return $image_editor;
+        }
+
+        $quality = max( 1, min( 100, intval( round( $compression_ratio * 100 ) ) ) );
+        $image_editor->set_quality( $quality );
+
+        $path_info = pathinfo( $file_path );
+        if ( empty( $path_info['dirname'] ) || empty( $path_info['filename'] ) ) {
+            return new WP_Error(
+                'tts_image_path_error',
+                __( 'Unable to determine a filename for the compressed image.', 'fp-publisher' )
+            );
+        }
+
+        $extension           = isset( $path_info['extension'] ) ? $path_info['extension'] : 'jpg';
+        $compressed_filename = $path_info['dirname'] . '/' . $path_info['filename'] . '-compressed.' . $extension;
+        $saved               = $image_editor->save( $compressed_filename );
+
+        if ( is_wp_error( $saved ) ) {
+            return $saved;
+        }
+
+        if ( empty( $saved['path'] ) ) {
+            return new WP_Error(
+                'tts_image_compression_failed',
+                __( 'Image compression did not produce a valid file.', 'fp-publisher' )
+            );
+        }
+
+        return array(
+            'compressed_path'   => $saved['path'],
+            'compression_ratio' => $compression_ratio,
+        );
+    }
+
+    /**
+     * Compress a video file using the configured transcoder.
+     *
+     * @param string $file_path Absolute path to the video.
+     * @param string $quality   Compression quality (low|medium|high).
+     * @return array|WP_Error Compression details or error.
+     */
+    private function compress_video_file( $file_path, $quality ) {
+        $settings        = get_option( 'tts_settings', array() );
+        $transcoder_path = isset( $settings['media_transcoder_path'] ) ? trim( $settings['media_transcoder_path'] ) : '';
+
+        if ( empty( $transcoder_path ) ) {
+            return new WP_Error(
+                'tts_transcoder_missing',
+                __( 'Video compression requires configuring the ffmpeg binary in the plugin settings.', 'fp-publisher' )
+            );
+        }
+
+        if ( ! file_exists( $transcoder_path ) ) {
+            return new WP_Error(
+                'tts_transcoder_not_found',
+                __( 'The configured ffmpeg binary could not be found on the server.', 'fp-publisher' )
+            );
+        }
+
+        if ( ! is_executable( $transcoder_path ) ) {
+            return new WP_Error(
+                'tts_transcoder_not_executable',
+                __( 'The configured ffmpeg binary is not executable.', 'fp-publisher' )
+            );
+        }
+
+        if ( ! $this->is_shell_exec_available() ) {
+            return new WP_Error(
+                'tts_exec_disabled',
+                __( "Video compression is not available because PHP's exec() function is disabled.", 'fp-publisher' )
+            );
+        }
+
+        $quality_presets = array(
+            'low'    => array(
+                'video_bitrate' => '800k',
+                'audio_bitrate' => '96k',
+                'preset'        => 'veryfast',
+            ),
+            'medium' => array(
+                'video_bitrate' => '1500k',
+                'audio_bitrate' => '128k',
+                'preset'        => 'faster',
+            ),
+            'high'   => array(
+                'video_bitrate' => '2500k',
+                'audio_bitrate' => '192k',
+                'preset'        => 'medium',
+            ),
+        );
+
+        $preset = $quality_presets[ $quality ] ?? $quality_presets['medium'];
+
+        $path_info = pathinfo( $file_path );
+        $extension = isset( $path_info['extension'] ) ? strtolower( $path_info['extension'] ) : 'mp4';
+
+        if ( empty( $extension ) ) {
+            $extension = 'mp4';
+        }
+
+        $compressed_path = $path_info['dirname'] . '/' . $path_info['filename'] . '-compressed.' . $extension;
+
+        if ( file_exists( $compressed_path ) ) {
+            @unlink( $compressed_path );
+        }
+
+        $command = sprintf(
+            "%s -y -i %s -vcodec libx264 -preset %s -b:v %s -acodec aac -b:a %s -movflags +faststart %s 2>&1",
+            escapeshellarg( $transcoder_path ),
+            escapeshellarg( $file_path ),
+            escapeshellarg( $preset['preset'] ),
+            escapeshellarg( $preset['video_bitrate'] ),
+            escapeshellarg( $preset['audio_bitrate'] ),
+            escapeshellarg( $compressed_path )
+        );
+
+        $output     = array();
+        $return_var = 0;
+        exec( $command, $output, $return_var );
+
+        if ( 0 !== $return_var ) {
+            $message = __( 'Video compression failed to complete.', 'fp-publisher' );
+
+            if ( ! empty( $output ) ) {
+                $error_output = wp_strip_all_tags( implode( ' ', array_slice( $output, -5 ) ) );
+
+                if ( ! empty( $error_output ) ) {
+                    $message = sprintf(
+                        /* translators: %s: error message returned by ffmpeg. */
+                        __( 'Video compression failed: %s', 'fp-publisher' ),
+                        $error_output
+                    );
+                }
+            }
+
+            return new WP_Error( 'tts_transcoder_failed', $message );
+        }
+
+        if ( ! file_exists( $compressed_path ) ) {
+            return new WP_Error(
+                'tts_transcoder_output_missing',
+                __( 'The video transcoder did not produce an output file.', 'fp-publisher' )
+            );
+        }
+
+        return array(
+            'compressed_path' => $compressed_path,
+        );
+    }
+
+    /**
+     * Determine whether shell execution is available.
+     *
+     * @return bool
+     */
+    private function is_shell_exec_available() {
+        if ( ! function_exists( 'exec' ) ) {
+            return false;
+        }
+
+        $disabled_functions = (string) ini_get( 'disable_functions' );
+
+        if ( '' === $disabled_functions ) {
+            return true;
+        }
+
+        $disabled_functions = array_map( 'trim', explode( ',', $disabled_functions ) );
+
+        return ! in_array( 'exec', $disabled_functions, true );
     }
 
     /**
