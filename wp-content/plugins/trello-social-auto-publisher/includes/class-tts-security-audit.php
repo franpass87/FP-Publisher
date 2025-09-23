@@ -420,20 +420,227 @@ class TTS_Security_Audit {
      * Monitor nonce failures
      */
     public function monitor_nonce_failures( $message = '', $title = '', $args = array() ) {
-        // Check for nonce verification failures - use $_POST instead of $_REQUEST for security
-        if ( ( isset( $_POST['_wpnonce'] ) || isset( $_POST['_ajax_nonce'] ) ) &&
-             ( ! wp_verify_nonce( $_POST['_wpnonce'] ?? '', 'wp_rest' ) &&
-               ! check_ajax_referer( $_POST['_ajax_nonce'] ?? '', false, false ) ) ) {
-            $this->log_security_event(
-                self::EVENT_PERMISSION_VIOLATION,
-                'Nonce verification failed',
-                self::RISK_MEDIUM,
-                array(
-                    'action' => sanitize_text_field( $_POST['action'] ?? 'unknown' ),
-                    'nonce_provided' => ! empty( $_POST['_wpnonce'] ) || ! empty( $_POST['_ajax_nonce'] )
-                )
-            );
+        $request_action = isset( $_REQUEST['action'] )
+            ? sanitize_key( wp_unslash( $_REQUEST['action'] ) )
+            : '';
+
+        if ( '' === $request_action || 0 !== strpos( $request_action, 'tts_' ) ) {
+            return $message;
         }
+
+        $nonce_map = array(
+            'tts_rate_limit_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_check_rate_limits',
+                    'tts_reset_rate_limits',
+                    'tts_get_quota_status',
+                ),
+            ),
+            'tts_ajax_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_export_data',
+                    'tts_import_data',
+                    'tts_system_maintenance',
+                    'tts_generate_report',
+                    'tts_quick_connection_check',
+                    'tts_refresh_health',
+                    'tts_save_social_settings',
+                    'tts_show_export_modal',
+                    'tts_show_import_modal',
+                    'tts_test_client_connections',
+                    'tts_test_single_connection',
+                ),
+            ),
+            'tts_media_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_resize_image',
+                    'tts_optimize_video',
+                    'tts_add_watermark',
+                    'tts_batch_process_media',
+                    'tts_get_stock_photos',
+                    'tts_create_media_variations',
+                    'tts_compress_media',
+                    'tts_analyze_media_performance',
+                ),
+            ),
+            'tts_workflow_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_submit_for_approval',
+                    'tts_approve_content',
+                    'tts_reject_content',
+                    'tts_add_workflow_comment',
+                    'tts_assign_task',
+                    'tts_get_workflow_status',
+                    'tts_create_content_template',
+                    'tts_get_team_dashboard',
+                ),
+            ),
+            'tts_competitor_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_add_competitor',
+                    'tts_remove_competitor',
+                    'tts_analyze_competitor',
+                    'tts_get_competitor_report',
+                    'tts_track_competitor_posts',
+                ),
+            ),
+            'tts_ai_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_generate_hashtags',
+                    'tts_analyze_content',
+                    'tts_predict_performance',
+                    'tts_suggest_content',
+                    'tts_auto_tag_image',
+                ),
+            ),
+            'tts_integration_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_connect_integration',
+                    'tts_disconnect_integration',
+                    'tts_test_integration',
+                    'tts_sync_integration_data',
+                    'tts_get_integration_data',
+                    'tts_configure_integration',
+                    'tts_get_available_integrations',
+                ),
+            ),
+            'tts_security_audit_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_get_security_audit',
+                    'tts_get_security_stats',
+                    'tts_clear_audit_logs',
+                ),
+            ),
+            'tts_cache_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_clear_cache',
+                    'tts_get_cache_stats',
+                    'tts_optimize_cache',
+                ),
+            ),
+            'tts_backup_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_create_backup',
+                    'tts_restore_backup',
+                    'tts_download_backup',
+                    'tts_delete_backup',
+                    'tts_list_backups',
+                ),
+            ),
+            'tts_error_recovery_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_retry_failed_operation',
+                    'tts_get_error_analytics',
+                    'tts_clear_retry_queue',
+                    'tts_get_retry_queue',
+                ),
+            ),
+            'tts_admin_nonce' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_add_content_source',
+                    'tts_sync_content_sources',
+                ),
+            ),
+            'tts_frequency_status' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_refresh_frequency_status',
+                    'tts_check_all_frequencies',
+                    'tts_test_alert_system',
+                ),
+            ),
+            'tts_frequency_widget' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_frequency_widget_refresh',
+                ),
+            ),
+            'tts_test_connection' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_test_connection',
+                ),
+            ),
+            'tts_check_rate_limits' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_check_rate_limits',
+                ),
+            ),
+            'tts_wizard' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_get_lists',
+                ),
+            ),
+            'tts_dashboard' => array(
+                'field'   => 'nonce',
+                'actions' => array(
+                    'tts_refresh_posts',
+                    'tts_delete_post',
+                    'tts_bulk_action',
+                ),
+            ),
+        );
+
+        $action_checks = array();
+
+        foreach ( $nonce_map as $nonce_action => $data ) {
+            $field = $data['field'];
+            foreach ( $data['actions'] as $action_name ) {
+                $action_checks[ $action_name ][] = array(
+                    'nonce' => $nonce_action,
+                    'field' => $field,
+                );
+            }
+        }
+
+        if ( empty( $action_checks[ $request_action ] ) ) {
+            return $message;
+        }
+
+        $failed_checks = array();
+
+        foreach ( $action_checks[ $request_action ] as $check ) {
+            $result = check_ajax_referer( $check['nonce'], $check['field'], false );
+
+            if ( false === $result ) {
+                $failed_checks[] = $check;
+                continue;
+            }
+
+            return $message;
+        }
+
+        if ( empty( $failed_checks ) ) {
+            return $message;
+        }
+
+        $failed_check = $failed_checks[0];
+
+        $this->log_security_event(
+            self::EVENT_PERMISSION_VIOLATION,
+            'Nonce verification failed',
+            self::RISK_MEDIUM,
+            array(
+                'nonce_action'   => $failed_check['nonce'],
+                'nonce_field'    => $failed_check['field'],
+                'request_action' => $request_action,
+                'nonce_provided' => ! empty( $_REQUEST[ $failed_check['field'] ] ),
+            )
+        );
 
         return $message;
     }
