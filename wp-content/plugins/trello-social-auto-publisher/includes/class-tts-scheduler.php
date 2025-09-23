@@ -12,12 +12,41 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Scheduler for social posts.
  */
-class TTS_Scheduler {
+class TTS_Scheduler implements TTS_Scheduler_Interface {
+
+    /**
+     * Integration gateway used to notify downstream systems.
+     *
+     * @var TTS_Integration_Gateway_Interface|null
+     */
+    private $integration_gateway;
+
+    /**
+     * Observability channel for telemetry.
+     *
+     * @var TTS_Observability_Channel_Interface|null
+     */
+    private $telemetry_channel;
 
     /**
      * Constructor.
+     *
+     * @param TTS_Integration_Gateway_Interface|null   $integration_gateway Integration gateway dependency.
+     * @param TTS_Observability_Channel_Interface|null $telemetry_channel   Telemetry channel dependency.
      */
-    public function __construct() {
+    public function __construct( $integration_gateway = null, $telemetry_channel = null ) {
+        if ( $integration_gateway instanceof TTS_Integration_Gateway_Interface ) {
+            $this->integration_gateway = $integration_gateway;
+        } else {
+            $this->integration_gateway = null;
+        }
+
+        if ( $telemetry_channel instanceof TTS_Observability_Channel_Interface ) {
+            $this->telemetry_channel = $telemetry_channel;
+        } else {
+            $this->telemetry_channel = null;
+        }
+
         add_action( 'save_post_tts_social_post', array( $this, 'schedule_post' ), 10, 3 );
         add_action( 'tts_publish_social_post', array( $this, 'publish_social_post' ), 10, 2 );
     }
@@ -48,34 +77,129 @@ class TTS_Scheduler {
         }
 
         $existing_channels = get_post_meta( $post_id, '_tts_social_channel', true );
-        $this->unschedule_post_actions( $post_id, $existing_channels );
+        $this->release_schedule( new TTS_Schedule_Cancellation( $post_id, $existing_channels ) );
 
-        $approved  = isset( $_POST['_tts_approved'] ) ? (bool) sanitize_text_field( $_POST['_tts_approved'] ) : (bool) get_post_meta( $post_id, '_tts_approved', true );
-        if ( ! $approved ) {
-            return;
-        }
-
+        $approved   = isset( $_POST['_tts_approved'] ) ? (bool) sanitize_text_field( $_POST['_tts_approved'] ) : (bool) get_post_meta( $post_id, '_tts_approved', true );
         $publish_at = isset( $_POST['_tts_publish_at'] ) ? sanitize_text_field( $_POST['_tts_publish_at'] ) : get_post_meta( $post_id, '_tts_publish_at', true );
         $channels   = isset( $_POST['_tts_social_channel'] ) && is_array( $_POST['_tts_social_channel'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['_tts_social_channel'] ) ) : get_post_meta( $post_id, '_tts_social_channel', true );
 
-        if ( ! empty( $publish_at ) ) {
-            $timestamp = strtotime( $publish_at );
-            if ( $timestamp ) {
-                $channels = is_array( $channels ) ? $channels : ( $channels ? array( $channels ) : array() );
-                $this->unschedule_post_actions( $post_id, $channels );
+        if ( is_array( $channels ) ) {
+            $channels = array_map( 'sanitize_text_field', $channels );
+        } elseif ( ! empty( $channels ) ) {
+            $channels = array( sanitize_text_field( $channels ) );
+        } else {
+            $channels = array();
+        }
 
-                if ( ! empty( $channels ) ) {
-                    $options = get_option( 'tts_settings', array() );
-                    foreach ( $channels as $channel ) {
-                        $offset = isset( $options[ $channel . '_offset' ] ) ? intval( $options[ $channel . '_offset' ] ) : 0;
-                        $when   = $timestamp + $offset * MINUTE_IN_SECONDS;
-                        as_schedule_single_action( $when, 'tts_publish_social_post', array( $post_id, $channel ) );
-                    }
-                } else {
-                    as_schedule_single_action( $timestamp, 'tts_publish_social_post', array( $post_id ) );
+        $client_id = intval( get_post_meta( $post_id, '_tts_client_id', true ) );
+        $metadata  = array(
+            'trigger' => 'save_post',
+            'update'  => (bool) $update,
+        );
+
+        $request = new TTS_Schedule_Request(
+            $post_id,
+            $client_id,
+            $channels,
+            $publish_at,
+            $approved,
+            $metadata
+        );
+
+        $this->queue_from_request( $request );
+    }
+
+    /**
+     * Queue a publication based on a schedule request.
+     *
+     * @param TTS_Schedule_Request $request Schedule request payload.
+     */
+    public function queue_from_request( TTS_Schedule_Request $request ) {
+        $post_id = $request->get_post_id();
+
+        if ( ! $post_id ) {
+            return;
+        }
+
+        $channels = $request->get_channels();
+        $this->unschedule_post_actions( $post_id, $channels );
+
+        if ( ! $request->is_approved() ) {
+            $this->maybe_record_event(
+                'info',
+                __( 'Skipping schedule because approval flag is missing.', 'fp-publisher' ),
+                array(
+                    'post_id'  => $post_id,
+                    'channels' => $channels,
+                )
+            );
+            return;
+        }
+
+        $timestamp = $request->get_publish_timestamp();
+
+        if ( ! $timestamp ) {
+            $this->maybe_record_event(
+                'warning',
+                __( 'Cannot schedule publication without a valid timestamp.', 'fp-publisher' ),
+                array(
+                    'post_id'  => $post_id,
+                    'channels' => $channels,
+                )
+            );
+            return;
+        }
+
+        $options = get_option( 'tts_settings', array() );
+
+        if ( empty( $channels ) ) {
+            as_schedule_single_action( $timestamp, 'tts_publish_social_post', array( $post_id ) );
+        } else {
+            foreach ( $channels as $channel ) {
+                if ( ! is_string( $channel ) || '' === $channel ) {
+                    continue;
                 }
+
+                $offset = isset( $options[ $channel . '_offset' ] ) ? intval( $options[ $channel . '_offset' ] ) : 0;
+                $when   = $timestamp + $offset * MINUTE_IN_SECONDS;
+                as_schedule_single_action( $when, 'tts_publish_social_post', array( $post_id, $channel ) );
             }
         }
+
+        $this->maybe_record_event(
+            'info',
+            __( 'Queued publication request.', 'fp-publisher' ),
+            array(
+                'post_id'   => $post_id,
+                'client_id' => $request->get_client_id(),
+                'channels'  => $channels,
+            )
+        );
+    }
+
+    /**
+     * Release scheduled actions for a post and optional channels.
+     *
+     * @param TTS_Schedule_Cancellation $cancellation Cancellation payload.
+     */
+    public function release_schedule( TTS_Schedule_Cancellation $cancellation ) {
+        $post_id = $cancellation->get_post_id();
+
+        if ( ! $post_id ) {
+            return;
+        }
+
+        $channels = $cancellation->get_channels();
+        $this->unschedule_post_actions( $post_id, $channels );
+
+        $this->maybe_record_event(
+            'info',
+            __( 'Released scheduled publication.', 'fp-publisher' ),
+            array(
+                'post_id'  => $post_id,
+                'channels' => $channels,
+            )
+        );
     }
 
     /**
@@ -110,6 +234,22 @@ class TTS_Scheduler {
             as_unschedule_all_actions( 'tts_publish_social_post', array( $post_id, $channel ) );
             as_unschedule_all_actions( 'tts_publish_social_post', array( 'post_id' => $post_id, 'channel' => $channel ) );
         }
+    }
+
+    /**
+     * Send an observability event when telemetry is available.
+     *
+     * @param string $level   Severity level.
+     * @param string $message Event message.
+     * @param array  $context Additional context.
+     */
+    private function maybe_record_event( $level, $message, $context = array() ) {
+        if ( ! $this->telemetry_channel instanceof TTS_Observability_Channel_Interface ) {
+            return;
+        }
+
+        $event = new TTS_Observability_Event( 'scheduler', $level, $message, $context );
+        $this->telemetry_channel->record_event( $event );
     }
 
     /**
@@ -157,6 +297,37 @@ class TTS_Scheduler {
 
         $options  = get_option( 'tts_settings', array() );
         $channels = $forced_channel ? array( $forced_channel ) : get_post_meta( $post_id, '_tts_social_channel', true );
+
+        if ( ! is_array( $channels ) ) {
+            $channels = $channels ? array( $channels ) : array();
+        }
+
+        $this->maybe_record_event(
+            'info',
+            __( 'Publishing social post triggered.', 'fp-publisher' ),
+            array(
+                'post_id'   => $post_id,
+                'client_id' => $client_id,
+                'channels'  => $channels,
+            )
+        );
+
+        if ( $this->integration_gateway instanceof TTS_Integration_Gateway_Interface ) {
+            $message = new TTS_Integration_Message(
+                0,
+                'publication_sync',
+                array(
+                    'post_id'   => $post_id,
+                    'client_id' => $client_id,
+                    'channels'  => $channels,
+                ),
+                array(
+                    'post_id'  => $post_id,
+                    'channels' => $channels,
+                )
+            );
+            $this->integration_gateway->dispatch_message( $message );
+        }
 
         if ( empty( $channels ) && ! $forced_channel ) {
             $mapped_channel = '';
