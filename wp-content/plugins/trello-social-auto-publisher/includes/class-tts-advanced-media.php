@@ -1812,93 +1812,407 @@ class TTS_Advanced_Media {
      * @return array Performance analysis.
      */
     private function analyze_media_performance() {
-        global $wpdb;
-        
-        // Get posts with media
-        $posts_with_media = $wpdb->get_results(
-            "SELECT p.ID, p.post_title, p.post_date, pm.meta_value as featured_image_id,
-                    sm.meta_value as social_platforms
-            FROM {$wpdb->posts} p
-            LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_thumbnail_id'
-            LEFT JOIN {$wpdb->postmeta} sm ON p.ID = sm.post_id AND sm.meta_key = '_tts_social_channel'
-            WHERE p.post_type = 'tts_social_post'
-            AND p.post_status = 'publish'
-            AND pm.meta_value IS NOT NULL
-            ORDER BY p.post_date DESC
-            LIMIT 50",
-            ARRAY_A
-        );
-        
-        $analysis = array(
-            'total_posts_analyzed' => count( $posts_with_media ),
-            'media_types' => array(),
-            'platform_performance' => array(),
-            'top_performing_media' => array(),
-            'optimization_opportunities' => array(),
-            'recommendations' => array()
-        );
-        
-        foreach ( $posts_with_media as $post ) {
-            // Simulate performance data
-            $platforms = maybe_unserialize( $post['social_platforms'] );
-            if ( ! is_array( $platforms ) ) {
-                $platforms = array( $platforms );
-            }
-            
-            foreach ( $platforms as $platform ) {
-                if ( ! isset( $analysis['platform_performance'][ $platform ] ) ) {
-                    $analysis['platform_performance'][ $platform ] = array(
-                        'posts_count' => 0,
-                        'avg_engagement' => 0,
-                        'total_likes' => 0,
-                        'total_shares' => 0,
-                        'best_media_types' => array()
-                    );
-                }
-                
-                $analysis['platform_performance'][ $platform ]['posts_count']++;
-                $analysis['platform_performance'][ $platform ]['avg_engagement'] += rand( 50, 500 );
-                $analysis['platform_performance'][ $platform ]['total_likes'] += rand( 10, 200 );
-                $analysis['platform_performance'][ $platform ]['total_shares'] += rand( 1, 50 );
-            }
-        }
-        
-        // Calculate averages
-        foreach ( $analysis['platform_performance'] as $platform => &$data ) {
-            if ( $data['posts_count'] > 0 ) {
-                $data['avg_engagement'] = round( $data['avg_engagement'] / $data['posts_count'] );
-            }
-        }
-        
-        // Generate recommendations
-        $analysis['recommendations'] = array(
+        $posts = get_posts(
             array(
-                'category' => 'Image Optimization',
-                'recommendation' => 'Optimize images for each platform\'s preferred dimensions',
-                'impact' => 'High',
-                'effort' => 'Medium'
-            ),
-            array(
-                'category' => 'Video Content',
-                'recommendation' => 'Increase video content - shows 40% higher engagement',
-                'impact' => 'High',
-                'effort' => 'High'
-            ),
-            array(
-                'category' => 'Compression',
-                'recommendation' => 'Compress media files to improve loading times',
-                'impact' => 'Medium',
-                'effort' => 'Low'
-            ),
-            array(
-                'category' => 'Watermarking',
-                'recommendation' => 'Add subtle watermarks for brand consistency',
-                'impact' => 'Low',
-                'effort' => 'Low'
+                'post_type'      => 'tts_social_post',
+                'post_status'    => 'publish',
+                'posts_per_page' => 50,
+                'orderby'        => 'date',
+                'order'          => 'DESC',
             )
         );
-        
+
+        $analysis = array(
+            'total_posts_analyzed'       => 0,
+            'platform_performance'       => array(),
+            'top_performing_media'       => array(),
+            'optimization_opportunities' => array(),
+            'recommendations'            => array(),
+            'posts_without_metrics'      => 0,
+        );
+
+        if ( empty( $posts ) ) {
+            return $analysis;
+        }
+
+        $top_posts = array();
+
+        foreach ( $posts as $post ) {
+            $channels = get_post_meta( $post->ID, '_tts_social_channel', true );
+            if ( empty( $channels ) ) {
+                continue;
+            }
+
+            if ( ! is_array( $channels ) ) {
+                $channels = array( $channels );
+            }
+
+            $channels = array_unique( array_filter( array_map( array( $this, 'normalize_platform_key' ), $channels ) ) );
+
+            if ( empty( $channels ) ) {
+                continue;
+            }
+
+            $metrics = get_post_meta( $post->ID, '_tts_metrics', true );
+            if ( ! is_array( $metrics ) ) {
+                $metrics = array();
+            }
+
+            $metrics = array_change_key_case( $metrics, CASE_LOWER );
+
+            $post_has_metrics = false;
+            $post_total       = 0;
+            $post_platforms   = array();
+
+            foreach ( $channels as $channel ) {
+                if ( ! isset( $analysis['platform_performance'][ $channel ] ) ) {
+                    $analysis['platform_performance'][ $channel ] = array(
+                        'posts_count'               => 0,
+                        'posts_without_metric_data' => 0,
+                        'metrics'                   => array(),
+                        'total_interactions'        => 0,
+                        'missing_metrics'           => array(),
+                    );
+                }
+
+                $platform_metrics = isset( $metrics[ $channel ] ) ? $metrics[ $channel ] : array();
+                $flat_metrics     = $this->flatten_numeric_metrics( $platform_metrics );
+
+                if ( empty( $flat_metrics ) ) {
+                    $analysis['platform_performance'][ $channel ]['posts_without_metric_data']++;
+                    continue;
+                }
+
+                $analysis['platform_performance'][ $channel ]['posts_count']++;
+                $post_platforms[] = $channel;
+                $post_has_metrics  = true;
+
+                $post_platform_total = 0;
+
+                foreach ( $flat_metrics as $metric_key => $value ) {
+                    if ( ! isset( $analysis['platform_performance'][ $channel ]['metrics'][ $metric_key ] ) ) {
+                        $analysis['platform_performance'][ $channel ]['metrics'][ $metric_key ] = array(
+                            'total' => 0,
+                            'count' => 0,
+                        );
+                    }
+
+                    $analysis['platform_performance'][ $channel ]['metrics'][ $metric_key ]['total'] += (float) $value;
+                    $analysis['platform_performance'][ $channel ]['metrics'][ $metric_key ]['count']++;
+                    $post_platform_total += (float) $value;
+                }
+
+                $analysis['platform_performance'][ $channel ]['total_interactions'] += $post_platform_total;
+                $post_total += $post_platform_total;
+            }
+
+            if ( $post_has_metrics ) {
+                $analysis['total_posts_analyzed']++;
+
+                if ( $post_total > 0 ) {
+                    $permalink = get_permalink( $post );
+                    $top_posts[ $post->ID ] = array(
+                        'post_id'            => $post->ID,
+                        'title'              => get_the_title( $post->ID ),
+                        'permalink'          => $permalink ? $permalink : '',
+                        'total_interactions' => round( $post_total, 2 ),
+                        'platforms'          => array_values( array_unique( $post_platforms ) ),
+                        'date'               => get_post_time( 'mysql', false, $post ),
+                    );
+                }
+            } else {
+                $analysis['posts_without_metrics']++;
+            }
+        }
+
+        foreach ( $analysis['platform_performance'] as $platform => &$data ) {
+            foreach ( $data['metrics'] as $metric_key => &$metric_data ) {
+                $metric_data['total'] = round( $metric_data['total'], 2 );
+
+                if ( $metric_data['count'] > 0 ) {
+                    $metric_data['average'] = round( $metric_data['total'] / $metric_data['count'], 2 );
+                } else {
+                    $metric_data['average'] = null;
+                }
+
+                unset( $metric_data['count'] );
+            }
+
+            if ( $data['posts_count'] > 0 ) {
+                $data['avg_interactions_per_post'] = round( $data['total_interactions'] / $data['posts_count'], 2 );
+            } else {
+                $data['avg_interactions_per_post'] = null;
+            }
+
+            $expected_metrics = $this->get_expected_metrics_for_platform( $platform );
+            if ( ! empty( $expected_metrics ) ) {
+                $present_metrics         = array_keys( $data['metrics'] );
+                $data['missing_metrics'] = array_values( array_diff( $expected_metrics, $present_metrics ) );
+            } else {
+                $data['missing_metrics'] = array();
+            }
+
+            $data['total_interactions'] = round( $data['total_interactions'], 2 );
+
+            if ( ! empty( $data['missing_metrics'] ) ) {
+                $data['missing_metrics'] = array_values( array_unique( $data['missing_metrics'] ) );
+            }
+
+            if ( empty( $data['metrics'] ) ) {
+                $data['metrics'] = array();
+            } else {
+                ksort( $data['metrics'] );
+            }
+        }
+        unset( $data );
+
+        if ( ! empty( $top_posts ) ) {
+            uasort(
+                $top_posts,
+                function( $a, $b ) {
+                    if ( $a['total_interactions'] === $b['total_interactions'] ) {
+                        return strcmp( $b['date'], $a['date'] );
+                    }
+
+                    return ( $b['total_interactions'] <=> $a['total_interactions'] );
+                }
+            );
+
+            $analysis['top_performing_media'] = array_slice( array_values( $top_posts ), 0, 5 );
+        }
+
+        $analysis['recommendations'] = $this->build_performance_recommendations( $analysis );
+
         return $analysis;
+    }
+
+    /**
+     * Normalize a platform key for consistent indexing.
+     *
+     * @param mixed $platform Platform identifier.
+     * @return string
+     */
+    private function normalize_platform_key( $platform ) {
+        $platform = is_string( $platform ) ? $platform : (string) $platform;
+        $platform = strtolower( trim( $platform ) );
+        $platform = str_replace( array( ' ', '/' ), '_', $platform );
+        $platform = preg_replace( '/[^a-z0-9_\-]/', '', $platform );
+
+        return $platform;
+    }
+
+    /**
+     * Normalize a metric key into snake case.
+     *
+     * @param mixed $key Metric key.
+     * @return string
+     */
+    private function normalize_metric_key( $key ) {
+        if ( is_int( $key ) || ( is_string( $key ) && ctype_digit( $key ) ) ) {
+            return 'metric_' . $key;
+        }
+
+        $key = is_string( $key ) ? $key : (string) $key;
+        $key = trim( $key );
+
+        if ( '' === $key ) {
+            return '';
+        }
+
+        $key = preg_replace( '/([a-z])([A-Z])/', '$1_$2', $key );
+        $key = str_replace( array( '-', ' ', '/' ), '_', $key );
+        $key = strtolower( $key );
+
+        return $key;
+    }
+
+    /**
+     * Flatten nested metrics into a single-level array of numeric values.
+     *
+     * @param mixed  $metrics Metrics array.
+     * @param string $prefix  Metric prefix.
+     * @return array
+     */
+    private function flatten_numeric_metrics( $metrics, $prefix = '' ) {
+        $flattened = array();
+
+        if ( is_object( $metrics ) ) {
+            $metrics = (array) $metrics;
+        }
+
+        if ( ! is_array( $metrics ) ) {
+            return $flattened;
+        }
+
+        foreach ( $metrics as $key => $value ) {
+            $normalized_key = $this->normalize_metric_key( $key );
+            $metric_key     = $prefix ? $prefix . '.' . $normalized_key : $normalized_key;
+
+            if ( '' === $metric_key ) {
+                continue;
+            }
+
+            if ( is_array( $value ) || is_object( $value ) ) {
+                $child_metrics = $this->flatten_numeric_metrics( $value, $metric_key );
+
+                if ( ! empty( $child_metrics ) ) {
+                    $flattened = array_merge( $flattened, $child_metrics );
+                }
+            } elseif ( is_numeric( $value ) ) {
+                $flattened[ $metric_key ] = (float) $value;
+            }
+        }
+
+        return $flattened;
+    }
+
+    /**
+     * Expected metrics for each platform.
+     *
+     * @param string $platform Platform key.
+     * @return array
+     */
+    private function get_expected_metrics_for_platform( $platform ) {
+        $expected = array(
+            'facebook'  => array(
+                'engagement.comment_count',
+                'engagement.reaction_count',
+                'engagement.share_count',
+            ),
+            'instagram' => array(
+                'like_count',
+                'comments_count',
+            ),
+            'youtube'   => array(
+                'view_count',
+                'like_count',
+                'comment_count',
+            ),
+            'tiktok'    => array(
+                'data.metrics.play_count',
+                'data.metrics.like_count',
+                'data.metrics.comment_count',
+                'data.metrics.share_count',
+            ),
+        );
+
+        return isset( $expected[ $platform ] ) ? $expected[ $platform ] : array();
+    }
+
+    /**
+     * Build recommendations based on aggregated metrics.
+     *
+     * @param array $analysis Analysis data.
+     * @return array
+     */
+    private function build_performance_recommendations( $analysis ) {
+        $recommendations = array();
+
+        $missing_posts = isset( $analysis['posts_without_metrics'] ) ? (int) $analysis['posts_without_metrics'] : 0;
+
+        if ( $missing_posts > 0 ) {
+            $recommendations[] = array(
+                'category'       => __( 'Data completeness', 'fp-publisher' ),
+                'recommendation' => sprintf(
+                    _n(
+                        '%s post is missing refreshed analytics. Run the analytics sync to update metrics.',
+                        '%s posts are missing refreshed analytics. Run the analytics sync to update metrics.',
+                        $missing_posts,
+                        'fp-publisher'
+                    ),
+                    number_format_i18n( $missing_posts )
+                ),
+                'impact'         => __( 'High', 'fp-publisher' ),
+                'effort'         => __( 'Low', 'fp-publisher' ),
+            );
+        }
+
+        $platform_avgs = array();
+
+        if ( ! empty( $analysis['platform_performance'] ) ) {
+            foreach ( $analysis['platform_performance'] as $platform => $data ) {
+                if ( isset( $data['avg_interactions_per_post'] ) && is_numeric( $data['avg_interactions_per_post'] ) && $data['avg_interactions_per_post'] > 0 ) {
+                    $platform_avgs[ $platform ] = $data['avg_interactions_per_post'];
+                }
+
+                if ( ! empty( $data['missing_metrics'] ) ) {
+                    $recommendations[] = array(
+                        'category'       => sprintf( __( '%s metrics', 'fp-publisher' ), ucwords( $platform ) ),
+                        'recommendation' => sprintf(
+                            __( 'Some expected metrics (%1$s) are not available for %2$s. Verify the integration credentials and retry syncing.', 'fp-publisher' ),
+                            implode( ', ', $data['missing_metrics'] ),
+                            ucwords( $platform )
+                        ),
+                        'impact'         => __( 'Medium', 'fp-publisher' ),
+                        'effort'         => __( 'Medium', 'fp-publisher' ),
+                    );
+                }
+
+                if ( ! empty( $data['posts_without_metric_data'] ) ) {
+                    $recommendations[] = array(
+                        'category'       => sprintf( __( '%s coverage', 'fp-publisher' ), ucwords( $platform ) ),
+                        'recommendation' => sprintf(
+                            _n(
+                                '%1$s post for %2$s has not returned analytics data yet.',
+                                '%1$s posts for %2$s have not returned analytics data yet.',
+                                $data['posts_without_metric_data'],
+                                'fp-publisher'
+                            ),
+                            number_format_i18n( (int) $data['posts_without_metric_data'] ),
+                            ucwords( $platform )
+                        ),
+                        'impact'         => __( 'Medium', 'fp-publisher' ),
+                        'effort'         => __( 'Low', 'fp-publisher' ),
+                    );
+                }
+            }
+        }
+
+        if ( ! empty( $platform_avgs ) ) {
+            arsort( $platform_avgs );
+            reset( $platform_avgs );
+            $top_platform = key( $platform_avgs );
+            $top_average  = current( $platform_avgs );
+
+            $recommendations[] = array(
+                'category'       => __( 'Content focus', 'fp-publisher' ),
+                'recommendation' => sprintf(
+                    __( '%1$s posts average %2$s interactions. Continue prioritizing this channel while engagement remains strong.', 'fp-publisher' ),
+                    ucwords( $top_platform ),
+                    number_format_i18n( round( $top_average, 2 ) )
+                ),
+                'impact'         => __( 'High', 'fp-publisher' ),
+                'effort'         => __( 'Medium', 'fp-publisher' ),
+            );
+
+            end( $platform_avgs );
+            $lowest_platform = key( $platform_avgs );
+            $lowest_average  = current( $platform_avgs );
+
+            if ( $lowest_platform && $lowest_platform !== $top_platform ) {
+                $recommendations[] = array(
+                    'category'       => __( 'Optimization', 'fp-publisher' ),
+                    'recommendation' => sprintf(
+                        __( '%1$s lags with an average of %2$s interactions per post. Review timing or creative to lift results.', 'fp-publisher' ),
+                        ucwords( $lowest_platform ),
+                        number_format_i18n( round( $lowest_average, 2 ) )
+                    ),
+                    'impact'         => __( 'Medium', 'fp-publisher' ),
+                    'effort'         => __( 'Medium', 'fp-publisher' ),
+                );
+            }
+        }
+
+        if ( empty( $recommendations ) ) {
+            $recommendations[] = array(
+                'category'       => __( 'Monitoring', 'fp-publisher' ),
+                'recommendation' => __( 'Metrics are up to date. Keep monitoring performance trends to surface new opportunities.', 'fp-publisher' ),
+                'impact'         => __( 'Low', 'fp-publisher' ),
+                'effort'         => __( 'Low', 'fp-publisher' ),
+            );
+        }
+
+        return $recommendations;
     }
 
     /**
