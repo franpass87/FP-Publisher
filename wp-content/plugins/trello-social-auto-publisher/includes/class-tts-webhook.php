@@ -311,11 +311,72 @@ class TTS_Webhook {
             return new WP_Error( 'invalid_signature', __( 'Missing signature.', 'fp-publisher' ), array( 'status' => 403 ) );
         }
 
-        $mapping_json = get_post_meta( $client_id, '_tts_column_mapping', true );
-        $mapping = ! empty( $mapping_json ) ? json_decode( $mapping_json, true ) : array();
-        if ( empty( $result['idList'] ) || ! is_array( $mapping ) || ! array_key_exists( $result['idList'], $mapping ) ) {
-            return rest_ensure_response( array( 'message' => __( 'Unmapped list.', 'fp-publisher' ) ) );
+        $import_result = self::import_card_for_client( $result, $client_id, $data );
+
+        if ( is_wp_error( $import_result ) ) {
+            $error_code = $import_result->get_error_code();
+
+            if ( 'trello_card_exists' === $error_code ) {
+                return rest_ensure_response( array( 'message' => __( 'Card already processed.', 'fp-publisher' ) ) );
+            }
+
+            if ( 'tts_unmapped_list' === $error_code ) {
+                return rest_ensure_response( array( 'message' => __( 'Unmapped list.', 'fp-publisher' ) ) );
+            }
+
+            $error_data = $import_result->get_error_data();
+            if ( ! is_array( $error_data ) ) {
+                $error_data = array();
+            }
+            if ( ! isset( $error_data['status'] ) ) {
+                $error_data['status'] = 400;
+            }
+
+            return new WP_Error( $error_code, $import_result->get_error_message(), $error_data );
         }
+
+        return rest_ensure_response( $import_result );
+    }
+
+    /**
+     * Create a social post from Trello card data.
+     *
+     * @param array $card_data Trello card data.
+     * @param int   $client_id Client identifier.
+     * @param array $payload   Optional webhook payload for manual media detection.
+     *
+     * @return array|WP_Error Import result or error.
+     */
+    public static function import_card_for_client( $card_data, $client_id, $payload = array() ) {
+        $defaults = array(
+            'idCard'        => '',
+            'name'          => '',
+            'desc'          => '',
+            'labels'        => array(),
+            'attachments'   => array(),
+            'due'           => '',
+            'idList'        => '',
+            'idBoard'       => '',
+            'canale_social' => '',
+        );
+
+        $card_data = wp_parse_args( $card_data, $defaults );
+
+        if ( empty( $card_data['idCard'] ) ) {
+            return new WP_Error( 'missing_card_id', __( 'Card ID is required for import.', 'fp-publisher' ) );
+        }
+
+        if ( empty( $card_data['idList'] ) ) {
+            return new WP_Error( 'missing_list_id', __( 'Card list is required for import.', 'fp-publisher' ) );
+        }
+
+        $mapping_json = get_post_meta( $client_id, '_tts_column_mapping', true );
+        $mapping      = ! empty( $mapping_json ) ? json_decode( $mapping_json, true ) : array();
+
+        if ( empty( $mapping ) || ! is_array( $mapping ) || ! array_key_exists( $card_data['idList'], $mapping ) ) {
+            return new WP_Error( 'tts_unmapped_list', __( 'The Trello list is not mapped for import.', 'fp-publisher' ) );
+        }
+
         $existing_post = get_posts(
             array(
                 'post_type'   => 'tts_social_post',
@@ -323,7 +384,7 @@ class TTS_Webhook {
                 'meta_query'  => array(
                     array(
                         'key'   => '_trello_card_id',
-                        'value' => $result['idCard'],
+                        'value' => $card_data['idCard'],
                     ),
                 ),
                 'fields'      => 'ids',
@@ -333,139 +394,157 @@ class TTS_Webhook {
 
         if ( ! empty( $existing_post ) ) {
             tts_log_event( $existing_post[0], 'webhook', 'skip', 'Trello card already processed', '' );
-            return rest_ensure_response( array( 'message' => __( 'Card already processed.', 'fp-publisher' ) ) );
+            return new WP_Error( 'trello_card_exists', __( 'Trello card already processed.', 'fp-publisher' ) );
         }
 
         $post_id = wp_insert_post(
             array(
-                'post_title'   => sanitize_text_field( $result['name'] ),
-                'post_content' => wp_kses_post( $result['desc'] ),
+                'post_title'   => sanitize_text_field( $card_data['name'] ),
+                'post_content' => wp_kses_post( $card_data['desc'] ),
                 'post_type'    => 'tts_social_post',
                 'post_status'  => 'draft',
-                'meta_input'   => array( '_tts_client_id' => $client_id ),
+                'meta_input'   => array(
+                    '_tts_client_id'        => $client_id,
+                    '_tts_content_source'   => 'trello',
+                    '_tts_source_reference' => $card_data['idCard'],
+                ),
             ),
             true
         );
 
-        if ( ! is_wp_error( $post_id ) ) {
-            update_post_meta( $post_id, '_trello_card_id', $result['idCard'] );
-            update_post_meta( $post_id, '_trello_labels', $result['labels'] );
-            update_post_meta( $post_id, '_trello_attachments', $result['attachments'] );
-            update_post_meta( $post_id, '_trello_due', $result['due'] );
-            update_post_meta( $post_id, '_trello_board_id', $result['idBoard'] );
+        if ( is_wp_error( $post_id ) ) {
+            return $post_id;
+        }
 
-            $result['post_id']   = $post_id;
-            $result['client_id'] = $client_id;
+        update_post_meta( $post_id, '_trello_card_id', $card_data['idCard'] );
+        update_post_meta( $post_id, '_trello_labels', $card_data['labels'] );
+        update_post_meta( $post_id, '_trello_attachments', $card_data['attachments'] );
+        update_post_meta( $post_id, '_trello_due', $card_data['due'] );
+        update_post_meta( $post_id, '_trello_board_id', $card_data['idBoard'] );
 
-            if ( empty( $result['attachments'] ) ) {
-                $manual_url = '';
-                $pattern    = '/https?:\\/\\/\S+\.mp4/i';
+        if ( ! empty( $card_data['canale_social'] ) ) {
+            update_post_meta( $post_id, '_tts_canale_social', sanitize_text_field( $card_data['canale_social'] ) );
+        }
 
-                if ( ! empty( $result['desc'] ) && preg_match( $pattern, $result['desc'], $matches ) ) {
-                    $manual_url = $matches[0];
-                } elseif ( isset( $data['action']['data']['text'] ) && preg_match( $pattern, $data['action']['data']['text'], $matches ) ) {
-                    $manual_url = $matches[0];
+        $card_data['post_id']   = $post_id;
+        $card_data['client_id'] = $client_id;
+
+        $media_ids = array();
+
+        if ( ! empty( $card_data['attachments'] ) && is_array( $card_data['attachments'] ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+
+            foreach ( $card_data['attachments'] as $attachment ) {
+                if ( empty( $attachment['isUpload'] ) || empty( $attachment['url'] ) ) {
+                    continue;
                 }
 
-                if ( $manual_url ) {
-                    $importer  = new TTS_Media_Importer();
-                    $media_id  = $importer->import_from_url( $manual_url );
+                $response = wp_remote_get(
+                    $attachment['url'],
+                    array(
+                        'timeout' => 20,
+                    )
+                );
 
-                    if ( is_wp_error( $media_id ) ) {
-                        tts_log_event( $post_id, 'webhook', 'error', $media_id->get_error_message(), $manual_url );
-                        return rest_ensure_response( $result );
-                    }
-
-                    update_post_meta( $post_id, '_tts_manual_media', (int) $media_id );
-                    tts_log_event( $post_id, 'webhook', 'success', __( 'Manual media imported', 'fp-publisher' ), $manual_url );
-                } else {
-                    tts_log_event( $post_id, 'webhook', 'warning', __( 'No attachments provided', 'fp-publisher' ), '' );
-                    return rest_ensure_response( $result );
+                if ( is_wp_error( $response ) ) {
+                    tts_log_event( $post_id, 'webhook', 'error', __( 'Failed to retrieve attachment.', 'fp-publisher' ), $attachment['url'] );
+                    continue;
                 }
+
+                $code = wp_remote_retrieve_response_code( $response );
+                if ( 200 !== (int) $code ) {
+                    tts_log_event( $post_id, 'webhook', 'error', sprintf( __( 'Unexpected HTTP response code: %d', 'fp-publisher' ), $code ), $attachment['url'] );
+                    continue;
+                }
+
+                $content_type = wp_remote_retrieve_header( $response, 'content-type' );
+                $file_name    = basename( wp_parse_url( $attachment['url'], PHP_URL_PATH ) );
+                $filetype     = wp_check_filetype( $file_name );
+
+                if ( empty( $content_type ) || empty( $filetype['type'] ) || ( 0 !== strpos( $content_type, 'image/' ) && 0 !== strpos( $content_type, 'video/' ) ) ) {
+                    tts_log_event( $post_id, 'webhook', 'error', sprintf( __( 'Unsupported MIME type: %s', 'fp-publisher' ), $content_type ), $attachment['url'] );
+                    continue;
+                }
+
+                $body = wp_remote_retrieve_body( $response );
+                $tmp  = wp_tempnam( $attachment['url'] );
+
+                if ( ! $tmp ) {
+                    continue;
+                }
+
+                file_put_contents( $tmp, $body );
+
+                $file_array = array(
+                    'name'     => sanitize_file_name( $file_name ),
+                    'tmp_name' => $tmp,
+                );
+
+                $media_id = media_handle_sideload( $file_array, $post_id );
+                @unlink( $tmp );
+
+                if ( is_wp_error( $media_id ) ) {
+                    tts_log_event( $post_id, 'webhook', 'error', $media_id->get_error_message(), $attachment['url'] );
+                    continue;
+                }
+
+                $media_ids[] = (int) $media_id;
             }
 
-            if ( ! empty( $result['due'] ) ) {
-                $publish_at = sanitize_text_field( $result['due'] );
-                update_post_meta( $post_id, '_tts_publish_at', $publish_at );
-                $timestamp = strtotime( $publish_at );
-                if ( $timestamp ) {
-                    as_schedule_single_action( $timestamp, 'tts_publish_social_post', array( $post_id ) );
-                    tts_log_event(
-                        $post_id,
-                        'webhook',
-                        'scheduled',
-                        sprintf( __( 'Publish scheduled for %s', 'fp-publisher' ), $publish_at ),
-                        ''
-                    );
-                }
-            }
-
-            $media_ids = array();
-            if ( ! empty( $result['attachments'] ) && is_array( $result['attachments'] ) ) {
-                require_once ABSPATH . 'wp-admin/includes/file.php';
-                require_once ABSPATH . 'wp-admin/includes/media.php';
-                require_once ABSPATH . 'wp-admin/includes/image.php';
-
-                foreach ( $result['attachments'] as $attachment ) {
-                    if ( empty( $attachment['isUpload'] ) || empty( $attachment['url'] ) ) {
-                        continue;
-                    }
-
-                    $response = wp_remote_get(
-                        $attachment['url'],
-                        array(
-                            'timeout' => 20,
-                        )
-                    );
-                    if ( is_wp_error( $response ) ) {
-                        tts_log_event( $post_id, 'webhook', 'error', __( 'Failed to retrieve attachment.', 'fp-publisher' ), $attachment['url'] );
-                        continue;
-                    }
-
-                    $code = wp_remote_retrieve_response_code( $response );
-                    if ( 200 !== (int) $code ) {
-                        tts_log_event( $post_id, 'webhook', 'error', sprintf( __( 'Unexpected HTTP response code: %d', 'fp-publisher' ), $code ), $attachment['url'] );
-                        continue;
-                    }
-
-                    $content_type = wp_remote_retrieve_header( $response, 'content-type' );
-                    $filetype     = wp_check_filetype( basename( wp_parse_url( $attachment['url'], PHP_URL_PATH ) ) );
-
-                    if ( empty( $content_type ) || empty( $filetype['type'] ) || ( 0 !== strpos( $content_type, 'image/' ) && 0 !== strpos( $content_type, 'video/' ) ) ) {
-                        tts_log_event( $post_id, 'webhook', 'error', sprintf( __( 'Unsupported MIME type: %s', 'fp-publisher' ), $content_type ), $attachment['url'] );
-                        continue;
-                    }
-
-                    $body = wp_remote_retrieve_body( $response );
-                    $tmp  = wp_tempnam( $attachment['url'] );
-                    if ( ! $tmp ) {
-                        continue;
-                    }
-
-                    file_put_contents( $tmp, $body );
-
-                    $file_array = array(
-                        'name'     => sanitize_file_name( basename( wp_parse_url( $attachment['url'], PHP_URL_PATH ) ) ),
-                        'tmp_name' => $tmp,
-                    );
-
-                    $media_id = media_handle_sideload( $file_array, $post_id );
-                    @unlink( $tmp );
-
-                    if ( ! is_wp_error( $media_id ) ) {
-                        $media_ids[] = (int) $media_id;
-                    }
-                }
-
-                if ( ! empty( $media_ids ) ) {
-                    set_post_thumbnail( $post_id, $media_ids[0] );
-                    update_post_meta( $post_id, '_trello_media_ids', $media_ids );
-                    update_post_meta( $post_id, '_tts_attachment_ids', $media_ids );
-                }
+            if ( ! empty( $media_ids ) ) {
+                set_post_thumbnail( $post_id, $media_ids[0] );
+                update_post_meta( $post_id, '_trello_media_ids', $media_ids );
+                update_post_meta( $post_id, '_tts_attachment_ids', $media_ids );
             }
         }
 
-        return rest_ensure_response( $result );
+        if ( empty( $media_ids ) ) {
+            $manual_url = '';
+            $pattern    = '/https?:\\/\\/\S+\.mp4/i';
+
+            if ( ! empty( $card_data['desc'] ) && preg_match( $pattern, $card_data['desc'], $matches ) ) {
+                $manual_url = $matches[0];
+            } elseif ( isset( $payload['action']['data']['text'] ) && preg_match( $pattern, $payload['action']['data']['text'], $matches ) ) {
+                $manual_url = $matches[0];
+            }
+
+            if ( $manual_url ) {
+                $importer = new TTS_Media_Importer();
+                $media_id = $importer->import_from_url( $manual_url );
+
+                if ( is_wp_error( $media_id ) ) {
+                    tts_log_event( $post_id, 'webhook', 'error', $media_id->get_error_message(), $manual_url );
+                } else {
+                    set_post_thumbnail( $post_id, $media_id );
+                    update_post_meta( $post_id, '_tts_manual_media', (int) $media_id );
+                    update_post_meta( $post_id, '_tts_attachment_ids', array( (int) $media_id ) );
+                    $media_ids[] = (int) $media_id;
+                    tts_log_event( $post_id, 'webhook', 'success', __( 'Manual media imported', 'fp-publisher' ), $manual_url );
+                }
+            } else {
+                tts_log_event( $post_id, 'webhook', 'warning', __( 'No attachments provided', 'fp-publisher' ), '' );
+            }
+        }
+
+        if ( ! empty( $card_data['due'] ) ) {
+            $publish_at = sanitize_text_field( $card_data['due'] );
+            update_post_meta( $post_id, '_tts_publish_at', $publish_at );
+            $timestamp = strtotime( $publish_at );
+            if ( $timestamp ) {
+                as_schedule_single_action( $timestamp, 'tts_publish_social_post', array( $post_id ) );
+                tts_log_event(
+                    $post_id,
+                    'webhook',
+                    'scheduled',
+                    sprintf( __( 'Publish scheduled for %s', 'fp-publisher' ), $publish_at ),
+                    ''
+                );
+            }
+        }
+
+        return $card_data;
     }
 
     /**

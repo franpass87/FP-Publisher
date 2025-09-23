@@ -1527,8 +1527,12 @@ class TTS_Admin {
         echo esc_html__( 'Generate Report', 'fp-publisher' );
         echo '</button>';
         echo '</div>';
+
+        if ( ! $has_syncable_sources ) {
+            echo '<p class="description tts-sync-disabled-note">' . esc_html__( 'Connect at least one remote content source to enable syncing.', 'fp-publisher' ) . '</p>';
+        }
         echo '</div>';
-        
+
         echo '</div>';
         echo '</div>';
     }
@@ -4353,7 +4357,9 @@ class TTS_Social_Posts_Table extends WP_List_Table {
     private function render_content_management_tabs() {
         $sources = TTS_Content_Source::SOURCES;
         $stats = TTS_Content_Source::get_source_stats();
-        $trello_enabled = get_option( 'tts_trello_enabled', 1 );
+        $trello_enabled     = get_option( 'tts_trello_enabled', 1 );
+        $syncable_sources   = TTS_Content_Source::get_syncable_sources();
+        $has_syncable_sources = ! empty( $syncable_sources );
         
         echo '<div class="tts-content-tabs">';
         echo '<nav class="nav-tab-wrapper">';
@@ -4456,9 +4462,14 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         echo '<h3>' . esc_html__( 'Quick Actions', 'fp-publisher' ) . '</h3>';
         echo '<div class="actions-grid">';
         
-        if ( $trello_enabled ) {
+        if ( $has_syncable_sources ) {
             echo '<button class="tts-btn primary" data-action="sync-all" data-source="all">';
             echo '<span class="dashicons dashicons-update"></span>';
+            echo esc_html__( 'Sync All Sources', 'fp-publisher' );
+            echo '</button>';
+        } else {
+            echo '<button class="tts-btn secondary" type="button" disabled aria-disabled="true">';
+            echo '<span class="dashicons dashicons-lock"></span>';
             echo esc_html__( 'Sync All Sources', 'fp-publisher' );
             echo '</button>';
         }
@@ -4492,24 +4503,43 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         echo '<div class="source-header">';
         echo '<h3>' . esc_html( $source_name ) . ' ' . esc_html__( 'Content', 'fp-publisher' ) . '</h3>';
         echo '<div class="source-actions">';
-        
-        if ( in_array( $source_key, array( 'trello', 'google_drive', 'dropbox' ), true ) ) {
-            echo '<button class="tts-btn primary" data-action="sync" data-source="' . esc_attr( $source_key ) . '">';
-            echo '<span class="dashicons dashicons-update"></span>';
-            echo esc_html__( 'Sync Now', 'fp-publisher' );
-            echo '</button>';
+
+        $is_remote_source = in_array( $source_key, array( 'trello', 'google_drive', 'dropbox' ), true );
+        $sync_available   = true;
+
+        if ( $is_remote_source ) {
+            $sync_available = TTS_Content_Source::is_sync_available( $source_key );
+
+            if ( $sync_available ) {
+                echo '<button class="tts-btn primary" data-action="sync" data-source="' . esc_attr( $source_key ) . '">';
+                echo '<span class="dashicons dashicons-update"></span>';
+                echo esc_html__( 'Sync Now', 'fp-publisher' );
+                echo '</button>';
+            } else {
+                echo '<button class="tts-btn secondary" type="button" disabled aria-disabled="true">';
+                echo '<span class="dashicons dashicons-lock"></span>';
+                echo esc_html__( 'Sync Unavailable', 'fp-publisher' );
+                echo '</button>';
+            }
         }
-        
+
         if ( in_array( $source_key, array( 'local_upload', 'manual' ), true ) ) {
             echo '<button class="tts-btn primary" data-action="add-content" data-source="' . esc_attr( $source_key ) . '">';
             echo '<span class="dashicons dashicons-plus"></span>';
             echo esc_html__( 'Add Content', 'fp-publisher' );
             echo '</button>';
         }
-        
+
         echo '</div>';
         echo '</div>';
-        
+
+        if ( $is_remote_source && ! $sync_available ) {
+            $unavailable_message = TTS_Content_Source::get_sync_unavailable_message( $source_key );
+            if ( $unavailable_message ) {
+                echo '<p class="description tts-sync-disabled-note">' . esc_html( $unavailable_message ) . '</p>';
+            }
+        }
+
         // Content list
         echo '<div class="source-content-list" id="content-list-' . esc_attr( $source_key ) . '">';
         $this->render_source_content_list( $source_key );
@@ -4563,7 +4593,14 @@ class TTS_Social_Posts_Table extends WP_List_Table {
             echo '<div class="tts-empty-state">';
             echo '<p>' . esc_html__( 'No content found for this source.', 'fp-publisher' ) . '</p>';
             if ( in_array( $source_key, array( 'trello', 'google_drive', 'dropbox' ), true ) ) {
-                echo '<p><em>' . esc_html__( 'Try syncing to import content from this source.', 'fp-publisher' ) . '</em></p>';
+                if ( TTS_Content_Source::is_sync_available( $source_key ) ) {
+                    echo '<p><em>' . esc_html__( 'Try syncing to import content from this source.', 'fp-publisher' ) . '</em></p>';
+                } else {
+                    $message = TTS_Content_Source::get_sync_unavailable_message( $source_key );
+                    if ( $message ) {
+                        echo '<p><em>' . esc_html( $message ) . '</em></p>';
+                    }
+                }
             }
             echo '</div>';
         }
@@ -4612,18 +4649,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
         </style>
         
         <?php
-        $syncable_sources = array();
-        $potential_sources = array( 'trello', 'google_drive', 'dropbox' );
-
-        foreach ( $potential_sources as $sync_source ) {
-            if ( 'trello' === $sync_source && ! get_option( 'tts_trello_enabled', 1 ) ) {
-                continue;
-            }
-
-            if ( array_key_exists( $sync_source, TTS_Content_Source::SOURCES ) ) {
-                $syncable_sources[] = $sync_source;
-            }
-        }
+        $syncable_sources = TTS_Content_Source::get_syncable_sources();
 
         $sync_nonce = wp_create_nonce( 'tts_admin_nonce' );
         ?>
