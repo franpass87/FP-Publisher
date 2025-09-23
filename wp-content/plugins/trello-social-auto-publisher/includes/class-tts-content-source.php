@@ -680,10 +680,10 @@ class TTS_Content_Source {
             wp_die( __( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
-        $source = sanitize_text_field( $_POST['source'] ?? '' );
-        $reference = sanitize_text_field( $_POST['reference'] ?? '' );
-        $title = sanitize_text_field( $_POST['title'] ?? '' );
-        $content = wp_kses_post( $_POST['content'] ?? '' );
+        $source = sanitize_text_field( wp_unslash( $_POST['source'] ?? '' ) );
+        $reference = sanitize_text_field( wp_unslash( $_POST['reference'] ?? '' ) );
+        $title = sanitize_text_field( wp_unslash( $_POST['title'] ?? '' ) );
+        $content = wp_kses_post( wp_unslash( $_POST['content'] ?? '' ) );
 
         if ( empty( $source ) || ! array_key_exists( $source, self::SOURCES ) ) {
             wp_send_json_error( __( 'Invalid content source', 'fp-publisher' ) );
@@ -723,7 +723,7 @@ class TTS_Content_Source {
             wp_die( __( 'Insufficient permissions', 'fp-publisher' ) );
         }
 
-        $source = sanitize_text_field( $_POST['source'] ?? '' );
+        $source = sanitize_text_field( wp_unslash( $_POST['source'] ?? '' ) );
         
         if ( empty( $source ) || ! array_key_exists( $source, self::SOURCES ) ) {
             wp_send_json_error( __( 'Invalid content source', 'fp-publisher' ) );
