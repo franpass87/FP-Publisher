@@ -219,7 +219,16 @@ class TTS_Advanced_Media {
 
         try {
             $optimized_info = $this->optimize_video_for_platform( $attachment_id, $platform, $quality );
-            
+
+            if ( is_wp_error( $optimized_info ) ) {
+                wp_send_json_error(
+                    array(
+                        'message' => $optimized_info->get_error_message(),
+                        'code'    => $optimized_info->get_error_code(),
+                    )
+                );
+            }
+
             wp_send_json_success( array(
                 'optimized_info' => $optimized_info,
                 'message' => __( 'Video optimized successfully!', 'fp-publisher' )
@@ -235,14 +244,17 @@ class TTS_Advanced_Media {
      *
      * @param int $attachment_id Attachment ID.
      * @param string $platform Target platform.
-     * @param string $quality Quality setting.
-     * @return array Optimization info.
+     * @param string $quality  Quality setting.
+     * @return array|WP_Error Optimization info or error.
      */
     private function optimize_video_for_platform( $attachment_id, $platform, $quality ) {
         $video_path = get_attached_file( $attachment_id );
-        
+
         if ( ! $video_path || ! file_exists( $video_path ) ) {
-            throw new Exception( 'Video file not found' );
+            return new WP_Error(
+                'tts_video_not_found',
+                __( 'The original video file could not be located for optimization.', 'fp-publisher' )
+            );
         }
         
         // Platform-specific video settings
@@ -305,54 +317,128 @@ class TTS_Advanced_Media {
         }
 
         $original_dimensions = $video_info['dimensions'] ?? array();
-        $optimized_dimensions = $original_dimensions;
 
-        if (
-            ! empty( $original_dimensions['width'] ) &&
-            ! empty( $original_dimensions['height'] )
-        ) {
+        $path_info = pathinfo( $video_path );
+        $extension = isset( $path_info['extension'] ) ? strtolower( $path_info['extension'] ) : 'mp4';
+
+        if ( empty( $extension ) ) {
+            $extension = 'mp4';
+        }
+
+        $safe_platform = sanitize_file_name( $platform );
+        if ( '' === $safe_platform ) {
+            $safe_platform = 'platform';
+        }
+
+        $safe_quality = sanitize_file_name( $quality );
+        if ( '' === $safe_quality ) {
+            $safe_quality = 'quality';
+        }
+
+        $optimized_filename = sprintf(
+            '%s-%s-%s-optimized.%s',
+            $path_info['filename'],
+            $safe_platform,
+            $safe_quality,
+            $extension
+        );
+
+        $optimized_path = rtrim( $path_info['dirname'], '/\\' ) . '/' . $optimized_filename;
+
+        $transcode_result = $this->compress_video_file( $video_path, $quality, $optimized_path );
+
+        if ( is_wp_error( $transcode_result ) ) {
+            return $transcode_result;
+        }
+
+        $optimized_path = $transcode_result['compressed_path'] ?? $optimized_path;
+
+        if ( empty( $optimized_path ) || ! file_exists( $optimized_path ) ) {
+            return new WP_Error(
+                'tts_optimized_file_missing',
+                __( 'The optimized video file could not be created.', 'fp-publisher' )
+            );
+        }
+
+        $optimized_size = filesize( $optimized_path );
+
+        if ( false === $optimized_size ) {
+            return new WP_Error(
+                'tts_optimized_filesize',
+                __( 'Unable to determine the optimized video size.', 'fp-publisher' )
+            );
+        }
+
+        $optimized_metadata = $this->load_video_metadata_from_file( $optimized_path );
+        $optimized_duration = $this->read_duration_from_metadata( $optimized_metadata );
+        $optimized_width    = $this->read_dimension_from_metadata( $optimized_metadata, 'width' );
+        $optimized_height   = $this->read_dimension_from_metadata( $optimized_metadata, 'height' );
+
+        if ( null !== $optimized_duration ) {
+            $optimized_duration = (int) min( (int) $optimized_duration, (int) $settings['max_duration'] );
+        } elseif ( isset( $video_info['duration'] ) && is_numeric( $video_info['duration'] ) ) {
+            $optimized_duration = (int) min( (int) $video_info['duration'], (int) $settings['max_duration'] );
+        } else {
+            $optimized_duration = null;
+        }
+
+        $optimized_dimensions = array(
+            'width'  => isset( $optimized_width ) && '' !== $optimized_width ? (int) $optimized_width : null,
+            'height' => isset( $optimized_height ) && '' !== $optimized_height ? (int) $optimized_height : null,
+        );
+
+        if ( empty( $optimized_dimensions['width'] ) || empty( $optimized_dimensions['height'] ) ) {
             $optimized_dimensions = $this->calculate_optimized_dimensions(
                 $original_dimensions,
                 $settings['aspect_ratio'],
                 $quality_setting['width']
             );
-        } elseif ( ! is_array( $optimized_dimensions ) ) {
-            $optimized_dimensions = array(
-                'width' => null,
-                'height' => null,
-            );
         }
 
-        $optimized_duration = null;
+        $upload_dir    = wp_upload_dir();
+        $optimized_url = '';
 
-        if ( isset( $video_info['duration'] ) && is_numeric( $video_info['duration'] ) ) {
-            $optimized_duration = min( (int) $video_info['duration'], (int) $settings['max_duration'] );
+        if ( ! empty( $transcode_result['compressed_url'] ) ) {
+            $optimized_url = $transcode_result['compressed_url'];
+        } elseif ( ! empty( $upload_dir['basedir'] ) && ! empty( $upload_dir['baseurl'] ) && 0 === strpos( $optimized_path, $upload_dir['basedir'] ) ) {
+            $optimized_url = str_replace( $upload_dir['basedir'], $upload_dir['baseurl'], $optimized_path );
         }
 
-        // Simulate video optimization (would use FFmpeg or similar in production)
-        $optimized_info = array(
-            'original_size' => (int) $original_size,
-            'original_duration' => $video_info['duration'],
-            'original_dimensions' => $original_dimensions,
-            'optimized_size' => (int) round( $original_size * 0.7 ), // Simulate 30% compression
-            'optimized_duration' => $optimized_duration,
-            'optimized_dimensions' => $optimized_dimensions,
-            'platform_settings' => $settings,
-            'quality_used' => $quality,
-            'compression_ratio' => '30%',
-            'meets_requirements' => $this->check_video_requirements( $video_info, $settings ),
-            'optimized_at' => current_time( 'mysql' )
+        $optimized_video_info = array(
+            'duration'   => $optimized_duration,
+            'dimensions' => $optimized_dimensions,
+            'filesize'   => (int) $optimized_size,
+            'format'     => $extension,
         );
-        
-        // Store optimization metadata
+
+        $optimized_info = array(
+            'original_size'       => (int) $original_size,
+            'original_duration'   => $video_info['duration'],
+            'original_dimensions' => $original_dimensions,
+            'optimized_size'      => (int) $optimized_size,
+            'optimized_duration'  => $optimized_duration,
+            'optimized_dimensions'=> $optimized_dimensions,
+            'optimized_path'      => $optimized_path,
+            'optimized_url'       => $optimized_url,
+            'platform_settings'   => $settings,
+            'quality_used'        => $quality,
+            'compression_ratio'   => ( $original_size > 0 ) ? round( $optimized_size / $original_size, 4 ) : null,
+            'meets_requirements'  => $this->check_video_requirements( $optimized_video_info, $settings ),
+            'optimized_at'        => current_time( 'mysql' )
+        );
+
         $metadata = wp_get_attachment_metadata( $attachment_id );
-        if ( ! isset( $metadata['tts_video_optimizations'] ) ) {
+        if ( ! is_array( $metadata ) ) {
+            $metadata = array();
+        }
+
+        if ( ! isset( $metadata['tts_video_optimizations'] ) || ! is_array( $metadata['tts_video_optimizations'] ) ) {
             $metadata['tts_video_optimizations'] = array();
         }
-        
+
         $metadata['tts_video_optimizations'][ $platform ] = $optimized_info;
         wp_update_attachment_metadata( $attachment_id, $metadata );
-        
+
         return $optimized_info;
     }
 
@@ -797,10 +883,25 @@ class TTS_Advanced_Media {
             }
         }
 
+        $size_ok = null;
+
+        if ( isset( $video_info['filesize'] ) && isset( $platform_settings['max_size'] ) ) {
+            $max_bytes = (int) $platform_settings['max_size'] * 1024 * 1024;
+            $size_ok   = ( (int) $video_info['filesize'] ) <= $max_bytes;
+        }
+
+        $format_ok = null;
+
+        if ( ! empty( $platform_settings['formats'] ) && is_array( $platform_settings['formats'] ) ) {
+            if ( ! empty( $video_info['format'] ) ) {
+                $format_ok = in_array( strtolower( (string) $video_info['format'] ), array_map( 'strtolower', $platform_settings['formats'] ), true );
+            }
+        }
+
         return array(
-            'duration_ok' => $duration_ok,
-            'size_ok' => true, // Would check actual file size
-            'format_ok' => true, // Would check if format is supported
+            'duration_ok'     => $duration_ok,
+            'size_ok'         => $size_ok,
+            'format_ok'       => $format_ok,
             'aspect_ratio_ok' => $aspect_ratio_ok,
         );
     }
@@ -1649,11 +1750,12 @@ class TTS_Advanced_Media {
     /**
      * Compress a video file using the configured transcoder.
      *
-     * @param string $file_path Absolute path to the video.
-     * @param string $quality   Compression quality (low|medium|high).
+     * @param string      $file_path   Absolute path to the video.
+     * @param string      $quality     Compression quality (low|medium|high).
+     * @param string|null $output_path Optional absolute path where the compressed file should be written.
      * @return array|WP_Error Compression details or error.
      */
-    private function compress_video_file( $file_path, $quality ) {
+    private function compress_video_file( $file_path, $quality, $output_path = null ) {
         $settings        = get_option( 'tts_settings', array() );
         $transcoder_path = isset( $settings['media_transcoder_path'] ) ? trim( $settings['media_transcoder_path'] ) : '';
 
@@ -1712,7 +1814,21 @@ class TTS_Advanced_Media {
             $extension = 'mp4';
         }
 
-        $compressed_path = $path_info['dirname'] . '/' . $path_info['filename'] . '-compressed.' . $extension;
+        if ( ! empty( $output_path ) ) {
+            $compressed_path = $output_path;
+        } else {
+            $compressed_path = $path_info['dirname'] . '/' . $path_info['filename'] . '-compressed.' . $extension;
+        }
+
+        $compressed_dir = dirname( $compressed_path );
+
+        if ( ! empty( $compressed_dir ) && ! is_dir( $compressed_dir ) ) {
+            if ( function_exists( 'wp_mkdir_p' ) ) {
+                wp_mkdir_p( $compressed_dir );
+            } else {
+                @mkdir( $compressed_dir, 0755, true );
+            }
+        }
 
         if ( file_exists( $compressed_path ) ) {
             @unlink( $compressed_path );
@@ -1757,9 +1873,17 @@ class TTS_Advanced_Media {
             );
         }
 
-        return array(
+        $result = array(
             'compressed_path' => $compressed_path,
         );
+
+        $upload_dir = wp_upload_dir();
+
+        if ( ! empty( $upload_dir['basedir'] ) && ! empty( $upload_dir['baseurl'] ) && 0 === strpos( $compressed_path, $upload_dir['basedir'] ) ) {
+            $result['compressed_url'] = str_replace( $upload_dir['basedir'], $upload_dir['baseurl'], $compressed_path );
+        }
+
+        return $result;
     }
 
     /**
