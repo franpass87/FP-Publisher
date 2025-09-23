@@ -166,6 +166,22 @@ class TTS_Settings {
             );
         }
 
+        // Media processing options.
+        add_settings_section(
+            'tts_media_processing',
+            __( 'Media Processing', 'fp-publisher' ),
+            '__return_false',
+            'tts_settings'
+        );
+
+        add_settings_field(
+            'media_transcoder_path',
+            __( 'FFmpeg Binary Path', 'fp-publisher' ),
+            array( $this, 'render_media_transcoder_path_field' ),
+            'tts_settings',
+            'tts_media_processing'
+        );
+
         // UTM options.
         add_settings_section(
             'tts_utm_options',
@@ -409,6 +425,17 @@ class TTS_Settings {
     }
 
     /**
+     * Render field for media transcoder path.
+     */
+    public function render_media_transcoder_path_field() {
+        $options = get_option( 'tts_settings', array() );
+        $value   = isset( $options['media_transcoder_path'] ) ? esc_attr( $options['media_transcoder_path'] ) : '';
+
+        echo '<input type="text" name="tts_settings[media_transcoder_path]" value="' . $value . '" class="regular-text" placeholder="/usr/bin/ffmpeg" />';
+        echo '<p class="description">' . esc_html__( 'Provide the absolute path to the ffmpeg binary used for video compression.', 'fp-publisher' ) . '</p>';
+    }
+
+    /**
      * Render a UTM field for a given channel and parameter.
      *
      * @param array $args Field arguments.
@@ -549,6 +576,7 @@ function tts_sanitize_settings( $input ) {
         'bitly_token',
         'unsplash_access_key',
         'pexels_api_key',
+        'media_transcoder_path',
     );
 
     foreach ( $text_keys as $key ) {
