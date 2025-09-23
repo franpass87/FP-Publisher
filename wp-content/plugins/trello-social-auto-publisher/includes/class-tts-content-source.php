@@ -189,6 +189,15 @@ class TTS_Content_Source {
                 $source = $requested_source;
             }
         }
+
+        $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
+        $show_trello_disabled_notice = false;
+
+        if ( ! $trello_enabled && 'trello' === $source ) {
+            $source                     = 'manual';
+            $show_trello_disabled_notice = true;
+        }
+
         $source_reference = get_post_meta( $post->ID, '_tts_source_reference', true );
         
         echo '<table class="form-table">';
@@ -197,13 +206,21 @@ class TTS_Content_Source {
         echo '<td>';
         echo '<select name="tts_content_source" id="tts_content_source" class="widefat">';
         echo '<option value="">' . esc_html__( 'Select Source', 'fp-publisher' ) . '</option>';
-        
+
         foreach ( self::SOURCES as $key => $label ) {
+            if ( ! $trello_enabled && 'trello' === $key ) {
+                continue;
+            }
+
             $selected = selected( $source, $key, false );
             echo '<option value="' . esc_attr( $key ) . '"' . $selected . '>' . esc_html( $label ) . '</option>';
         }
-        
+
         echo '</select>';
+
+        if ( $show_trello_disabled_notice ) {
+            echo '<p class="description tts-content-source-warning">' . esc_html__( 'Trello integration is disabled. Manual creation will be used for this post unless you choose another source.', 'fp-publisher' ) . '</p>';
+        }
         echo '</td>';
         echo '</tr>';
         echo '<tr>';
