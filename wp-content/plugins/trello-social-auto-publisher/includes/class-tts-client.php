@@ -707,17 +707,46 @@ class TTS_Client {
      * @param string $channel Social channel slug.
      */
     protected function handle_oauth( $channel ) {
-        if ( ! session_id() ) {
-            session_start();
-        }
-
         $state   = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
-        $expect  = isset( $_SESSION['tts_oauth_state'] ) ? $_SESSION['tts_oauth_state'] : '';
         $code    = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
         $step    = isset( $_GET['step'] ) ? absint( $_GET['step'] ) : 2;
         $client  = isset( $_GET['client_id'] ) ? absint( $_GET['client_id'] ) : 0;
+        $state_key = 'tts_oauth_state_' . sanitize_key( $channel );
+        $expected_state = '';
+        $user_id = get_current_user_id();
 
-        if ( empty( $code ) || $state !== $expect ) {
+        if ( $user_id ) {
+            $stored_state = get_user_meta( $user_id, $state_key, true );
+
+            if ( is_string( $stored_state ) && '' !== $stored_state ) {
+                $expected_state = $stored_state;
+            }
+
+            delete_user_meta( $user_id, $state_key );
+        }
+
+        if ( '' === $expected_state && '' !== $state ) {
+            $transient_key = $state_key . '_' . $state;
+            $stored_state  = get_transient( $transient_key );
+
+            if ( is_string( $stored_state ) && '' !== $stored_state ) {
+                $expected_state = $stored_state;
+            }
+
+            delete_transient( $transient_key );
+        }
+
+        $state_matches = ( '' !== $state && '' !== $expected_state );
+
+        if ( $state_matches ) {
+            if ( function_exists( 'hash_equals' ) ) {
+                $state_matches = hash_equals( $expected_state, $state );
+            } else {
+                $state_matches = ( $expected_state === $state );
+            }
+        }
+
+        if ( empty( $code ) || ! $state_matches ) {
             wp_die( esc_html__( 'OAuth verification failed.', 'fp-publisher' ) );
         }
 

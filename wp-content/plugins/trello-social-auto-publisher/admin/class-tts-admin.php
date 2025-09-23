@@ -3120,12 +3120,14 @@ class TTS_Admin {
         $platform_settings = isset( $settings[$platform] ) ? $settings[$platform] : array();
         $redirect_uri = admin_url( 'admin-post.php?action=tts_oauth_' . $platform );
         $state = wp_generate_password( 20, false );
-        
-        // Store state for verification
-        if ( ! session_id() ) {
-            session_start();
+        $state_key = 'tts_oauth_state_' . sanitize_key( $platform );
+        $user_id = get_current_user_id();
+
+        if ( $user_id ) {
+            update_user_meta( $user_id, $state_key, $state );
+        } else {
+            set_transient( $state_key . '_' . $state, $state, 15 * MINUTE_IN_SECONDS );
         }
-        $_SESSION['tts_oauth_state'] = $state;
 
         switch ( $platform ) {
             case 'facebook':
