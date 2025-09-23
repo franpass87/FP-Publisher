@@ -1378,7 +1378,12 @@ class TTS_Integration_Hub {
         
         if ( isset( $sync_methods[ $integration['integration_name'] ] ) ) {
             $credentials = $this->decrypt_credentials( $integration['credentials'] );
-            $sync_result = call_user_func( $sync_methods[ $integration['integration_name'] ], $credentials, $data_type );
+            $sync_result = call_user_func(
+                $sync_methods[ $integration['integration_name'] ],
+                $integration_id,
+                $credentials,
+                $data_type
+            );
         } else {
             // Return error for unsupported integrations
             $sync_result = new WP_Error( 'unsupported_integration', 'Integration sync method not implemented' );
@@ -1402,11 +1407,12 @@ class TTS_Integration_Hub {
     /**
      * Sync HubSpot data.
      *
-     * @param array $credentials Credentials.
+     * @param int    $integration_id Integration ID.
+     * @param array  $credentials Credentials.
      * @param string $data_type Data type.
      * @return array Sync result.
      */
-    private function sync_hubspot_data( $credentials, $data_type ) {
+    private function sync_hubspot_data( $integration_id, $credentials, $data_type ) {
         $data_types = array( 'contacts', 'companies', 'deals', 'campaigns' );
         
         if ( $data_type === 'all' ) {
@@ -1431,8 +1437,8 @@ class TTS_Integration_Hub {
             
             // Store synced data in database
             if ( $synced_count > 0 ) {
-                $this->store_integration_data( 
-                    $credentials['portal_id'],
+                $this->store_integration_data(
+                    $integration_id,
                     $type,
                     $sync_result['data']
                 );
@@ -1566,11 +1572,12 @@ class TTS_Integration_Hub {
     /**
      * Sync WooCommerce data.
      *
-     * @param array $credentials Credentials.
+     * @param int    $integration_id Integration ID.
+     * @param array  $credentials Credentials.
      * @param string $data_type Data type.
      * @return array Sync result.
      */
-    private function sync_woocommerce_data( $credentials, $data_type ) {
+    private function sync_woocommerce_data( $integration_id, $credentials, $data_type ) {
         // Check if WooCommerce is active
         if ( ! class_exists( 'WooCommerce' ) ) {
             return new WP_Error( 'woocommerce_inactive', 'WooCommerce plugin is not active' );
@@ -1600,8 +1607,8 @@ class TTS_Integration_Hub {
             
             // Store synced data
             if ( $synced_count > 0 ) {
-                $this->store_integration_data( 
-                    'woocommerce',
+                $this->store_integration_data(
+                    $integration_id,
                     $type,
                     $sync_result
                 );
@@ -1702,11 +1709,12 @@ class TTS_Integration_Hub {
     /**
      * Sync Mailchimp data.
      *
-     * @param array $credentials Credentials.
+     * @param int    $integration_id Integration ID.
+     * @param array  $credentials Credentials.
      * @param string $data_type Data type.
      * @return array Sync result.
      */
-    private function sync_mailchimp_data( $credentials, $data_type ) {
+    private function sync_mailchimp_data( $integration_id, $credentials, $data_type ) {
         if ( empty( $credentials['api_key'] ) ) {
             return new WP_Error( 'missing_credentials', 'Missing Mailchimp API key' );
         }
@@ -1735,8 +1743,8 @@ class TTS_Integration_Hub {
             
             // Store synced data
             if ( $synced_count > 0 ) {
-                $this->store_integration_data( 
-                    'mailchimp',
+                $this->store_integration_data(
+                    $integration_id,
                     $type,
                     $sync_result['data']
                 );
@@ -1830,26 +1838,73 @@ class TTS_Integration_Hub {
     /**
      * Store integration data.
      *
-     * @param string $integration_id Integration ID.
+     * @param int    $integration_id Integration ID.
      * @param string $data_type Data type.
      * @param array $data Data to store.
      */
     private function store_integration_data( $integration_id, $data_type, $data ) {
         global $wpdb;
-        
+
         $data_table = $wpdb->prefix . 'tts_integration_data';
-        
+
+        $validated_integration_id = filter_var(
+            $integration_id,
+            FILTER_VALIDATE_INT,
+            array(
+                'options' => array(
+                    'min_range' => 1,
+                ),
+            )
+        );
+
+        if ( false === $validated_integration_id ) {
+            $message = sprintf(
+                'Invalid integration ID provided for data storage: %s',
+                is_scalar( $integration_id ) ? (string) $integration_id : gettype( $integration_id )
+            );
+
+            if ( class_exists( 'TTS_Logger' ) ) {
+                TTS_Logger::log(
+                    $message,
+                    'error',
+                    array(
+                        'integration_id' => $integration_id,
+                        'data_type'      => $data_type,
+                    )
+                );
+            } else {
+                $context         = array( 'data_type' => $data_type );
+                $encoded_context = function_exists( 'wp_json_encode' )
+                    ? wp_json_encode( $context )
+                    : json_encode( $context );
+
+                error_log( '[TTS][ERROR][integration_hub] ' . $message . ' | Context: ' . $encoded_context );
+            }
+
+            return;
+        }
+
+        if ( empty( $data ) || ! is_array( $data ) ) {
+            return;
+        }
+
         foreach ( $data as $record ) {
+            if ( empty( $record ) || ! is_array( $record ) ) {
+                continue;
+            }
+
+            $external_id = isset( $record['id'] ) ? (string) $record['id'] : null;
+
             $wpdb->replace(
                 $data_table,
                 array(
-                    'integration_id' => $integration_id,
+                    'integration_id' => $validated_integration_id,
                     'data_type' => $data_type,
-                    'external_id' => $record['id'],
+                    'external_id' => $external_id,
                     'data_content' => maybe_serialize( $record ),
                     'sync_status' => 'completed'
                 ),
-                array( '%s', '%s', '%s', '%s', '%s' )
+                array( '%d', '%s', '%s', '%s', '%s' )
             );
         }
     }
