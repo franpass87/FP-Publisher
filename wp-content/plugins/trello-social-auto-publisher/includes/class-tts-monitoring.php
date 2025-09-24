@@ -126,67 +126,106 @@ class TTS_Monitoring {
      */
     private static function check_database_health() {
         global $wpdb;
-        
+
         $health = array(
-            'status' => true,
+            'status'  => true,
             'message' => 'Database is healthy',
-            'details' => array()
+            'details' => array(),
         );
-        
+
         try {
-            // Check database connectivity
-            $start_time = microtime( true );
-            $test_query = $wpdb->get_var( "SELECT 1" );
+            // Quick connectivity probe – bail early if the connection is unhealthy.
+            $start_time    = microtime( true );
+            $test_query    = $wpdb->get_var( 'SELECT 1' );
             $response_time = ( microtime( true ) - $start_time ) * 1000;
-            
+
             $health['details']['response_time_ms'] = round( $response_time, 2 );
-            
+
+            if ( null === $test_query || $wpdb->last_error ) {
+                $health['status']  = false;
+                $health['message'] = $wpdb->last_error ? 'Database connectivity error: ' . $wpdb->last_error : 'Database did not respond as expected.';
+                return $health;
+            }
+
             if ( $response_time > 1000 ) { // 1 second
-                $health['status'] = false;
+                $health['status']  = false;
                 $health['message'] = 'Database response time is too slow: ' . round( $response_time, 2 ) . 'ms';
             }
-            
-            // Check table integrity
-            $tables = array(
+
+            $supports_mysql_checks = ! property_exists( $wpdb, 'is_mysql' ) || $wpdb->is_mysql;
+
+            if ( ! $supports_mysql_checks ) {
+                $health['details']['engine']  = method_exists( $wpdb, 'db_version' ) ? $wpdb->db_version() : 'unknown';
+                $health['details']['warnings'] = array(
+                    __( 'Advanced MySQL specific health checks are not supported on this database engine.', 'fp-publisher' ),
+                );
+
+                return $health;
+            }
+
+            // Check table integrity.
+            $tables       = array(
                 $wpdb->prefix . 'tts_logs',
                 $wpdb->posts,
                 $wpdb->postmeta,
-                $wpdb->options
+                $wpdb->options,
             );
-            
             $table_status = array();
+            $warnings     = array();
+
             foreach ( $tables as $table ) {
+                $wpdb->flush();
                 $check_result = $wpdb->get_row( "CHECK TABLE {$table}", ARRAY_A );
-                $table_status[ $table ] = $check_result ? $check_result['Msg_text'] : 'Unknown';
-                
-                if ( $check_result && $check_result['Msg_text'] !== 'OK' ) {
-                    $health['status'] = false;
-                    $health['message'] = "Table {$table} has issues: " . $check_result['Msg_text'];
+
+                if ( is_array( $check_result ) && isset( $check_result['Msg_text'] ) ) {
+                    $table_status[ $table ] = $check_result['Msg_text'];
+
+                    if ( 'OK' !== $check_result['Msg_text'] ) {
+                        $health['status']  = false;
+                        $health['message'] = "Table {$table} has issues: " . $check_result['Msg_text'];
+                    }
+                } elseif ( $wpdb->last_error ) {
+                    $table_status[ $table ] = 'unavailable';
+                    $warnings[]             = sprintf( __( 'Unable to run integrity check on table %1$s: %2$s', 'fp-publisher' ), $table, $wpdb->last_error );
+                } else {
+                    $table_status[ $table ] = 'unknown';
                 }
             }
-            
+
+            if ( ! empty( $warnings ) ) {
+                $health['details']['warnings'] = isset( $health['details']['warnings'] )
+                    ? array_merge( $health['details']['warnings'], $warnings )
+                    : $warnings;
+            }
+
             $health['details']['table_status'] = $table_status;
-            
-            // Check for deadlocks or long-running queries
-            $long_queries = $wpdb->get_results( "
-                SELECT TIME, STATE, INFO 
-                FROM INFORMATION_SCHEMA.PROCESSLIST 
-                WHERE TIME > 30 AND COMMAND != 'Sleep'
-            ", ARRAY_A );
-            
-            if ( ! empty( $long_queries ) ) {
+
+            // Check for deadlocks or long-running queries. This query requires PROCESS privilege and may not be available.
+            $wpdb->flush();
+            $long_queries = $wpdb->get_results( '
+                SELECT TIME, STATE, INFO
+                FROM INFORMATION_SCHEMA.PROCESSLIST
+                WHERE TIME > 30 AND COMMAND != "Sleep"
+            ', ARRAY_A );
+
+            if ( is_array( $long_queries ) && ! empty( $long_queries ) ) {
                 $health['details']['long_running_queries'] = count( $long_queries );
                 if ( count( $long_queries ) > 5 ) {
-                    $health['status'] = false;
+                    $health['status']  = false;
                     $health['message'] = 'Multiple long-running database queries detected';
                 }
+            } elseif ( $wpdb->last_error ) {
+                $warning = __( 'Process list information is unavailable for the current database user.', 'fp-publisher' );
+                $health['details']['warnings'] = isset( $health['details']['warnings'] )
+                    ? array_merge( $health['details']['warnings'], array( $warning ) )
+                    : array( $warning );
             }
-            
+
         } catch ( Exception $e ) {
-            $health['status'] = false;
+            $health['status']  = false;
             $health['message'] = 'Database error: ' . $e->getMessage();
         }
-        
+
         return $health;
     }
     
