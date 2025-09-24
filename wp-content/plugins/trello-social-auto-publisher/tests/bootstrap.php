@@ -65,6 +65,7 @@ $GLOBALS['tts_scheduled_actions']     = array();
 $GLOBALS['tts_scheduled_single_events'] = array();
 $GLOBALS['tts_registered_activation_hooks'] = array();
 $GLOBALS['tts_registered_deactivation_hooks'] = array();
+$GLOBALS['tts_registered_rest_routes'] = array();
 $GLOBALS['tts_is_admin']              = false;
 
 if ( ! function_exists( '__' ) ) {
@@ -520,6 +521,41 @@ if ( ! function_exists( 'do_action' ) ) {
                 call_user_func_array( $callback['callback'], $call_args );
             }
         }
+    }
+}
+
+if ( ! function_exists( 'has_action' ) ) {
+    function has_action( $hook, $callback = false ) {
+        if ( empty( $GLOBALS['tts_action_callbacks'][ $hook ] ) ) {
+            return false;
+        }
+
+        if ( false === $callback ) {
+            return true;
+        }
+
+        foreach ( $GLOBALS['tts_action_callbacks'][ $hook ] as $callbacks ) {
+            foreach ( $callbacks as $registered ) {
+                if ( $registered['callback'] === $callback ) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+}
+
+if ( ! function_exists( 'register_rest_route' ) ) {
+    function register_rest_route( $namespace, $route, $args = array(), $override = false ) {
+        $GLOBALS['tts_registered_rest_routes'][] = array(
+            'namespace' => $namespace,
+            'route'     => $route,
+            'args'      => $args,
+            'override'  => (bool) $override,
+        );
+
+        return true;
     }
 }
 
@@ -1127,6 +1163,47 @@ if ( ! function_exists( 'is_wp_error' ) ) {
     }
 }
 
+if ( ! class_exists( 'WP_REST_Response' ) ) {
+    class WP_REST_Response {
+        /** @var mixed */
+        protected $data;
+
+        /** @var int */
+        protected $status = 200;
+
+        public function __construct( $data = null, $status = 200 ) {
+            $this->data   = $data;
+            $this->status = (int) $status;
+        }
+
+        public function get_data() {
+            return $this->data;
+        }
+
+        public function set_data( $data ) {
+            $this->data = $data;
+        }
+
+        public function get_status() {
+            return $this->status;
+        }
+
+        public function set_status( $status ) {
+            $this->status = (int) $status;
+        }
+    }
+}
+
+if ( ! function_exists( 'rest_ensure_response' ) ) {
+    function rest_ensure_response( $response ) {
+        if ( $response instanceof WP_REST_Response ) {
+            return $response;
+        }
+
+        return new WP_REST_Response( $response );
+    }
+}
+
 if ( ! isset( $GLOBALS['wpdb'] ) ) {
     class TTS_Test_WPDB {
         public $postmeta = 'wp_postmeta';
@@ -1275,6 +1352,7 @@ function tts_reset_test_state() {
     $GLOBALS['tts_json_errors']         = array();
     $GLOBALS['tts_nonce_check_results'] = array();
     $GLOBALS['tts_scheduled_events']    = array();
+    $GLOBALS['tts_registered_rest_routes'] = array();
     $GLOBALS['tts_current_user_caps']   = array();
     $GLOBALS['tts_current_user']        = null;
     $GLOBALS['tts_current_screen']      = null;
