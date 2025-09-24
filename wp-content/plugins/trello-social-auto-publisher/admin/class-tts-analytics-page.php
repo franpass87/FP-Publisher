@@ -50,12 +50,7 @@ class TTS_Analytics_Page {
             return;
         }
 
-        wp_enqueue_style(
-            'tts-analytics',
-            plugin_dir_url( __FILE__ ) . 'css/tts-analytics.css',
-            array(),
-            '1.0'
-        );
+        TTS_Asset_Manager::enqueue_style( 'tts-analytics', 'admin/css/tts-analytics.css' );
 
         wp_enqueue_script(
             'chart.js',
@@ -65,13 +60,8 @@ class TTS_Analytics_Page {
             true
         );
 
-        wp_enqueue_script(
-            'tts-analytics',
-            plugin_dir_url( __FILE__ ) . 'js/tts-analytics.js',
-            array( 'chart.js' ),
-            '1.0',
-            true
-        );
+        TTS_Asset_Manager::register_script( 'tts-analytics', 'admin/js/tts-analytics.js', array( 'chart.js' ) );
+        wp_enqueue_script( 'tts-analytics' );
     }
 
     /**

@@ -38,20 +38,9 @@ class TTS_Frequency_Status_Page {
             return;
         }
 
-        wp_enqueue_style(
-            'tts-frequency-status',
-            plugin_dir_url( __FILE__ ) . '../admin/css/tts-frequency-status.css',
-            array(),
-            '1.0'
-        );
-
-        wp_enqueue_script(
-            'tts-frequency-status',
-            plugin_dir_url( __FILE__ ) . '../admin/js/tts-frequency-status.js',
-            array( 'jquery', 'jquery-effects-core', 'jquery-effects-highlight' ),
-            '1.0',
-            true
-        );
+        TTS_Asset_Manager::enqueue_style( 'tts-frequency-status', 'admin/css/tts-frequency-status.css' );
+        TTS_Asset_Manager::register_script( 'tts-frequency-status', 'admin/js/tts-frequency-status.js', array( 'jquery', 'jquery-effects-core', 'jquery-effects-highlight' ) );
+        wp_enqueue_script( 'tts-frequency-status' );
 
         wp_localize_script(
             'tts-frequency-status',

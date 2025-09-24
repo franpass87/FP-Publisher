@@ -1,0 +1,13 @@
+{
+  "name": "trello-social-auto-publisher-admin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node ./tools/build-admin-assets.mjs",
+    "watch": "node ./tools/build-admin-assets.mjs --watch",
+    "clean": "node ./tools/build-admin-assets.mjs --clean"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.2"
+  }
+}

@@ -523,54 +523,20 @@ class TTS_Admin {
      * @param string $hook Current admin page hook.
      */
     private function enqueue_core_assets( $hook ) {
-        // Essential styles with version based on file modification time for better caching
-        $css_version = filemtime( plugin_dir_path( __FILE__ ) . 'css/tts-core.css' );
-        wp_enqueue_style(
-            'tts-core',
-            plugin_dir_url( __FILE__ ) . 'css/tts-core.css',
-            array(),
-            $css_version
-        );
+        TTS_Asset_Manager::enqueue_style( 'tts-core', 'admin/css/tts-core.css' );
 
-        $notifications_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-notifications.js' );
-        wp_register_script(
-            'tts-notifications',
-            plugin_dir_url( __FILE__ ) . 'js/tts-notifications.js',
-            array(),
-            $notifications_version,
-            true
-        );
+        TTS_Asset_Manager::register_script( 'tts-notifications', 'admin/js/tts-notifications.js' );
         wp_enqueue_script( 'tts-notifications' );
 
-        $admin_utils_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-admin-utils.js' );
-        wp_register_script(
-            'tts-admin-utils',
-            plugin_dir_url( __FILE__ ) . 'js/tts-admin-utils.js',
-            array( 'tts-notifications', 'wp-util' ),
-            $admin_utils_version,
-            true
-        );
+        TTS_Asset_Manager::register_script( 'tts-admin-utils', 'admin/js/tts-admin-utils.js', array( 'tts-notifications', 'wp-util' ) );
         wp_enqueue_script( 'tts-admin-utils' );
 
-        $help_system_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-help-system.js' );
-        wp_register_script(
-            'tts-help-system',
-            plugin_dir_url( __FILE__ ) . 'js/tts-help-system.js',
-            array( 'tts-admin-utils' ),
-            $help_system_version,
-            true
-        );
+        TTS_Asset_Manager::register_script( 'tts-help-system', 'admin/js/tts-help-system.js', array( 'tts-admin-utils' ) );
         wp_enqueue_script( 'tts-help-system' );
 
         // Essential JavaScript with optimized dependencies
-        $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-core.js' );
-        wp_enqueue_script(
-            'tts-core',
-            plugin_dir_url( __FILE__ ) . 'js/tts-core.js',
-            array( 'jquery', 'tts-notifications' ),
-            $js_version,
-            true
-        );
+        TTS_Asset_Manager::register_script( 'tts-core', 'admin/js/tts-core.js', array( 'jquery', 'tts-notifications' ) );
+        wp_enqueue_script( 'tts-core' );
 
         // Localize core script with minimal data
         wp_localize_script( 'tts-core', 'tts_ajax', array(
@@ -627,53 +593,24 @@ class TTS_Admin {
      * Enqueue shared assets for admin pages without dedicated bundles.
      */
     private function enqueue_shared_admin_page_assets() {
-        $css_path = plugin_dir_path( __FILE__ ) . 'css/tts-optimized.css';
-        if ( file_exists( $css_path ) ) {
-            $css_version = filemtime( $css_path );
-            wp_enqueue_style(
-                'tts-optimized',
-                plugin_dir_url( __FILE__ ) . 'css/tts-optimized.css',
-                array( 'tts-core' ),
-                $css_version
-            );
-        }
-
-        $js_path = plugin_dir_path( __FILE__ ) . 'js/tts-optimized-core.js';
-        if ( file_exists( $js_path ) ) {
-            $js_version = filemtime( $js_path );
-            wp_enqueue_script(
-                'tts-optimized-core',
-                plugin_dir_url( __FILE__ ) . 'js/tts-optimized-core.js',
-                array( 'tts-core', 'tts-admin-utils' ),
-                $js_version,
-                true
-            );
-        }
+        TTS_Asset_Manager::enqueue_style( 'tts-optimized', 'admin/css/tts-optimized.css', array( 'tts-core' ) );
+        TTS_Asset_Manager::enqueue_script( 'tts-optimized-core', 'admin/js/tts-optimized-core.js', array( 'tts-core', 'tts-admin-utils' ) );
     }
 
     /**
      * Enqueue dashboard-specific assets.
      */
     private function enqueue_dashboard_specific_assets() {
-        $css_version = filemtime( plugin_dir_path( __FILE__ ) . 'css/tts-dashboard.css' );
-        wp_enqueue_style(
-            'tts-dashboard',
-            plugin_dir_url( __FILE__ ) . 'css/tts-dashboard.css',
-            array( 'tts-core' ),
-            $css_version
-        );
+        TTS_Asset_Manager::enqueue_style( 'tts-dashboard', 'admin/css/tts-dashboard.css', array( 'tts-core' ) );
 
         if ( ! $this->dashboard_needs_react_components() ) {
             return;
         }
 
-        $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-dashboard.js' );
-        wp_enqueue_script(
+        TTS_Asset_Manager::enqueue_script(
             'tts-dashboard',
-            plugin_dir_url( __FILE__ ) . 'js/tts-dashboard.js',
-            array( 'tts-core', 'tts-notifications', 'wp-element', 'wp-components', 'wp-api-fetch' ),
-            $js_version,
-            true
+            'admin/js/tts-dashboard.js',
+            array( 'tts-core', 'tts-notifications', 'wp-element', 'wp-components', 'wp-api-fetch' )
         );
     }
 
@@ -691,48 +628,25 @@ class TTS_Admin {
      * Enqueue calendar specific assets.
      */
     private function enqueue_calendar_assets() {
-        $css_version = filemtime( plugin_dir_path( __FILE__ ) . 'css/tts-calendar.css' );
-        wp_enqueue_style(
-            'tts-calendar',
-            plugin_dir_url( __FILE__ ) . 'css/tts-calendar.css',
-            array( 'tts-core' ),
-            $css_version
-        );
-
-        $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-calendar.js' );
-        wp_enqueue_script(
-            'tts-calendar',
-            plugin_dir_url( __FILE__ ) . 'js/tts-calendar.js',
-            array( 'tts-core' ),
-            $js_version,
-            true
-        );
+        TTS_Asset_Manager::enqueue_style( 'tts-calendar', 'admin/css/tts-calendar.css', array( 'tts-core' ) );
+        TTS_Asset_Manager::enqueue_script( 'tts-calendar', 'admin/js/tts-calendar.js', array( 'tts-core' ) );
     }
 
     /**
      * Enqueue health page specific assets.
      */
     private function enqueue_health_assets() {
-        $css_version = filemtime( plugin_dir_path( __FILE__ ) . 'css/tts-health.css' );
-        wp_enqueue_style(
-            'tts-health',
-            plugin_dir_url( __FILE__ ) . 'css/tts-health.css',
-            array( 'tts-core' ),
-            $css_version
-        );
+        TTS_Asset_Manager::enqueue_style( 'tts-health', 'admin/css/tts-health.css', array( 'tts-core' ) );
     }
 
     /**
      * Enqueue AI features specific assets.
      */
     private function enqueue_ai_features_assets() {
-        $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-advanced-features.js' );
-        wp_enqueue_script(
+        TTS_Asset_Manager::enqueue_script(
             'tts-advanced-features',
-            plugin_dir_url( __FILE__ ) . 'js/tts-advanced-features.js',
-            array( 'tts-core', 'tts-notifications', 'tts-admin-utils', 'tts-help-system' ),
-            $js_version,
-            true
+            'admin/js/tts-advanced-features.js',
+            array( 'tts-core', 'tts-notifications', 'tts-admin-utils', 'tts-help-system' )
         );
     }
 
@@ -740,22 +654,9 @@ class TTS_Admin {
      * Enqueue social connections specific assets.
      */
     private function enqueue_social_connections_assets() {
-        $css_version = filemtime( plugin_dir_path( __FILE__ ) . 'css/tts-social-connections.css' );
-        wp_enqueue_style(
-            'tts-social-connections',
-            plugin_dir_url( __FILE__ ) . 'css/tts-social-connections.css',
-            array( 'tts-core' ),
-            $css_version
-        );
-
-        $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-social-connections.js' );
-        wp_enqueue_script(
-            'tts-social-connections',
-            plugin_dir_url( __FILE__ ) . 'js/tts-social-connections.js',
-            array( 'tts-core' ),
-            $js_version,
-            true
-        );
+        TTS_Asset_Manager::enqueue_style( 'tts-social-connections', 'admin/css/tts-social-connections.css', array( 'tts-core' ) );
+        TTS_Asset_Manager::register_script( 'tts-social-connections', 'admin/js/tts-social-connections.js', array( 'tts-core' ) );
+        wp_enqueue_script( 'tts-social-connections' );
 
         wp_localize_script(
             'tts-social-connections',
@@ -772,13 +673,7 @@ class TTS_Admin {
      * Enqueue analytics specific assets with conditional Chart.js loading.
      */
     private function enqueue_analytics_assets() {
-        $css_version = filemtime( plugin_dir_path( __FILE__ ) . 'css/tts-analytics.css' );
-        wp_enqueue_style(
-            'tts-analytics',
-            plugin_dir_url( __FILE__ ) . 'css/tts-analytics.css',
-            array( 'tts-core' ),
-            $css_version
-        );
+        TTS_Asset_Manager::enqueue_style( 'tts-analytics', 'admin/css/tts-analytics.css', array( 'tts-core' ) );
 
         // Load Chart.js from CDN with integrity check for better performance
         wp_enqueue_script(
@@ -789,14 +684,8 @@ class TTS_Admin {
             true
         );
 
-        $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-analytics.js' );
-        wp_enqueue_script(
-            'tts-analytics',
-            plugin_dir_url( __FILE__ ) . 'js/tts-analytics.js',
-            array( 'tts-core', 'chart-js' ),
-            $js_version,
-            true
-        );
+        TTS_Asset_Manager::register_script( 'tts-analytics', 'admin/js/tts-analytics.js', array( 'tts-core', 'chart-js' ) );
+        wp_enqueue_script( 'tts-analytics' );
 
         $localized_data = array(
             'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
@@ -853,13 +742,7 @@ class TTS_Admin {
             return;
         }
 
-        wp_enqueue_script(
-            'tts-wizard',
-            plugin_dir_url( __FILE__ ) . 'js/tts-wizard.js',
-            array( 'tts-core' ),
-            '1.1',
-            true
-        );
+        TTS_Asset_Manager::enqueue_script( 'tts-wizard', 'admin/js/tts-wizard.js', array( 'tts-core' ) );
 
         wp_localize_script(
             'tts-wizard',
@@ -893,13 +776,10 @@ class TTS_Admin {
             return;
         }
 
-        $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-media.js' );
-        wp_enqueue_script(
+        TTS_Asset_Manager::enqueue_script(
             'tts-media',
-            plugin_dir_url( __FILE__ ) . 'js/tts-media.js',
-            array( 'tts-core', 'media-editor', 'jquery-ui-sortable' ),
-            $js_version,
-            true
+            'admin/js/tts-media.js',
+            array( 'tts-core', 'media-editor', 'jquery-ui-sortable' )
         );
     }
 
@@ -1017,14 +897,8 @@ class TTS_Admin {
             return;
         }
 
-        $js_version = filemtime( plugin_dir_path( __FILE__ ) . 'js/tts-dashboard-widget.js' );
-        wp_enqueue_script(
-            'tts-dashboard-widget',
-            plugin_dir_url( __FILE__ ) . 'js/tts-dashboard-widget.js',
-            array( 'jquery' ),
-            $js_version,
-            true
-        );
+        TTS_Asset_Manager::register_script( 'tts-dashboard-widget', 'admin/js/tts-dashboard-widget.js', array( 'jquery' ) );
+        wp_enqueue_script( 'tts-dashboard-widget' );
 
         wp_localize_script(
             'tts-dashboard-widget',

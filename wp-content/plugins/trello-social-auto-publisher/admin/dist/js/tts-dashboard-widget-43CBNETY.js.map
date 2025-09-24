@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../js/tts-dashboard-widget.js"],
+  "sourcesContent": ["(function($){\n    $(function(){\n        $('#tts-dashboard-widget-refresh').on('click', function(e){\n            e.preventDefault();\n            // Placeholder for AJAX refresh logic.\n        });\n    });\n})(jQuery);\n"],
+  "mappings": "OAAC,SAASA,EAAE,CACRA,EAAE,UAAU,CACRA,EAAE,+BAA+B,EAAE,GAAG,QAAS,SAASC,EAAE,CACtDA,EAAE,eAAe,CAErB,CAAC,CACL,CAAC,CACL,GAAG,MAAM",
+  "names": ["$", "e"]
+}

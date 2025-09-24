@@ -103,15 +103,6 @@ textarea:focus,
     margin-top: 4px;
     font-weight: 500;
 }
-        border: 2px solid #000 !important;
-        font-weight: bold !important;
-    }
-    
-    .tts-stat-number {
-        color: #000 !important;
-        font-weight: bold !important;
-    }
-}
 
 /* ==========================================================================
    Reduced Motion Support

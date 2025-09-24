@@ -1444,7 +1444,24 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
         if ( ! $integration || $integration['status'] !== 'active' ) {
             throw new Exception( 'Integration not found or inactive' );
         }
-        
+
+        $start_time        = microtime( true );
+        $integration_name  = isset( $integration['integration_name'] ) ? (string) $integration['integration_name'] : '';
+        $integration_slug  = sanitize_key( $integration_name );
+        if ( '' === $integration_slug ) {
+            $integration_slug = 'unknown';
+        }
+        $operation_context = array(
+            'operation_id'   => uniqid( 'integration_', true ),
+            'integration_id' => (int) $integration_id,
+            'integration'    => $integration_slug,
+            'data_type'      => sanitize_key( $data_type ),
+            'trigger'        => $this->detect_operation_trigger(),
+            'start_timestamp'=> $start_time,
+        );
+
+        do_action( 'tts_integration_hub_operation_started', $operation_context );
+
         $sync_methods = array(
             'hubspot' => array( $this, 'sync_hubspot_data' ),
             'salesforce' => array( $this, 'sync_salesforce_data' ),
@@ -1460,19 +1477,48 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
             'last_sync' => current_time( 'mysql' )
         );
         
-        if ( isset( $sync_methods[ $integration['integration_name'] ] ) ) {
-            $credentials = $this->decrypt_credentials( $integration['credentials'] );
-            $sync_result = call_user_func(
-                $sync_methods[ $integration['integration_name'] ],
-                $integration_id,
-                $credentials,
-                $data_type
-            );
-        } else {
-            // Return error for unsupported integrations
-            $sync_result = new WP_Error( 'unsupported_integration', 'Integration sync method not implemented' );
+        try {
+            if ( isset( $sync_methods[ $integration_slug ] ) ) {
+                $credentials = $this->decrypt_credentials( $integration['credentials'] );
+                $sync_result = call_user_func(
+                    $sync_methods[ $integration_slug ],
+                    $integration_id,
+                    $credentials,
+                    $data_type
+                );
+            } else {
+                // Return error for unsupported integrations
+                $sync_result = new WP_Error( 'unsupported_integration', 'Integration sync method not implemented' );
+            }
+        } catch ( Exception $exception ) {
+            $failure_context = $operation_context;
+            $failure_context['status']        = 'error';
+            $failure_context['end_timestamp'] = microtime( true );
+            $failure_context['duration_ms']   = round( ( $failure_context['end_timestamp'] - $start_time ) * 1000, 2 );
+
+            do_action( 'tts_integration_hub_operation_failed', $failure_context, $exception );
+            throw $exception;
         }
-        
+
+        $end_time            = microtime( true );
+        $completion_context   = $operation_context;
+        $completion_context['duration_ms']   = round( ( $end_time - $start_time ) * 1000, 2 );
+        $completion_context['end_timestamp'] = $end_time;
+
+        if ( is_wp_error( $sync_result ) ) {
+            $completion_context['status'] = 'error';
+            do_action( 'tts_integration_hub_operation_failed', $completion_context, $sync_result );
+        } else {
+            $completion_context['status']         = 'success';
+            $completion_context['synced_records'] = isset( $sync_result['synced_records'] ) ? (int) $sync_result['synced_records'] : 0;
+            $completion_context['failed_records'] = isset( $sync_result['failed_records'] ) ? (int) $sync_result['failed_records'] : 0;
+            if ( isset( $sync_result['last_sync'] ) ) {
+                $completion_context['last_sync'] = $sync_result['last_sync'];
+            }
+
+            do_action( 'tts_integration_hub_operation_completed', $completion_context, $sync_result );
+        }
+
         // Update integration sync status
         $wpdb->update(
             $integrations_table,
@@ -2109,6 +2155,29 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
     private function trigger_integration_sync( $integration_id ) {
         // Schedule immediate sync
         wp_schedule_single_event( time() + 60, 'tts_integration_sync_single', array( $integration_id ) );
+    }
+
+    /**
+     * Emit an observability event if telemetry is configured.
+     *
+     * @param string $level   Severity level.
+     * @param string $message Message body.
+     * @param array  $context Context payload.
+     */
+    private function detect_operation_trigger() {
+        if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
+            return 'ajax';
+        }
+
+        if ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) {
+            return 'cron';
+        }
+
+        if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+            return 'rest';
+        }
+
+        return is_admin() ? 'admin' : 'manual';
     }
 
     /**

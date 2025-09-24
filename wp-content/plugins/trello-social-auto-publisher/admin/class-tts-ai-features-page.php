@@ -35,20 +35,9 @@ class TTS_AI_Features_Page {
             return;
         }
 
-        wp_enqueue_style(
-            'tts-ai-features',
-            plugin_dir_url( __FILE__ ) . 'css/tts-ai-features.css',
-            array(),
-            '1.0.0'
-        );
-
-        wp_enqueue_script(
-            'tts-ai-features',
-            plugin_dir_url( __FILE__ ) . 'js/tts-ai-features.js',
-            array( 'jquery' ),
-            '1.0.0',
-            true
-        );
+        TTS_Asset_Manager::enqueue_style( 'tts-ai-features', 'admin/css/tts-ai-features.css' );
+        TTS_Asset_Manager::register_script( 'tts-ai-features', 'admin/js/tts-ai-features.js', array( 'jquery' ) );
+        wp_enqueue_script( 'tts-ai-features' );
 
         wp_localize_script(
             'tts-ai-features',

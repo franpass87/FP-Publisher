@@ -13,16 +13,28 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Performance optimization and caching utilities.
  */
 class TTS_Performance {
-    
+
     /**
      * Cache group for transients.
      */
     const CACHE_GROUP = 'tts_performance';
-    
+
     /**
      * Default cache expiration (5 minutes).
      */
     const DEFAULT_EXPIRATION = 300;
+
+    /**
+     * Option key storing aggregated profiling statistics.
+     */
+    const PROFILER_OPTION_KEY = 'tts_profiler_stats';
+
+    /**
+     * Active profiling sessions keyed by component.
+     *
+     * @var array
+     */
+    private static $active_profiles = array();
     
     /**
      * Get cached dashboard statistics.
@@ -588,6 +600,7 @@ class TTS_Performance {
             'cache' => $cache_stats,
             'server' => $server_info,
             'wordpress' => $wp_performance,
+            'profiler' => self::get_profiler_snapshot(),
             'load_time_ms' => round( $wp_time, 2 ),
             'last_updated' => current_time( 'mysql' ),
             'score' => self::calculate_performance_score( $db_time, $memory_usage, $memory_limit )
@@ -754,12 +767,646 @@ class TTS_Performance {
      */
     private static function count_tts_transients() {
         global $wpdb;
-        
+
         return (int) $wpdb->get_var( "
-            SELECT COUNT(*) 
-            FROM {$wpdb->options} 
+            SELECT COUNT(*)
+            FROM {$wpdb->options}
             WHERE option_name LIKE '_transient_tts_%'
         " );
+    }
+
+    /**
+     * Bootstrap profiling hooks for scheduler and integration hub modules.
+     */
+    public static function bootstrap_profiling_layer() {
+        static $bootstrapped = false;
+
+        if ( $bootstrapped ) {
+            return;
+        }
+
+        $bootstrapped = true;
+
+        add_action( 'tts_scheduler_job_started', array( __CLASS__, 'record_scheduler_job_started' ), 10, 1 );
+        add_action( 'tts_scheduler_job_completed', array( __CLASS__, 'record_scheduler_job_completed' ), 10, 2 );
+        add_action( 'tts_scheduler_job_failed', array( __CLASS__, 'record_scheduler_job_failed' ), 10, 2 );
+
+        add_action( 'tts_integration_hub_operation_started', array( __CLASS__, 'record_integration_operation_started' ), 10, 1 );
+        add_action( 'tts_integration_hub_operation_completed', array( __CLASS__, 'record_integration_operation_completed' ), 10, 2 );
+        add_action( 'tts_integration_hub_operation_failed', array( __CLASS__, 'record_integration_operation_failed' ), 10, 2 );
+    }
+
+    /**
+     * Handle scheduler profiling start event.
+     *
+     * @param array $context Profiling context.
+     */
+    public static function record_scheduler_job_started( $context ) {
+        if ( ! is_array( $context ) ) {
+            return;
+        }
+
+        $identifier = isset( $context['job_id'] ) ? (string) $context['job_id'] : self::build_profile_identifier( 'scheduler', $context );
+        self::start_profile( 'scheduler', $identifier, $context );
+    }
+
+    /**
+     * Handle scheduler profiling completion event.
+     *
+     * @param array $context Profiling context.
+     * @param mixed $result  Job result payload.
+     */
+    public static function record_scheduler_job_completed( $context, $result ) {
+        if ( ! is_array( $context ) ) {
+            return;
+        }
+
+        self::finalize_profile( 'scheduler', $context, 'success' );
+    }
+
+    /**
+     * Handle scheduler failure profiling event.
+     *
+     * @param array $context Profiling context.
+     * @param mixed $error   Error payload.
+     */
+    public static function record_scheduler_job_failed( $context, $error ) {
+        if ( ! is_array( $context ) ) {
+            return;
+        }
+
+        self::finalize_profile( 'scheduler', $context, 'error', array( 'error' => $error ) );
+    }
+
+    /**
+     * Handle integration hub profiling start event.
+     *
+     * @param array $context Profiling context.
+     */
+    public static function record_integration_operation_started( $context ) {
+        if ( ! is_array( $context ) ) {
+            return;
+        }
+
+        $identifier = isset( $context['operation_id'] ) ? (string) $context['operation_id'] : self::build_profile_identifier( 'integration_hub', $context );
+        self::start_profile( 'integration_hub', $identifier, $context );
+    }
+
+    /**
+     * Handle integration hub success event.
+     *
+     * @param array $context Profiling context.
+     * @param mixed $result  Operation result payload.
+     */
+    public static function record_integration_operation_completed( $context, $result ) {
+        if ( ! is_array( $context ) ) {
+            return;
+        }
+
+        if ( is_array( $result ) ) {
+            if ( isset( $result['synced_records'] ) && ! isset( $context['synced_records'] ) ) {
+                $context['synced_records'] = (int) $result['synced_records'];
+            }
+
+            if ( isset( $result['failed_records'] ) && ! isset( $context['failed_records'] ) ) {
+                $context['failed_records'] = (int) $result['failed_records'];
+            }
+
+            if ( isset( $result['last_sync'] ) && ! isset( $context['last_sync'] ) ) {
+                $context['last_sync'] = $result['last_sync'];
+            }
+        }
+
+        self::finalize_profile( 'integration_hub', $context, 'success' );
+    }
+
+    /**
+     * Handle integration hub failure event.
+     *
+     * @param array $context Profiling context.
+     * @param mixed $error   Error payload.
+     */
+    public static function record_integration_operation_failed( $context, $error ) {
+        if ( ! is_array( $context ) ) {
+            return;
+        }
+
+        self::finalize_profile( 'integration_hub', $context, 'error', array( 'error' => $error ) );
+    }
+
+    /**
+     * Start profiling for a given component.
+     *
+     * @param string $component Component identifier.
+     * @param string $identifier Session identifier.
+     * @param array  $context    Context payload.
+     */
+    private static function start_profile( $component, $identifier, array $context ) {
+        if ( '' === $identifier ) {
+            $identifier = self::build_profile_identifier( $component, $context );
+        }
+
+        if ( ! isset( self::$active_profiles[ $component ] ) ) {
+            self::$active_profiles[ $component ] = array();
+        }
+
+        $start_time = isset( $context['start_timestamp'] ) ? (float) $context['start_timestamp'] : microtime( true );
+        self::$active_profiles[ $component ][ $identifier ] = array(
+            'started_at' => $start_time,
+            'context'    => $context,
+        );
+    }
+
+    /**
+     * Finalize profiling for a component and store results.
+     *
+     * @param string $component Component identifier.
+     * @param array  $context   Context payload.
+     * @param string $status    Operation status (success|error).
+     * @param array  $extra     Additional payload data.
+     */
+    private static function finalize_profile( $component, array $context, $status, array $extra = array() ) {
+        $identifier = '';
+
+        if ( 'scheduler' === $component ) {
+            $identifier = isset( $context['job_id'] ) ? (string) $context['job_id'] : '';
+        } elseif ( 'integration_hub' === $component ) {
+            $identifier = isset( $context['operation_id'] ) ? (string) $context['operation_id'] : '';
+        }
+
+        if ( '' === $identifier ) {
+            $identifier = self::build_profile_identifier( $component, $context );
+        }
+
+        $start_data = null;
+        if ( isset( self::$active_profiles[ $component ][ $identifier ] ) ) {
+            $start_data = self::$active_profiles[ $component ][ $identifier ];
+            unset( self::$active_profiles[ $component ][ $identifier ] );
+
+            if ( empty( self::$active_profiles[ $component ] ) ) {
+                unset( self::$active_profiles[ $component ] );
+            }
+        }
+
+        $start_time = isset( $context['start_timestamp'] ) ? (float) $context['start_timestamp'] : microtime( true );
+
+        if ( $start_data && isset( $start_data['started_at'] ) ) {
+            $start_time = (float) $start_data['started_at'];
+        }
+
+        $end_time = isset( $context['end_timestamp'] ) ? (float) $context['end_timestamp'] : microtime( true );
+        $duration_ms = isset( $context['duration_ms'] )
+            ? (float) $context['duration_ms']
+            : ( $end_time - $start_time ) * 1000;
+
+        $queue_latency_ms = null;
+
+        if ( isset( $context['queue_latency_ms'] ) ) {
+            $queue_latency_ms = (float) $context['queue_latency_ms'];
+        } else {
+            $queued_at = null;
+
+            if ( isset( $context['queued_at'] ) ) {
+                $queued_at = (float) $context['queued_at'];
+            } elseif ( $start_data && isset( $start_data['context']['queued_at'] ) ) {
+                $queued_at = (float) $start_data['context']['queued_at'];
+            }
+
+            if ( null !== $queued_at ) {
+                $queue_latency_ms = max( 0, ( $start_time - $queued_at ) * 1000 );
+            }
+        }
+
+        $start_context = $start_data ? (array) $start_data['context'] : array();
+
+        $sample = self::normalize_profile_sample(
+            $component,
+            $context,
+            $status,
+            $duration_ms,
+            $queue_latency_ms,
+            $start_context,
+            $extra
+        );
+
+        if ( empty( $sample ) ) {
+            return;
+        }
+
+        self::persist_profiling_sample( $component, $sample );
+        self::export_sample_to_metrics( $component, $sample );
+    }
+
+    /**
+     * Build a normalized profiling sample for a component.
+     *
+     * @param string $component        Component identifier.
+     * @param array  $context          Context payload.
+     * @param string $status           Operation status.
+     * @param float  $duration_ms      Operation duration in milliseconds.
+     * @param float  $queue_latency_ms Queue latency in milliseconds.
+     * @param array  $start_context    Original start context.
+     * @param array  $extra            Extra payload data.
+     *
+     * @return array Normalized sample.
+     */
+    private static function normalize_profile_sample( $component, array $context, $status, $duration_ms, $queue_latency_ms, array $start_context = array(), array $extra = array() ) {
+        $timestamp = current_time( 'mysql' );
+
+        if ( 'scheduler' === $component ) {
+            $job_id    = isset( $context['job_id'] ) ? (string) $context['job_id'] : ( $start_context['job_id'] ?? self::build_profile_identifier( $component, $context ) );
+            $post_id   = isset( $context['post_id'] ) ? absint( $context['post_id'] ) : absint( $start_context['post_id'] ?? 0 );
+            $client_id = isset( $context['client_id'] ) ? absint( $context['client_id'] ) : absint( $start_context['client_id'] ?? 0 );
+            $channel   = isset( $context['channel'] ) ? sanitize_key( $context['channel'] ) : sanitize_key( $start_context['channel'] ?? '' );
+            $attempt   = isset( $context['attempt'] ) ? absint( $context['attempt'] ) : absint( $start_context['attempt'] ?? 0 );
+            $max_attempts = isset( $context['max_attempts'] ) ? absint( $context['max_attempts'] ) : absint( $start_context['max_attempts'] ?? 0 );
+            $queued_by = isset( $context['queued_by'] ) ? sanitize_key( $context['queued_by'] ) : sanitize_key( $start_context['queued_by'] ?? '' );
+            $severity  = isset( $context['severity'] ) ? sanitize_key( $context['severity'] ) : sanitize_key( $start_context['severity'] ?? '' );
+
+            $sample = array(
+                'id'               => $job_id,
+                'status'           => $status,
+                'duration_ms'      => round( max( 0, (float) $duration_ms ), 2 ),
+                'queue_latency_ms' => isset( $queue_latency_ms ) ? round( max( 0, (float) $queue_latency_ms ), 2 ) : null,
+                'attempt'          => $attempt,
+                'max_attempts'     => $max_attempts,
+                'timestamp'        => $timestamp,
+                'post_id'          => $post_id,
+                'client_id'        => $client_id,
+                'channel'          => $channel,
+                'queued_by'        => $queued_by,
+            );
+
+            if ( $severity ) {
+                $sample['severity'] = $severity;
+            }
+
+            if ( 'error' === $status && isset( $extra['error'] ) ) {
+                $sample = array_merge( $sample, self::extract_error_details( $extra['error'] ) );
+            }
+
+            return $sample;
+        }
+
+        if ( 'integration_hub' === $component ) {
+            $operation_id    = isset( $context['operation_id'] ) ? (string) $context['operation_id'] : self::build_profile_identifier( $component, $context );
+            $integration_id  = isset( $context['integration_id'] ) ? absint( $context['integration_id'] ) : absint( $start_context['integration_id'] ?? 0 );
+            $integration     = isset( $context['integration'] ) ? sanitize_key( $context['integration'] ) : sanitize_key( $start_context['integration'] ?? '' );
+            $operation       = isset( $context['data_type'] ) ? sanitize_key( $context['data_type'] ) : sanitize_key( $start_context['data_type'] ?? '' );
+            $trigger         = isset( $context['trigger'] ) ? sanitize_key( $context['trigger'] ) : sanitize_key( $start_context['trigger'] ?? '' );
+            $synced_records  = isset( $context['synced_records'] ) ? absint( $context['synced_records'] ) : 0;
+            $failed_records  = isset( $context['failed_records'] ) ? absint( $context['failed_records'] ) : 0;
+            $last_sync       = isset( $context['last_sync'] ) ? sanitize_text_field( $context['last_sync'] ) : '';
+
+            $sample = array(
+                'id'              => $operation_id,
+                'status'          => $status,
+                'duration_ms'     => round( max( 0, (float) $duration_ms ), 2 ),
+                'timestamp'       => $timestamp,
+                'integration_id'  => $integration_id,
+                'integration'     => $integration,
+                'operation'       => $operation,
+                'trigger'         => $trigger,
+                'synced_records'  => $synced_records,
+                'failed_records'  => $failed_records,
+            );
+
+            if ( $last_sync ) {
+                $sample['last_sync'] = $last_sync;
+            }
+
+            if ( 'error' === $status && isset( $extra['error'] ) ) {
+                $sample = array_merge( $sample, self::extract_error_details( $extra['error'] ) );
+            }
+
+            return $sample;
+        }
+
+        return array();
+    }
+
+    /**
+     * Extract error details from various error payload types.
+     *
+     * @param mixed $error Error payload.
+     *
+     * @return array
+     */
+    private static function extract_error_details( $error ) {
+        $code    = 'unknown';
+        $message = '';
+
+        if ( is_wp_error( $error ) ) {
+            $code    = $error->get_error_code();
+            $message = $error->get_error_message();
+        } elseif ( $error instanceof \Throwable ) {
+            $code    = $error->getCode() ? (string) $error->getCode() : 'exception';
+            $message = $error->getMessage();
+        } elseif ( is_array( $error ) ) {
+            $code    = isset( $error['code'] ) ? (string) $error['code'] : $code;
+            $message = isset( $error['message'] ) ? (string) $error['message'] : $message;
+        } elseif ( is_string( $error ) ) {
+            $message = $error;
+        }
+
+        $message = substr( wp_strip_all_tags( (string) $message ), 0, 200 );
+
+        return array(
+            'error_code'    => sanitize_key( $code ),
+            'error_message' => sanitize_text_field( $message ),
+        );
+    }
+
+    /**
+     * Persist profiling sample and update aggregates.
+     *
+     * @param string $component Component identifier.
+     * @param array  $sample    Normalized sample data.
+     */
+    private static function persist_profiling_sample( $component, array $sample ) {
+        $stats = self::get_profiler_storage();
+
+        if ( ! isset( $stats[ $component ] ) || ! is_array( $stats[ $component ] ) ) {
+            $stats[ $component ] = self::get_default_profiler_bucket();
+        }
+
+        $bucket = $stats[ $component ];
+
+        $bucket['count']         = isset( $bucket['count'] ) ? (int) $bucket['count'] + 1 : 1;
+        $bucket['total_duration_ms'] = isset( $bucket['total_duration_ms'] ) ? (float) $bucket['total_duration_ms'] + (float) $sample['duration_ms'] : (float) $sample['duration_ms'];
+
+        if ( isset( $sample['queue_latency_ms'] ) && null !== $sample['queue_latency_ms'] ) {
+            $bucket['queue_samples']   = isset( $bucket['queue_samples'] ) ? (int) $bucket['queue_samples'] + 1 : 1;
+            $bucket['total_queue_ms'] = isset( $bucket['total_queue_ms'] ) ? (float) $bucket['total_queue_ms'] + (float) $sample['queue_latency_ms'] : (float) $sample['queue_latency_ms'];
+        }
+
+        if ( 'error' === $sample['status'] ) {
+            $bucket['errors'] = isset( $bucket['errors'] ) ? (int) $bucket['errors'] + 1 : 1;
+        }
+
+        $bucket['max_duration_ms'] = isset( $bucket['max_duration_ms'] ) ? max( (float) $bucket['max_duration_ms'], (float) $sample['duration_ms'] ) : (float) $sample['duration_ms'];
+        $bucket['min_duration_ms'] = isset( $bucket['min_duration_ms'] ) && $bucket['min_duration_ms'] > 0
+            ? min( (float) $bucket['min_duration_ms'], (float) $sample['duration_ms'] )
+            : (float) $sample['duration_ms'];
+
+        $recent = isset( $bucket['recent'] ) && is_array( $bucket['recent'] ) ? $bucket['recent'] : array();
+        $recent[] = $sample;
+        if ( count( $recent ) > 10 ) {
+            $recent = array_slice( $recent, -10 );
+        }
+
+        $bucket['recent'] = $recent;
+        $bucket['last']   = $sample;
+
+        $stats[ $component ] = $bucket;
+
+        update_option( self::PROFILER_OPTION_KEY, $stats, false );
+        wp_cache_set( 'profiler_stats', $stats, self::CACHE_GROUP );
+    }
+
+    /**
+     * Retrieve profiling storage from cache or persistent storage.
+     *
+     * @return array
+     */
+    private static function get_profiler_storage() {
+        $stats = wp_cache_get( 'profiler_stats', self::CACHE_GROUP );
+
+        if ( false === $stats ) {
+            $stats = get_option( self::PROFILER_OPTION_KEY, array() );
+            if ( ! is_array( $stats ) ) {
+                $stats = array();
+            }
+
+            $stats = wp_parse_args(
+                $stats,
+                array(
+                    'scheduler'       => self::get_default_profiler_bucket(),
+                    'integration_hub' => self::get_default_profiler_bucket(),
+                )
+            );
+
+            wp_cache_set( 'profiler_stats', $stats, self::CACHE_GROUP );
+        } else {
+            if ( ! isset( $stats['scheduler'] ) || ! is_array( $stats['scheduler'] ) ) {
+                $stats['scheduler'] = self::get_default_profiler_bucket();
+            }
+
+            if ( ! isset( $stats['integration_hub'] ) || ! is_array( $stats['integration_hub'] ) ) {
+                $stats['integration_hub'] = self::get_default_profiler_bucket();
+            }
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Default profiler bucket structure.
+     *
+     * @return array
+     */
+    private static function get_default_profiler_bucket() {
+        return array(
+            'count'             => 0,
+            'errors'            => 0,
+            'total_duration_ms' => 0,
+            'total_queue_ms'    => 0,
+            'queue_samples'     => 0,
+            'max_duration_ms'   => 0,
+            'min_duration_ms'   => 0,
+            'last'              => array(),
+            'recent'            => array(),
+        );
+    }
+
+    /**
+     * Return summarized profiler statistics for dashboards.
+     *
+     * @return array
+     */
+    public static function get_profiler_snapshot() {
+        $stats = self::get_profiler_storage();
+
+        return array(
+            'scheduler'       => self::prepare_profiler_bucket( $stats['scheduler'] ),
+            'integration_hub' => self::prepare_profiler_bucket( $stats['integration_hub'] ),
+        );
+    }
+
+    /**
+     * Build user-facing snapshot for a profiler bucket.
+     *
+     * @param array $bucket Raw profiler bucket.
+     *
+     * @return array
+     */
+    private static function prepare_profiler_bucket( array $bucket ) {
+        $total_runs = isset( $bucket['count'] ) ? (int) $bucket['count'] : 0;
+        $errors     = isset( $bucket['errors'] ) ? (int) $bucket['errors'] : 0;
+        $avg        = $total_runs > 0 ? round( (float) $bucket['total_duration_ms'] / $total_runs, 2 ) : 0;
+        $avg_queue  = ( ! empty( $bucket['queue_samples'] ) ) ? round( (float) $bucket['total_queue_ms'] / (int) $bucket['queue_samples'], 2 ) : null;
+
+        return array(
+            'total_runs'          => $total_runs,
+            'error_rate'          => $total_runs > 0 ? round( ( $errors / $total_runs ) * 100, 2 ) : 0,
+            'avg_duration_ms'     => $avg,
+            'avg_queue_latency_ms' => $avg_queue,
+            'max_duration_ms'     => isset( $bucket['max_duration_ms'] ) ? round( (float) $bucket['max_duration_ms'], 2 ) : 0,
+            'min_duration_ms'     => isset( $bucket['min_duration_ms'] ) && $bucket['min_duration_ms'] > 0 ? round( (float) $bucket['min_duration_ms'], 2 ) : 0,
+            'last_run'            => isset( $bucket['last'] ) ? $bucket['last'] : array(),
+            'recent'              => isset( $bucket['recent'] ) ? $bucket['recent'] : array(),
+        );
+    }
+
+    /**
+     * Build a deterministic identifier for profiling sessions.
+     *
+     * @param string $component Component identifier.
+     * @param array  $context   Context payload.
+     *
+     * @return string
+     */
+    private static function build_profile_identifier( $component, array $context ) {
+        $seed = wp_json_encode( array( $component, $context, microtime( true ) ) );
+        return substr( md5( (string) $seed ), 0, 12 );
+    }
+
+    /**
+     * Export profiling sample to the external metrics system.
+     *
+     * @param string $component Component identifier.
+     * @param array  $sample    Normalized sample data.
+     */
+    private static function export_sample_to_metrics( $component, array $sample ) {
+        if ( 'scheduler' === $component ) {
+            self::emit_metric(
+                'scheduler_job_duration_ms',
+                $sample['duration_ms'],
+                array(
+                    'channel' => $sample['channel'] ?? 'unknown',
+                    'status'  => $sample['status'],
+                )
+            );
+
+            if ( isset( $sample['queue_latency_ms'] ) && null !== $sample['queue_latency_ms'] ) {
+                self::emit_metric(
+                    'scheduler_queue_latency_ms',
+                    $sample['queue_latency_ms'],
+                    array(
+                        'channel' => $sample['channel'] ?? 'unknown',
+                    )
+                );
+            }
+
+            self::emit_metric(
+                'scheduler_job_attempts',
+                isset( $sample['attempt'] ) ? $sample['attempt'] : 0,
+                array(
+                    'channel' => $sample['channel'] ?? 'unknown',
+                    'status'  => $sample['status'],
+                )
+            );
+
+            if ( 'error' === $sample['status'] ) {
+                self::emit_metric(
+                    'scheduler_job_errors_total',
+                    1,
+                    array(
+                        'channel'  => $sample['channel'] ?? 'unknown',
+                        'severity' => $sample['severity'] ?? 'unknown',
+                    ),
+                    'counter'
+                );
+            }
+
+            return;
+        }
+
+        if ( 'integration_hub' === $component ) {
+            self::emit_metric(
+                'integration_operation_duration_ms',
+                $sample['duration_ms'],
+                array(
+                    'integration' => $sample['integration'] ?? 'unknown',
+                    'operation'   => $sample['operation'] ?? 'generic',
+                    'status'      => $sample['status'],
+                )
+            );
+
+            self::emit_metric(
+                'integration_records_synced',
+                isset( $sample['synced_records'] ) ? $sample['synced_records'] : 0,
+                array(
+                    'integration' => $sample['integration'] ?? 'unknown',
+                    'operation'   => $sample['operation'] ?? 'generic',
+                ),
+                'counter'
+            );
+
+            if ( ! empty( $sample['failed_records'] ) ) {
+                self::emit_metric(
+                    'integration_records_failed',
+                    $sample['failed_records'],
+                    array(
+                        'integration' => $sample['integration'] ?? 'unknown',
+                        'operation'   => $sample['operation'] ?? 'generic',
+                    ),
+                    'counter'
+                );
+            }
+
+            if ( 'error' === $sample['status'] ) {
+                self::emit_metric(
+                    'integration_operation_errors_total',
+                    1,
+                    array(
+                        'integration' => $sample['integration'] ?? 'unknown',
+                        'operation'   => $sample['operation'] ?? 'generic',
+                        'trigger'     => $sample['trigger'] ?? 'unspecified',
+                    ),
+                    'counter'
+                );
+            }
+        }
+    }
+
+    /**
+     * Emit a metric payload via the metrics export hook.
+     *
+     * @param string $metric Metric name.
+     * @param float  $value  Metric value.
+     * @param array  $tags   Metric tags.
+     * @param string $type   Metric type (gauge|counter).
+     */
+    private static function emit_metric( $metric, $value, array $tags = array(), $type = 'gauge' ) {
+        $clean_tags = array();
+
+        foreach ( $tags as $key => $tag_value ) {
+            $key = sanitize_key( $key );
+            if ( '' === $key || is_array( $tag_value ) || is_object( $tag_value ) ) {
+                continue;
+            }
+
+            $clean_tags[ $key ] = is_numeric( $tag_value )
+                ? (string) $tag_value
+                : sanitize_text_field( (string) $tag_value );
+        }
+
+        /**
+         * Allow external systems to capture metric samples emitted by the plugin.
+         *
+         * @param array $payload Metric payload.
+         */
+        do_action(
+            'tts_metrics_emit',
+            array(
+                'metric'      => sanitize_key( $metric ),
+                'value'       => (float) $value,
+                'type'        => sanitize_key( $type ),
+                'tags'        => $clean_tags,
+                'recorded_at' => current_time( 'mysql' ),
+            )
+        );
     }
     
     /**
@@ -1083,6 +1730,7 @@ class TTS_Performance {
 
 // Initialize performance optimizations
 add_action( 'plugins_loaded', array( 'TTS_Performance', 'enable_object_cache' ) );
+add_action( 'plugins_loaded', array( 'TTS_Performance', 'bootstrap_profiling_layer' ) );
 add_action( 'plugins_loaded', array( 'TTS_Performance', 'schedule_cleanup' ) );
 add_action( 'tts_database_cleanup', array( 'TTS_Performance', 'optimize_database' ) );
 add_action( 'tts_database_cleanup', array( 'TTS_Performance', 'cleanup_expired_transients' ) );
