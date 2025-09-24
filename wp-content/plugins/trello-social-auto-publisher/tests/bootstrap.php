@@ -9,6 +9,10 @@ if ( ! defined( 'ABSPATH' ) ) {
     define( 'ABSPATH', __DIR__ . '/../' );
 }
 
+if ( ! defined( 'TSAP_PLUGIN_DIR' ) ) {
+    define( 'TSAP_PLUGIN_DIR', dirname( __DIR__ ) . '/' );
+}
+
 if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
     define( 'MINUTE_IN_SECONDS', 60 );
 }
@@ -34,6 +38,8 @@ $GLOBALS['tts_test_client_posts']    = array();
 $GLOBALS['tts_test_wpdb_results']    = array();
 $GLOBALS['tts_localized_scripts']    = array();
 $GLOBALS['tts_enqueued_scripts']     = array();
+$GLOBALS['tts_enqueued_styles']      = array();
+$GLOBALS['tts_registered_scripts']   = array();
 $GLOBALS['tts_registered_actions']   = array();
 $GLOBALS['tts_registered_filters']   = array();
 $GLOBALS['tts_action_callbacks']     = array();
@@ -315,6 +321,53 @@ if ( ! function_exists( 'wp_localize_script' ) ) {
 if ( ! function_exists( 'wp_enqueue_script' ) ) {
     function wp_enqueue_script( $handle, $src = '', $deps = array(), $ver = false, $in_footer = false ) {
         $GLOBALS['tts_enqueued_scripts'][] = $handle;
+    }
+}
+
+if ( ! function_exists( 'wp_register_script' ) ) {
+    function wp_register_script( $handle, $src = '', $deps = array(), $ver = false, $in_footer = false ) {
+        $GLOBALS['tts_registered_scripts'][ $handle ] = array(
+            'src'       => $src,
+            'deps'      => $deps,
+            'ver'       => $ver,
+            'in_footer' => $in_footer,
+        );
+
+        return true;
+    }
+}
+
+if ( ! function_exists( 'wp_enqueue_style' ) ) {
+    function wp_enqueue_style( $handle, $src = '', $deps = array(), $ver = false, $media = 'all' ) {
+        $GLOBALS['tts_enqueued_styles'][] = $handle;
+        return true;
+    }
+}
+
+if ( ! function_exists( 'plugins_url' ) ) {
+    function plugins_url( $path = '', $plugin = '' ) {
+        $plugin_dir = '';
+
+        if ( $plugin ) {
+            $plugin_dir = dirname( str_replace( '\\', '/', (string) $plugin ) );
+            if ( '.' === $plugin_dir ) {
+                $plugin_dir = '';
+            }
+        }
+
+        $base = 'https://example.com/wp-content/plugins';
+
+        if ( '' !== $plugin_dir ) {
+            $base .= '/' . trim( $plugin_dir, '/' );
+        }
+
+        $path = ltrim( str_replace( '\\', '/', (string) $path ), '/' );
+
+        if ( '' !== $path ) {
+            $base .= '/' . $path;
+        }
+
+        return $base;
     }
 }
 
@@ -1129,6 +1182,8 @@ function tts_reset_test_state() {
     $GLOBALS['tts_test_wpdb_results']   = array();
     $GLOBALS['tts_localized_scripts']   = array();
     $GLOBALS['tts_enqueued_scripts']    = array();
+    $GLOBALS['tts_enqueued_styles']     = array();
+    $GLOBALS['tts_registered_scripts']  = array();
     $GLOBALS['tts_registered_actions']  = array();
     $GLOBALS['tts_registered_filters']  = array();
     $GLOBALS['tts_action_callbacks']    = array();
@@ -1156,5 +1211,6 @@ function tts_reset_test_state() {
 
 tts_reset_test_state();
 
+require_once __DIR__ . '/../includes/class-tts-asset-manager.php';
 require_once __DIR__ . '/../includes/class-tts-content-source.php';
 require_once __DIR__ . '/../admin/class-tts-admin.php';
