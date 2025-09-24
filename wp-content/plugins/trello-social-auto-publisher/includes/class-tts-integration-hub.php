@@ -2004,19 +2004,19 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
     private function fetch_woocommerce_data( $data_type ) {
         $data = array();
         $limit = 100; // Limit results for performance
-        
+
         switch ( $data_type ) {
             case 'products':
                 $products = wc_get_products( array( 'limit' => $limit, 'status' => 'publish' ) );
                 foreach ( $products as $product ) {
                     $data[] = array(
-                        'id' => $product->get_id(),
-                        'name' => $product->get_name(),
-                        'price' => $product->get_price(),
-                        'sku' => $product->get_sku(),
+                        'id'           => $product->get_id(),
+                        'name'         => $product->get_name(),
+                        'price'        => $product->get_price(),
+                        'sku'          => $product->get_sku(),
                         'stock_status' => $product->get_stock_status(),
-                        'categories' => wp_list_pluck( $product->get_category_ids(), 'name' ),
-                        'created_date' => $product->get_date_created()->date( 'Y-m-d H:i:s' )
+                        'categories'   => $this->resolve_woocommerce_category_names( $product->get_category_ids() ),
+                        'created_date' => $this->format_wc_datetime( $product->get_date_created() ),
                     );
                 }
                 break;
@@ -2025,12 +2025,12 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
                 $orders = wc_get_orders( array( 'limit' => $limit ) );
                 foreach ( $orders as $order ) {
                     $data[] = array(
-                        'id' => $order->get_id(),
-                        'status' => $order->get_status(),
-                        'total' => $order->get_total(),
-                        'customer_id' => $order->get_customer_id(),
+                        'id'            => $order->get_id(),
+                        'status'        => $order->get_status(),
+                        'total'         => $order->get_total(),
+                        'customer_id'   => $order->get_customer_id(),
                         'billing_email' => $order->get_billing_email(),
-                        'created_date' => $order->get_date_created()->date( 'Y-m-d H:i:s' )
+                        'created_date'  => $this->format_wc_datetime( $order->get_date_created() ),
                     );
                 }
                 break;
@@ -2074,8 +2074,77 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
                 }
                 break;
         }
-        
+
         return $data;
+    }
+
+    /**
+     * Resolve WooCommerce category IDs to human readable names while preserving order.
+     *
+     * @param array $category_ids Raw category identifiers returned by WooCommerce.
+     *
+     * @return array List of category names.
+     */
+    private function resolve_woocommerce_category_names( $category_ids ) {
+        if ( empty( $category_ids ) || ! is_array( $category_ids ) ) {
+            return array();
+        }
+
+        if ( ! function_exists( 'get_term' ) ) {
+            return array();
+        }
+
+        $names = array();
+
+        foreach ( $category_ids as $category_id ) {
+            $term_id = absint( $category_id );
+            if ( $term_id <= 0 ) {
+                continue;
+            }
+
+            $term = get_term( $term_id, 'product_cat' );
+
+            if ( $term && ! is_wp_error( $term ) && isset( $term->name ) ) {
+                $names[] = (string) $term->name;
+                continue;
+            }
+
+            if ( is_wp_error( $term ) ) {
+                $this->maybe_record_event(
+                    'warning',
+                    __( 'WooCommerce category lookup failed.', 'fp-publisher' ),
+                    array(
+                        'term_id' => $term_id,
+                        'error'   => $term->get_error_message(),
+                    )
+                );
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * Safely convert WooCommerce date objects to strings.
+     *
+     * @param mixed $datetime Date value returned by WooCommerce models.
+     *
+     * @return string Normalized date string or empty string when unavailable.
+     */
+    private function format_wc_datetime( $datetime ) {
+        if ( class_exists( 'WC_DateTime' ) && $datetime instanceof WC_DateTime ) {
+            return $datetime->date( 'Y-m-d H:i:s' );
+        }
+
+        if ( $datetime instanceof DateTimeInterface ) {
+            return $datetime->format( 'Y-m-d H:i:s' );
+        }
+
+        if ( is_object( $datetime ) && method_exists( $datetime, 'date' ) ) {
+            return (string) $datetime->date( 'Y-m-d H:i:s' );
+        }
+
+        return '';
     }
 
     /**
