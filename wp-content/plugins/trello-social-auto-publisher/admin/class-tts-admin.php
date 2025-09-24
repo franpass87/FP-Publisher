@@ -9,6 +9,10 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+if ( ! defined( 'MB_IN_BYTES' ) ) {
+    define( 'MB_IN_BYTES', 1024 * 1024 );
+}
+
 /**
  * Handles admin pages and filters.
  */
