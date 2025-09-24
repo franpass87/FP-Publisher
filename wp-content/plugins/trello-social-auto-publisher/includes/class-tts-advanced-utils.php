@@ -191,21 +191,101 @@ class TTS_Advanced_Utils {
                     'export_date' => current_time( 'mysql' )
                 );
             }
-            
+
+            /**
+             * Allow third-parties to adjust the export payload before encoding.
+             *
+             * @since 1.0.0
+             *
+             * @param array $export_data Prepared export payload.
+             * @param array $options     Export options supplied by the user.
+             */
+            $export_data = apply_filters( 'tts_export_package', $export_data, $options );
+
+            $encoded_payload = self::encode_export_payload( $export_data );
+
+            if ( is_wp_error( $encoded_payload ) ) {
+                return array(
+                    'success'    => false,
+                    'error'      => $encoded_payload->get_error_message(),
+                    'error_code' => $encoded_payload->get_error_code(),
+                );
+            }
+
             return array(
-                'success' => true,
-                'data' => $export_data,
-                'file_size' => strlen( json_encode( $export_data ) )
+                'success'   => true,
+                'data'      => $export_data,
+                'file_size' => strlen( $encoded_payload ),
+                'encoded'   => $encoded_payload,
             );
-            
+
         } catch ( Exception $e ) {
             return array(
                 'success' => false,
-                'error' => 'Export failed: ' . $e->getMessage()
+                'error'   => 'Export failed: ' . $e->getMessage()
             );
         }
     }
-    
+
+    /**
+     * Encode the export payload to JSON with resilient error handling.
+     *
+     * @param array $export_data Export payload.
+     *
+     * @return string|WP_Error
+     */
+    private static function encode_export_payload( array $export_data ) {
+        $options = apply_filters( 'tts_export_json_options', JSON_PRETTY_PRINT );
+
+        if ( ! is_int( $options ) ) {
+            $options = JSON_PRETTY_PRINT;
+        }
+
+        $encoded = wp_json_encode( $export_data, $options );
+
+        if ( false === $encoded ) {
+            $error_message = function_exists( 'json_last_error_msg' ) ? json_last_error_msg() : 'Unknown error';
+            $error_message = sanitize_text_field( (string) $error_message );
+
+            return new WP_Error(
+                'tts_export_encoding_failed',
+                sprintf( __( 'Failed to encode export payload: %s', 'fp-publisher' ), $error_message )
+            );
+        }
+
+        if ( function_exists( 'json_last_error' ) ) {
+            $last_error = json_last_error();
+            if ( JSON_ERROR_NONE !== $last_error ) {
+                $error_message = function_exists( 'json_last_error_msg' ) ? json_last_error_msg() : 'Unknown error';
+                $error_message = sanitize_text_field( (string) $error_message );
+
+                return new WP_Error(
+                    'tts_export_encoding_failed',
+                    sprintf( __( 'Failed to encode export payload: %s', 'fp-publisher' ), $error_message )
+                );
+            }
+        }
+
+        /**
+         * Filter the encoded export payload prior to persistence.
+         *
+         * @since 1.0.0
+         *
+         * @param string $encoded     JSON encoded payload.
+         * @param array  $export_data Original export data.
+         */
+        $encoded = apply_filters( 'tts_export_encoded_payload', $encoded, $export_data );
+
+        if ( ! is_string( $encoded ) || '' === $encoded ) {
+            return new WP_Error(
+                'tts_export_encoding_failed',
+                __( 'Failed to encode export payload: invalid encoded data.', 'fp-publisher' )
+            );
+        }
+
+        return $encoded;
+    }
+
     /**
      * Import plugin settings and data.
      *
