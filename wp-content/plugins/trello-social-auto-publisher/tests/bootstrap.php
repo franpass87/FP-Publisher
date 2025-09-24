@@ -48,6 +48,11 @@ $GLOBALS['tts_current_screen']       = null;
 $GLOBALS['tts_test_transients']      = array();
 $GLOBALS['tts_is_user_logged_in']    = null;
 $GLOBALS['tts_http_responses']       = array();
+$GLOBALS['tts_registered_post_types'] = array();
+$GLOBALS['tts_registered_post_meta']  = array();
+$GLOBALS['tts_registered_roles']      = array();
+$GLOBALS['tts_test_posts']            = array();
+$GLOBALS['tts_deleted_posts']         = array();
 
 if ( ! function_exists( '__' ) ) {
     function __( $text, $domain = null ) {
@@ -70,6 +75,14 @@ if ( ! function_exists( 'esc_html__' ) ) {
 if ( ! function_exists( 'esc_html_e' ) ) {
     function esc_html_e( $text, $domain = null ) {
         echo esc_html__( $text, $domain );
+    }
+}
+
+if ( ! function_exists( '_n' ) ) {
+    function _n( $single, $plural, $number, $domain = null ) {
+        unset( $domain );
+
+        return 1 === (int) $number ? $single : $plural;
     }
 }
 
@@ -103,9 +116,39 @@ if ( ! function_exists( 'esc_url' ) ) {
     }
 }
 
+if ( ! function_exists( 'esc_url_raw' ) ) {
+    function esc_url_raw( $url ) {
+        return (string) $url;
+    }
+}
+
 if ( ! function_exists( 'esc_js' ) ) {
     function esc_js( $text ) {
         return addslashes( (string) $text );
+    }
+}
+
+if ( ! function_exists( 'wp_strip_all_tags' ) ) {
+    function wp_strip_all_tags( $text ) {
+        return trim( strip_tags( (string) $text ) );
+    }
+}
+
+if ( ! function_exists( 'wp_trim_words' ) ) {
+    function wp_trim_words( $text, $num_words = 55 ) {
+        $words = preg_split( '/\s+/', trim( (string) $text ) );
+
+        if ( false === $words ) {
+            return '';
+        }
+
+        if ( count( $words ) <= $num_words ) {
+            return implode( ' ', $words );
+        }
+
+        $words = array_slice( $words, 0, $num_words );
+
+        return implode( ' ', $words );
     }
 }
 
@@ -172,6 +215,44 @@ if ( ! function_exists( 'plugin_dir_path' ) ) {
     }
 }
 
+if ( ! function_exists( 'get_site_url' ) ) {
+    function get_site_url() {
+        return 'http://example.com';
+    }
+}
+
+if ( ! function_exists( 'trailingslashit' ) ) {
+    function trailingslashit( $string ) {
+        return rtrim( (string) $string, '/\\' ) . '/';
+    }
+}
+
+if ( ! function_exists( 'wp_upload_dir' ) ) {
+    function wp_upload_dir() {
+        return array(
+            'path' => sys_get_temp_dir(),
+            'url'  => 'http://example.com/uploads',
+            'error'=> false,
+        );
+    }
+}
+
+if ( ! function_exists( 'register_post_type' ) ) {
+    function register_post_type( $post_type, $args = array() ) {
+        $GLOBALS['tts_registered_post_types'][ $post_type ] = $args;
+
+        return true;
+    }
+}
+
+if ( ! function_exists( 'register_post_meta' ) ) {
+    function register_post_meta( $post_type, $meta_key, $args ) {
+        $GLOBALS['tts_registered_post_meta'][ $post_type ][ $meta_key ] = $args;
+
+        return true;
+    }
+}
+
 if ( ! function_exists( 'add_query_arg' ) ) {
     function add_query_arg( $params, $url = '' ) {
         $params = (array) $params;
@@ -234,6 +315,50 @@ if ( ! function_exists( 'wp_localize_script' ) ) {
 if ( ! function_exists( 'wp_enqueue_script' ) ) {
     function wp_enqueue_script( $handle, $src = '', $deps = array(), $ver = false, $in_footer = false ) {
         $GLOBALS['tts_enqueued_scripts'][] = $handle;
+    }
+}
+
+if ( ! class_exists( 'WP_Role' ) ) {
+    class WP_Role {
+        /** @var string */
+        public $name;
+
+        /** @var array<string, bool> */
+        public $capabilities = array();
+
+        public function __construct( $role, $capabilities = array() ) {
+            $this->name         = (string) $role;
+            $this->capabilities = array();
+
+            foreach ( (array) $capabilities as $capability => $grant ) {
+                $this->capabilities[ $capability ] = (bool) $grant;
+            }
+        }
+
+        public function add_cap( $capability, $grant = true ) {
+            $this->capabilities[ $capability ] = (bool) $grant;
+        }
+
+        public function has_cap( $capability ) {
+            return ! empty( $this->capabilities[ $capability ] );
+        }
+    }
+}
+
+if ( ! function_exists( 'add_role' ) ) {
+    function add_role( $role, $display_name, $capabilities = array() ) {
+        unset( $display_name );
+
+        $role_object = new WP_Role( $role, $capabilities );
+        $GLOBALS['tts_registered_roles'][ $role ] = $role_object;
+
+        return $role_object;
+    }
+}
+
+if ( ! function_exists( 'get_role' ) ) {
+    function get_role( $role ) {
+        return $GLOBALS['tts_registered_roles'][ $role ] ?? null;
     }
 }
 
@@ -342,20 +467,51 @@ if ( ! function_exists( 'add_submenu_page' ) ) {
 }
 
 if ( ! function_exists( 'current_user_can' ) ) {
-    function current_user_can( $capability ) {
-        $caps = $GLOBALS['tts_current_user_caps'] ?? null;
+    function current_user_can( $capability, ...$args ) {
+        $caps = $GLOBALS['tts_current_user_caps'] ?? array();
 
         if ( ! is_array( $caps ) || empty( $caps ) ) {
-            return true;
+            return false;
         }
 
         if ( array_key_exists( $capability, $caps ) ) {
             return (bool) $caps[ $capability ];
         }
 
-        $granted_caps = array_keys( array_filter( $caps ) );
+        $normalized_caps = array();
+        foreach ( $caps as $key => $value ) {
+            if ( is_string( $key ) ) {
+                $normalized_caps[ $key ] = (bool) $value;
+            }
+        }
 
-        return in_array( $capability, $granted_caps, true );
+        if ( isset( $normalized_caps[ $capability ] ) ) {
+            return $normalized_caps[ $capability ];
+        }
+
+        switch ( $capability ) {
+            case 'edit_post':
+                $post_id = $args[0] ?? 0;
+                if ( isset( $normalized_caps[ 'edit_post_' . $post_id ] ) ) {
+                    return $normalized_caps[ 'edit_post_' . $post_id ];
+                }
+
+                return ! empty( $normalized_caps['tts_edit_social_posts'] ) || ! empty( $normalized_caps['edit_posts'] );
+
+            case 'delete_post':
+                $post_id = $args[0] ?? 0;
+                if ( isset( $normalized_caps[ 'delete_post_' . $post_id ] ) ) {
+                    return $normalized_caps[ 'delete_post_' . $post_id ];
+                }
+
+                return ! empty( $normalized_caps['tts_delete_social_posts'] ) || ! empty( $normalized_caps['delete_posts'] );
+
+            case 'read_post':
+                return ! empty( $normalized_caps['tts_read_social_posts'] ) || ! empty( $normalized_caps['read'] );
+
+            default:
+                return ! empty( $normalized_caps[ $capability ] );
+        }
     }
 }
 
@@ -392,6 +548,14 @@ if ( ! function_exists( 'wp_get_current_user' ) ) {
         $GLOBALS['tts_current_user'] = $user;
 
         return $user;
+    }
+}
+
+if ( ! function_exists( 'get_current_user_id' ) ) {
+    function get_current_user_id() {
+        $user = wp_get_current_user();
+
+        return isset( $user->ID ) ? (int) $user->ID : 0;
     }
 }
 
@@ -549,13 +713,36 @@ if ( ! function_exists( 'wp_die' ) ) {
 
 if ( ! function_exists( 'wp_verify_nonce' ) ) {
     function wp_verify_nonce( $nonce, $action ) {
-        return true;
+        if ( isset( $GLOBALS['tts_nonce_check_results'][ $action ] ) ) {
+            $override = $GLOBALS['tts_nonce_check_results'][ $action ];
+
+            if ( is_callable( $override ) ) {
+                return (bool) call_user_func( $override, $nonce, $action );
+            }
+
+            return (bool) $override;
+        }
+
+        return ( 'nonce-' . $action ) === (string) $nonce;
     }
 }
 
 if ( ! function_exists( 'sanitize_text_field' ) ) {
     function sanitize_text_field( $text ) {
-        return is_string( $text ) ? trim( $text ) : $text;
+        if ( ! is_string( $text ) ) {
+            return $text;
+        }
+
+        $filtered = wp_strip_all_tags( $text );
+        $filtered = preg_replace( '/[\r\n\t ]+/', ' ', $filtered );
+
+        return trim( (string) $filtered );
+    }
+}
+
+if ( ! function_exists( 'sanitize_textarea_field' ) ) {
+    function sanitize_textarea_field( $text ) {
+        return is_string( $text ) ? trim( preg_replace( "/[\r\0\x0B\f]/", '', $text ) ) : $text;
     }
 }
 
@@ -719,10 +906,40 @@ if ( ! function_exists( 'delete_post_meta' ) ) {
     }
 }
 
+if ( ! function_exists( 'get_post' ) ) {
+    function get_post( $post_id ) {
+        return $GLOBALS['tts_test_posts'][ $post_id ] ?? null;
+    }
+}
+
+if ( ! function_exists( 'wp_delete_post' ) ) {
+    function wp_delete_post( $post_id, $force_delete = false ) {
+        unset( $force_delete );
+
+        if ( isset( $GLOBALS['tts_test_posts'][ $post_id ] ) ) {
+            unset( $GLOBALS['tts_test_posts'][ $post_id ] );
+            $GLOBALS['tts_deleted_posts'][] = $post_id;
+
+            return true;
+        }
+
+        return false;
+    }
+}
+
+if ( ! function_exists( 'get_edit_post_link' ) ) {
+    function get_edit_post_link( $post_id ) {
+        return 'post.php?post=' . (int) $post_id;
+    }
+}
+
 if ( ! function_exists( 'get_posts' ) ) {
     function get_posts( $args = array() ) {
         if ( isset( $args['post_type'] ) && 'tts_client' === $args['post_type'] ) {
             return $GLOBALS['tts_test_client_posts'];
+        }
+        if ( isset( $args['post_type'] ) && 'tts_social_post' === $args['post_type'] ) {
+            return array_values( $GLOBALS['tts_test_posts'] );
         }
         return array();
     }
@@ -840,6 +1057,68 @@ if ( ! class_exists( 'WP_List_Table' ) ) {
     }
 }
 
+if ( ! class_exists( 'WP_REST_Request' ) ) {
+    class WP_REST_Request implements ArrayAccess {
+        /** @var array<string, mixed> */
+        protected $params = array();
+
+        /** @var array<string, string> */
+        protected $headers = array();
+
+        /** @var string */
+        protected $method = 'GET';
+
+        public function __construct( $method = 'GET', array $params = array(), array $headers = array() ) {
+            $this->method  = (string) $method;
+            $this->params  = $params;
+            $this->headers = $headers;
+        }
+
+        public function offsetExists( $offset ) : bool {
+            return isset( $this->params[ $offset ] );
+        }
+
+        #[\ReturnTypeWillChange]
+        public function offsetGet( $offset ) {
+            return $this->params[ $offset ] ?? null;
+        }
+
+        #[\ReturnTypeWillChange]
+        public function offsetSet( $offset, $value ) : void {
+            $this->params[ $offset ] = $value;
+        }
+
+        #[\ReturnTypeWillChange]
+        public function offsetUnset( $offset ) : void {
+            unset( $this->params[ $offset ] );
+        }
+
+        public function get_method() : string {
+            return $this->method;
+        }
+
+        public function set_method( $method ) : void {
+            $this->method = (string) $method;
+        }
+
+        public function set_param( $key, $value ) : void {
+            $this->params[ $key ] = $value;
+        }
+
+        public function get_header( $key ) {
+            return $this->headers[ $key ] ?? '';
+        }
+
+        public function set_header( $key, $value ) : void {
+            $this->headers[ $key ] = (string) $value;
+        }
+
+        public function get_param( $key ) {
+            return $this->params[ $key ] ?? null;
+        }
+    }
+}
+
 /**
  * Reset the global test state.
  */
@@ -864,6 +1143,11 @@ function tts_reset_test_state() {
     $GLOBALS['tts_test_transients']     = array();
     $GLOBALS['tts_is_user_logged_in']   = null;
     $GLOBALS['tts_http_responses']      = array();
+    $GLOBALS['tts_registered_post_types'] = array();
+    $GLOBALS['tts_registered_post_meta']  = array();
+    $GLOBALS['tts_registered_roles']      = array();
+    $GLOBALS['tts_test_posts']            = array();
+    $GLOBALS['tts_deleted_posts']         = array();
 
     $_GET     = array();
     $_POST    = array();

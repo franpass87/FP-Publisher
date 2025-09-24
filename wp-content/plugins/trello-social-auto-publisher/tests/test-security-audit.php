@@ -50,6 +50,10 @@ $tests = array(
     'ajax_security_audit_with_valid_nonce_does_not_log' => function () {
         tts_reset_test_state();
 
+        $GLOBALS['tts_current_user_caps'] = array(
+            'manage_options' => true,
+        );
+
         $audit = new TTS_Security_Audit_Test_Double();
         $audit->audit_logs_response = array(
             array(

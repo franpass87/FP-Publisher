@@ -54,8 +54,44 @@ class TTS_REST {
      * @return bool
      */
     public function permissions_check( WP_REST_Request $request ) {
-        $id = intval( $request['id'] );
-        return current_user_can( 'edit_post', $id );
+        $post_id = intval( $request['id'] );
+
+        if ( ! $this->verify_rest_nonce( $request ) ) {
+            return new WP_Error( 'rest_forbidden', __( 'Invalid REST nonce.', 'fp-publisher' ), array( 'status' => 403 ) );
+        }
+
+        if ( 'POST' === $request->get_method() ) {
+            if ( ! current_user_can( 'tts_publish_social_posts' ) || ! current_user_can( 'edit_post', $post_id ) ) {
+                return new WP_Error( 'rest_forbidden', __( 'You do not have permission to publish this social post.', 'fp-publisher' ), array( 'status' => 403 ) );
+            }
+        } else {
+            if ( ! current_user_can( 'tts_read_social_posts' ) || ( $post_id && ! current_user_can( 'read_post', $post_id ) ) ) {
+                return new WP_Error( 'rest_forbidden', __( 'You do not have permission to view this social post.', 'fp-publisher' ), array( 'status' => 403 ) );
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate REST nonce provided via header or request parameter.
+     *
+     * @param WP_REST_Request $request Request instance.
+     *
+     * @return bool
+     */
+    private function verify_rest_nonce( WP_REST_Request $request ) {
+        $nonce = $request->get_header( 'X-WP-Nonce' );
+
+        if ( empty( $nonce ) ) {
+            $nonce = $request->get_param( '_wpnonce' );
+        }
+
+        if ( empty( $nonce ) ) {
+            return false;
+        }
+
+        return (bool) wp_verify_nonce( $nonce, 'wp_rest' );
     }
 
     /**
