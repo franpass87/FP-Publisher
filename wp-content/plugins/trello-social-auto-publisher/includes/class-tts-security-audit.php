@@ -19,6 +19,26 @@ class TTS_Security_Audit {
     private $api_abuse_threshold = 300;
 
     /**
+     * Secure storage utility for encryption and masking.
+     *
+     * @var TTS_Secure_Storage|null
+     */
+    private $secure_storage = null;
+
+    /**
+     * Default retention policy (days) per risk level.
+     *
+     * @var array<int|string, int>
+     */
+    private $retention_policy = array(
+        self::RISK_LOW      => 30,
+        self::RISK_MEDIUM   => 90,
+        self::RISK_HIGH     => 180,
+        self::RISK_CRITICAL => 365,
+        'default'           => 90,
+    );
+
+    /**
      * Event types for security auditing
      */
     const EVENT_LOGIN_ATTEMPT = 'login_attempt';
@@ -45,6 +65,10 @@ class TTS_Security_Audit {
      */
     public function __construct() {
         $this->ensure_audit_table_exists();
+
+        if ( class_exists( 'TTS_Secure_Storage' ) ) {
+            $this->secure_storage = TTS_Secure_Storage::instance();
+        }
 
         add_action( 'init', array( $this, 'init_security_monitoring' ) );
         add_action( 'wp_ajax_tts_get_security_audit', array( $this, 'ajax_get_security_audit' ) );
@@ -170,7 +194,7 @@ class TTS_Security_Audit {
                 'ip_address' => $this->get_client_ip(),
                 'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? '',
                 'request_uri' => $_SERVER['REQUEST_URI'] ?? '',
-                'event_data' => wp_json_encode( $event_data ),
+                'event_data' => $this->prepare_event_data_for_storage( $event_data, $event_type ),
                 'timestamp' => current_time( 'mysql' )
             ),
             array( '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
@@ -842,7 +866,18 @@ class TTS_Security_Audit {
             $query = $wpdb->prepare( $query, $where_values );
         }
         
-        return $wpdb->get_results( $query );
+        $logs = $wpdb->get_results( $query );
+
+        if ( empty( $logs ) ) {
+            return array();
+        }
+
+        foreach ( $logs as $index => $log ) {
+            $event_type = isset( $log->event_type ) ? (string) $log->event_type : '';
+            $logs[ $index ]->event_data = $this->prepare_event_data_for_display( $log->event_data, $event_type );
+        }
+
+        return $logs;
     }
 
     /**
@@ -990,6 +1025,13 @@ class TTS_Security_Audit {
         $table_name = $wpdb->prefix . $this->audit_table;
         
         $days_to_keep = max( 1, intval( $_POST['days_to_keep'] ?? 30 ) );
+        $policy       = $this->get_retention_policy();
+        $max_days     = $this->get_max_retention_days( $policy );
+
+        if ( $max_days > 0 ) {
+            $days_to_keep = min( $days_to_keep, $max_days );
+        }
+
         $cutoff_date = date( 'Y-m-d H:i:s', time() - ( $days_to_keep * DAY_IN_SECONDS ) );
         
         $deleted = $wpdb->query(
@@ -1010,18 +1052,29 @@ class TTS_Security_Audit {
      */
     public function cleanup_old_logs() {
         global $wpdb;
-        
+
         $table_name = $wpdb->prefix . $this->audit_table;
-        
-        // Delete logs older than 90 days
-        $cutoff_date = date( 'Y-m-d H:i:s', time() - ( 90 * DAY_IN_SECONDS ) );
-        
-        $deleted = $wpdb->query(
-            $wpdb->prepare(
-                "DELETE FROM $table_name WHERE timestamp < %s",
-                $cutoff_date
-            )
-        );
+        $policy     = $this->get_retention_policy();
+
+        $deleted_total = 0;
+
+        foreach ( array( self::RISK_LOW, self::RISK_MEDIUM, self::RISK_HIGH, self::RISK_CRITICAL ) as $risk_level ) {
+            $days = isset( $policy[ $risk_level ] ) ? (int) $policy[ $risk_level ] : (int) $policy['default'];
+
+            if ( $days <= 0 ) {
+                continue;
+            }
+
+            $cutoff_date = date( 'Y-m-d H:i:s', time() - ( $days * DAY_IN_SECONDS ) );
+
+            $deleted_total += (int) $wpdb->query(
+                $wpdb->prepare(
+                    "DELETE FROM $table_name WHERE risk_level = %d AND timestamp < %s",
+                    $risk_level,
+                    $cutoff_date
+                )
+            );
+        }
         
         // Ensure table doesn't exceed max entries
         $total_entries = $wpdb->get_var( "SELECT COUNT(*) FROM $table_name" );
@@ -1033,9 +1086,146 @@ class TTS_Security_Audit {
             );
         }
         
-        if ( $deleted > 0 ) {
-            TTS_Logger::log( "Security audit cleanup: Deleted $deleted old log entries" );
+        if ( $deleted_total > 0 ) {
+            TTS_Logger::log( "Security audit cleanup: Deleted $deleted_total old log entries" );
         }
+    }
+
+    /**
+     * Prepare event data payload for encrypted storage.
+     *
+     * @param array  $event_data Event payload.
+     * @param string $event_type Event type identifier.
+     *
+     * @return string
+     */
+    private function prepare_event_data_for_storage( $event_data, $event_type ) {
+        $event_data = is_array( $event_data ) ? $event_data : (array) $event_data;
+
+        if ( $this->secure_storage ) {
+            $encrypted = $this->secure_storage->encrypt_for_storage(
+                $event_data,
+                array(
+                    'context'    => 'security_audit',
+                    'event_type' => $event_type,
+                )
+            );
+
+            if ( false !== $encrypted && ! empty( $encrypted ) ) {
+                return $encrypted;
+            }
+        }
+
+        $encoded = wp_json_encode( $event_data );
+
+        if ( false === $encoded ) {
+            $encoded = maybe_serialize( $event_data );
+        }
+
+        return $encoded;
+    }
+
+    /**
+     * Prepare stored event data for presentation to administrators.
+     *
+     * @param mixed  $stored     Stored payload.
+     * @param string $event_type Event type identifier.
+     *
+     * @return array
+     */
+    private function prepare_event_data_for_display( $stored, $event_type ) {
+        $decoded = array();
+
+        if ( $this->secure_storage && is_string( $stored ) && $this->secure_storage->is_encrypted_string( $stored ) ) {
+            $decoded = $this->secure_storage->decrypt_from_storage(
+                $stored,
+                array(
+                    'context'    => 'security_audit',
+                    'event_type' => $event_type,
+                )
+            );
+        } elseif ( is_string( $stored ) && '' !== $stored ) {
+            $json = json_decode( $stored, true );
+
+            if ( JSON_ERROR_NONE === json_last_error() ) {
+                $decoded = $json;
+            } else {
+                $maybe = maybe_unserialize( $stored );
+                if ( is_array( $maybe ) ) {
+                    $decoded = $maybe;
+                }
+            }
+        } elseif ( is_array( $stored ) ) {
+            $decoded = $stored;
+        }
+
+        if ( ! is_array( $decoded ) ) {
+            $decoded = array();
+        }
+
+        return $this->mask_event_data( $decoded );
+    }
+
+    /**
+     * Mask sensitive fields within an event payload.
+     *
+     * @param array $event_data Event payload.
+     *
+     * @return array
+     */
+    private function mask_event_data( $event_data ) {
+        if ( ! $this->secure_storage ) {
+            return $event_data;
+        }
+
+        $additional_fields = apply_filters(
+            'tts_security_audit_mask_fields',
+            array( 'session_id', 'user_email', 'post_data' )
+        );
+
+        return $this->secure_storage->mask_sensitive_data( $event_data, $additional_fields );
+    }
+
+    /**
+     * Retrieve the configured retention policy.
+     *
+     * @return array<int|string, int>
+     */
+    private function get_retention_policy() {
+        $policy = apply_filters( 'tts_security_audit_retention_policy', $this->retention_policy );
+
+        if ( ! is_array( $policy ) ) {
+            $policy = $this->retention_policy;
+        }
+
+        if ( ! isset( $policy['default'] ) ) {
+            $policy['default'] = $this->retention_policy['default'];
+        }
+
+        foreach ( $policy as $key => $value ) {
+            $policy[ $key ] = max( 0, intval( $value ) );
+        }
+
+        return $policy;
+    }
+
+    /**
+     * Determine the maximum retention period allowed by policy.
+     *
+     * @param array<int|string, int>|null $policy Optional policy override.
+     *
+     * @return int
+     */
+    private function get_max_retention_days( $policy = null ) {
+        $policy = is_array( $policy ) ? $policy : $this->get_retention_policy();
+
+        $values = array_filter( array_map( 'intval', $policy ) );
+
+        if ( empty( $values ) ) {
+            return 0;
+        }
+
+        return max( $values );
     }
 
     /**

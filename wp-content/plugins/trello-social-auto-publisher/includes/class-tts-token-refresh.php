@@ -14,10 +14,43 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class TTS_Token_Refresh {
 
+    const EXPIRY_REFRESH_THRESHOLD = DAY_IN_SECONDS;
+    const DEFAULT_ROTATION_INTERVAL = WEEK_IN_SECONDS;
+    const MINIMUM_ROTATION_INTERVAL = HOUR_IN_SECONDS;
+
+    /**
+     * Shared secure storage instance.
+     *
+     * @var TTS_Secure_Storage|null
+     */
+    private static $secure_storage = null;
+
+    /**
+     * Metadata configuration per channel.
+     *
+     * @var array<string, array<string, string>>
+     */
+    private static $token_meta_map = array(
+        'facebook'  => array(
+            'meta'          => '_tts_fb_token',
+            'previous_meta' => '_tts_fb_token_previous',
+            'expires_meta'  => '_tts_fb_token_expires_at',
+            'rotated_meta'  => '_tts_fb_token_rotated_at',
+        ),
+        'instagram' => array(
+            'meta'          => '_tts_ig_token',
+            'previous_meta' => '_tts_ig_token_previous',
+            'expires_meta'  => '_tts_ig_token_expires_at',
+            'rotated_meta'  => '_tts_ig_token_rotated_at',
+        ),
+    );
+
     /**
      * Refresh tokens for all tts_client posts.
      */
     public static function refresh_tokens() {
+        self::get_secure_storage();
+
         $clients = get_posts(
             array(
                 'post_type'      => 'tts_client',
@@ -41,85 +74,50 @@ class TTS_Token_Refresh {
      * @param int $client_id Client post ID.
      */
     protected static function refresh_client_tokens( $client_id ) {
-        $tokens       = array(
-            'facebook'  => array(
-                'meta'  => '_tts_fb_token',
-                'token' => get_post_meta( $client_id, '_tts_fb_token', true ),
-            ),
-            'instagram' => array(
-                'meta'  => '_tts_ig_token',
-                'token' => get_post_meta( $client_id, '_tts_ig_token', true ),
-            ),
-        );
-        $social_apps = get_option( 'tts_social_apps', array() );
-        $errors      = array();
+        $secure_storage = self::get_secure_storage();
+        $meta_map       = self::$token_meta_map;
+        $social_apps    = get_option( 'tts_social_apps', array() );
+        $errors         = array();
 
-        foreach ( $tokens as $channel => $data ) {
-            $token          = $data['token'];
-            $meta_key       = $data['meta'];
-            $channel_config = isset( $social_apps[ $channel ] ) ? $social_apps[ $channel ] : array();
+        foreach ( $meta_map as $channel => $meta_info ) {
+            $raw_token = get_post_meta( $client_id, $meta_info['meta'], true );
 
-            if ( empty( $token ) ) {
-                continue;
-            }
-
-            $endpoint = '';
-            $url      = '';
-
-            if ( 'facebook' === $channel ) {
-                $app_id     = isset( $channel_config['app_id'] ) ? $channel_config['app_id'] : '';
-                $app_secret = isset( $channel_config['app_secret'] ) ? $channel_config['app_secret'] : '';
-
-                if ( empty( $app_id ) || empty( $app_secret ) ) {
-                    $error_message = __( 'Facebook app credentials are missing; cannot refresh token.', 'fp-publisher' );
-                    $error_data    = array(
-                        'client_id'       => $client_id,
-                        'missing_app_id'  => empty( $app_id ),
-                        'missing_secret'  => empty( $app_secret ),
-                    );
-                    $error         = new WP_Error( 'tts_facebook_credentials_missing', $error_message, $error_data );
-
-                    tts_log_event(
-                        $client_id,
-                        $channel,
-                        'error',
-                        'Token refresh failed: missing app credentials',
-                        array(
-                            'has_app_id'     => ! empty( $app_id ),
-                            'has_app_secret' => ! empty( $app_secret ),
-                        )
-                    );
-
-                    $errors[ $channel ] = $error;
-                    continue;
-                }
-
-                $endpoint = 'https://graph.facebook.com/v18.0/oauth/access_token';
-                $url      = add_query_arg(
+            if ( $secure_storage ) {
+                $raw_token = $secure_storage->resolve_managed_secret(
+                    $raw_token,
                     array(
-                        'grant_type'        => 'fb_exchange_token',
-                        'client_id'         => $app_id,
-                        'client_secret'     => $app_secret,
-                        'fb_exchange_token' => $token,
-                    ),
-                    $endpoint
-                );
-            } elseif ( 'instagram' === $channel ) {
-                $endpoint = 'https://graph.instagram.com/refresh_access_token';
-                $url      = add_query_arg(
-                    array(
-                        'grant_type'   => 'ig_refresh_token',
-                        'access_token' => $token,
-                    ),
-                    $endpoint
+                        'context'   => 'token_refresh',
+                        'channel'   => $channel,
+                        'client_id' => $client_id,
+                        'purpose'   => 'access_token',
+                    )
                 );
             }
 
-            if ( empty( $url ) ) {
+            $token = self::normalize_token_value( $raw_token );
+
+            if ( '' === $token ) {
                 continue;
             }
 
-            $response = wp_remote_get( $url );
+            $meta_info['token']      = $token;
+            $meta_info['expires_at'] = isset( $meta_info['expires_meta'] ) ? intval( get_post_meta( $client_id, $meta_info['expires_meta'], true ) ) : 0;
+            $meta_info['rotated_at'] = isset( $meta_info['rotated_meta'] ) ? intval( get_post_meta( $client_id, $meta_info['rotated_meta'], true ) ) : 0;
+
+            if ( ! self::should_refresh_token( $client_id, $channel, $meta_info ) ) {
+                continue;
+            }
+
+            $channel_config = isset( $social_apps[ $channel ] ) ? self::resolve_channel_config( $channel, $social_apps[ $channel ] ) : array();
+            $request        = self::build_refresh_request( $channel, $token, $channel_config, $client_id );
+
+            if ( is_wp_error( $request ) ) {
+                $errors[ $channel ] = $request;
+                continue;
+            }
+
+            $response = wp_remote_get( $request['url'] );
+
             if ( is_wp_error( $response ) ) {
                 $message = sprintf(
                     __( '%1$s token refresh request failed: %2$s', 'fp-publisher' ),
@@ -131,7 +129,7 @@ class TTS_Token_Refresh {
                     $message,
                     array(
                         'client_id' => $client_id,
-                        'endpoint'  => $endpoint,
+                        'endpoint'  => $request['endpoint'],
                     )
                 );
 
@@ -231,11 +229,23 @@ class TTS_Token_Refresh {
                 continue;
             }
 
-            update_post_meta( $client_id, $meta_key, sanitize_text_field( $body['access_token'] ) );
+            $storage_context = self::store_refreshed_token( $client_id, $channel, $meta_info, $body );
 
-            $log_context = array();
+            $log_context = array(
+                'rotation_source' => $request['endpoint'],
+                'storage'         => isset( $storage_context['storage'] ) ? $storage_context['storage'] : 'meta',
+            );
+
             if ( isset( $body['expires_in'] ) ) {
                 $log_context['expires_in'] = absint( $body['expires_in'] );
+            }
+
+            if ( isset( $storage_context['expires_at'] ) && $storage_context['expires_at'] ) {
+                $log_context['expires_at'] = $storage_context['expires_at'];
+            }
+
+            if ( isset( $meta_info['rotated_meta'] ) ) {
+                $log_context['rotated_at'] = time();
             }
 
             tts_log_event( $client_id, $channel, 'success', 'Token refreshed successfully', $log_context );
@@ -250,5 +260,240 @@ class TTS_Token_Refresh {
         }
 
         return true;
+    }
+
+    /**
+     * Retrieve the secure storage instance when available.
+     *
+     * @return TTS_Secure_Storage|null
+     */
+    private static function get_secure_storage() {
+        if ( null === self::$secure_storage && class_exists( 'TTS_Secure_Storage' ) ) {
+            self::$secure_storage = TTS_Secure_Storage::instance();
+        }
+
+        return self::$secure_storage;
+    }
+
+    /**
+     * Normalize token values to trimmed strings.
+     *
+     * @param mixed $token Raw token value.
+     *
+     * @return string
+     */
+    private static function normalize_token_value( $token ) {
+        if ( is_array( $token ) || is_object( $token ) ) {
+            $token = wp_json_encode( $token );
+        }
+
+        if ( ! is_string( $token ) ) {
+            return '';
+        }
+
+        return trim( $token );
+    }
+
+    /**
+     * Resolve channel configuration using managed secret providers.
+     *
+     * @param string $channel Channel identifier.
+     * @param mixed  $config  Raw configuration.
+     *
+     * @return array<string, mixed>
+     */
+    private static function resolve_channel_config( $channel, $config ) {
+        $config = is_array( $config ) ? $config : array();
+        $storage = self::get_secure_storage();
+
+        if ( ! $storage ) {
+            return $config;
+        }
+
+        foreach ( $config as $key => $value ) {
+            if ( is_scalar( $value ) ) {
+                $resolved = $storage->resolve_managed_secret(
+                    $value,
+                    array(
+                        'context' => 'token_refresh',
+                        'channel' => $channel,
+                        'field'   => $key,
+                    )
+                );
+
+                if ( is_scalar( $resolved ) ) {
+                    $config[ $key ] = trim( (string) $resolved );
+                }
+            }
+        }
+
+        return $config;
+    }
+
+    /**
+     * Determine whether a token should be rotated.
+     *
+     * @param int    $client_id Client identifier.
+     * @param string $channel   Channel key.
+     * @param array  $meta_info Metadata for the token.
+     *
+     * @return bool
+     */
+    private static function should_refresh_token( $client_id, $channel, array $meta_info ) {
+        $decision = apply_filters( 'tts_should_refresh_social_token', null, $client_id, $channel, $meta_info );
+
+        if ( null !== $decision ) {
+            return (bool) $decision;
+        }
+
+        $now        = time();
+        $expires_at = isset( $meta_info['expires_at'] ) ? (int) $meta_info['expires_at'] : 0;
+        $rotated_at = isset( $meta_info['rotated_at'] ) ? (int) $meta_info['rotated_at'] : 0;
+
+        if ( $expires_at > 0 ) {
+            if ( $expires_at <= $now ) {
+                return true;
+            }
+
+            if ( ( $expires_at - $now ) <= self::EXPIRY_REFRESH_THRESHOLD ) {
+                return true;
+            }
+
+            if ( $rotated_at > 0 && ( $now - $rotated_at ) < self::MINIMUM_ROTATION_INTERVAL ) {
+                return false;
+            }
+
+            return false;
+        }
+
+        if ( $rotated_at <= 0 ) {
+            return true;
+        }
+
+        if ( ( $now - $rotated_at ) < self::MINIMUM_ROTATION_INTERVAL ) {
+            return false;
+        }
+
+        if ( ( $now - $rotated_at ) >= self::DEFAULT_ROTATION_INTERVAL ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Build the refresh request for a specific channel.
+     *
+     * @param string $channel Channel key.
+     * @param string $token   Current token.
+     * @param array  $config  Channel configuration.
+     * @param int    $client_id Client identifier.
+     *
+     * @return array{endpoint: string, url: string}|WP_Error
+     */
+    private static function build_refresh_request( $channel, $token, array $config, $client_id ) {
+        if ( 'facebook' === $channel ) {
+            $app_id     = isset( $config['app_id'] ) ? trim( (string) $config['app_id'] ) : '';
+            $app_secret = isset( $config['app_secret'] ) ? trim( (string) $config['app_secret'] ) : '';
+
+            if ( '' === $app_id || '' === $app_secret ) {
+                $error_message = __( 'Facebook app credentials are missing; cannot refresh token.', 'fp-publisher' );
+                $error_data    = array(
+                    'client_id'       => $client_id,
+                    'missing_app_id'  => '' === $app_id,
+                    'missing_secret'  => '' === $app_secret,
+                );
+
+                tts_log_event(
+                    $client_id,
+                    $channel,
+                    'error',
+                    'Token refresh failed: missing app credentials',
+                    array(
+                        'has_app_id'     => '' !== $app_id,
+                        'has_app_secret' => '' !== $app_secret,
+                    )
+                );
+
+                return new WP_Error( 'tts_facebook_credentials_missing', $error_message, $error_data );
+            }
+
+            $endpoint = 'https://graph.facebook.com/v18.0/oauth/access_token';
+            $url      = add_query_arg(
+                array(
+                    'grant_type'        => 'fb_exchange_token',
+                    'client_id'         => $app_id,
+                    'client_secret'     => $app_secret,
+                    'fb_exchange_token' => $token,
+                ),
+                $endpoint
+            );
+
+            return compact( 'endpoint', 'url' );
+        }
+
+        if ( 'instagram' === $channel ) {
+            $endpoint = 'https://graph.instagram.com/refresh_access_token';
+            $url      = add_query_arg(
+                array(
+                    'grant_type'   => 'ig_refresh_token',
+                    'access_token' => $token,
+                ),
+                $endpoint
+            );
+
+            return compact( 'endpoint', 'url' );
+        }
+
+        return new WP_Error(
+            'tts_' . $channel . '_unsupported_channel',
+            sprintf( __( 'Token refresh is not configured for the %s channel.', 'fp-publisher' ), $channel ),
+            array( 'client_id' => $client_id )
+        );
+    }
+
+    /**
+     * Persist refreshed token information and metadata.
+     *
+     * @param int    $client_id  Client identifier.
+     * @param string $channel    Channel key.
+     * @param array  $meta_info  Token metadata definitions.
+     * @param array  $body       API response payload.
+     *
+     * @return array<string, mixed>
+     */
+    private static function store_refreshed_token( $client_id, $channel, array $meta_info, array $body ) {
+        $new_token = sanitize_text_field( (string) $body['access_token'] );
+        $previous  = isset( $meta_info['token'] ) ? $meta_info['token'] : '';
+
+        if ( isset( $meta_info['previous_meta'] ) && '' !== $previous ) {
+            update_post_meta( $client_id, $meta_info['previous_meta'], $previous );
+        }
+
+        $handled = apply_filters( 'tts_token_refresh_persist_token', false, $client_id, $channel, $new_token, $meta_info, $body );
+
+        if ( ! $handled ) {
+            update_post_meta( $client_id, $meta_info['meta'], $new_token );
+        }
+
+        $expires_at = null;
+
+        if ( isset( $meta_info['expires_meta'] ) ) {
+            if ( isset( $body['expires_in'] ) ) {
+                $expires_at = time() + absint( $body['expires_in'] );
+                update_post_meta( $client_id, $meta_info['expires_meta'], $expires_at );
+            } else {
+                delete_post_meta( $client_id, $meta_info['expires_meta'] );
+            }
+        }
+
+        if ( isset( $meta_info['rotated_meta'] ) ) {
+            update_post_meta( $client_id, $meta_info['rotated_meta'], time() );
+        }
+
+        return array(
+            'storage'    => $handled ? 'external' : 'meta',
+            'expires_at' => $expires_at,
+        );
     }
 }

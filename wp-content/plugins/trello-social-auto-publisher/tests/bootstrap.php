@@ -20,6 +20,12 @@ if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
 if ( ! defined( 'DAY_IN_SECONDS' ) ) {
     define( 'DAY_IN_SECONDS', 24 * HOUR_IN_SECONDS );
 }
+if ( ! defined( 'WEEK_IN_SECONDS' ) ) {
+    define( 'WEEK_IN_SECONDS', 7 * DAY_IN_SECONDS );
+}
+
+// Provide deterministic encryption material for tests.
+putenv( 'TTS_ENCRYPTION_KEY=YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=' );
 
 // Global containers used by the tests.
 $GLOBALS['tts_test_options']         = array();
@@ -41,6 +47,7 @@ $GLOBALS['tts_current_user']         = null;
 $GLOBALS['tts_current_screen']       = null;
 $GLOBALS['tts_test_transients']      = array();
 $GLOBALS['tts_is_user_logged_in']    = null;
+$GLOBALS['tts_http_responses']       = array();
 
 if ( ! function_exists( '__' ) ) {
     function __( $text, $domain = null ) {
@@ -134,6 +141,12 @@ if ( ! function_exists( 'wp_unslash' ) ) {
     }
 }
 
+if ( ! function_exists( 'absint' ) ) {
+    function absint( $maybeint ) {
+        return abs( (int) $maybeint );
+    }
+}
+
 if ( ! function_exists( 'sanitize_key' ) ) {
     function sanitize_key( $key ) {
         $key = strtolower( (string) $key );
@@ -156,6 +169,47 @@ if ( ! function_exists( 'plugin_dir_url' ) ) {
 if ( ! function_exists( 'plugin_dir_path' ) ) {
     function plugin_dir_path( $file ) {
         return rtrim( dirname( $file ), '/\\' ) . '/';
+    }
+}
+
+if ( ! function_exists( 'add_query_arg' ) ) {
+    function add_query_arg( $params, $url = '' ) {
+        $params = (array) $params;
+        $parsed = parse_url( $url );
+        $query  = array();
+
+        if ( isset( $parsed['query'] ) ) {
+            parse_str( $parsed['query'], $query );
+        }
+
+        foreach ( $params as $key => $value ) {
+            $query[ $key ] = $value;
+        }
+
+        $scheme   = isset( $parsed['scheme'] ) ? $parsed['scheme'] . '://' : '';
+        $host     = $parsed['host'] ?? '';
+        $port     = isset( $parsed['port'] ) ? ':' . $parsed['port'] : '';
+        $path     = $parsed['path'] ?? '';
+        $base     = $scheme . $host . $port . $path;
+        $fragment = isset( $parsed['fragment'] ) ? '#' . $parsed['fragment'] : '';
+
+        $query_string = http_build_query( $query );
+
+        if ( '' !== $query_string ) {
+            return $base . '?' . $query_string . $fragment;
+        }
+
+        return $base . $fragment;
+    }
+}
+
+if ( ! function_exists( 'current_time' ) ) {
+    function current_time( $type ) {
+        if ( 'mysql' === $type ) {
+            return gmdate( 'Y-m-d H:i:s' );
+        }
+
+        return time();
     }
 }
 
@@ -405,6 +459,36 @@ if ( ! function_exists( 'wp_send_json_success' ) ) {
     }
 }
 
+if ( ! function_exists( 'wp_remote_get' ) ) {
+    function wp_remote_get( $url ) {
+        if ( isset( $GLOBALS['tts_http_responses'][ $url ] ) ) {
+            return $GLOBALS['tts_http_responses'][ $url ];
+        }
+
+        return new WP_Error( 'http_not_stubbed', 'No stubbed response for ' . $url );
+    }
+}
+
+if ( ! function_exists( 'wp_remote_retrieve_response_code' ) ) {
+    function wp_remote_retrieve_response_code( $response ) {
+        if ( is_array( $response ) && isset( $response['response']['code'] ) ) {
+            return (int) $response['response']['code'];
+        }
+
+        return 0;
+    }
+}
+
+if ( ! function_exists( 'wp_remote_retrieve_body' ) ) {
+    function wp_remote_retrieve_body( $response ) {
+        if ( is_array( $response ) && isset( $response['body'] ) ) {
+            return $response['body'];
+        }
+
+        return '';
+    }
+}
+
 if ( ! function_exists( 'wp_send_json_error' ) ) {
     function wp_send_json_error( $data = null, $status_code = 200 ) {
         $response = array(
@@ -501,6 +585,20 @@ if ( ! function_exists( 'wp_parse_args' ) ) {
     }
 }
 
+if ( ! function_exists( 'maybe_serialize' ) ) {
+    function maybe_serialize( $data ) {
+        if ( is_array( $data ) || is_object( $data ) ) {
+            return serialize( $data );
+        }
+
+        if ( is_serialized( $data ) ) {
+            return serialize( $data );
+        }
+
+        return $data;
+    }
+}
+
 if ( ! function_exists( 'maybe_unserialize' ) ) {
     function maybe_unserialize( $data ) {
         if ( ! is_string( $data ) ) {
@@ -511,6 +609,26 @@ if ( ! function_exists( 'maybe_unserialize' ) ) {
             return $unserialized;
         }
         return $data;
+    }
+}
+
+if ( ! function_exists( 'is_serialized' ) ) {
+    function is_serialized( $data ) {
+        if ( ! is_string( $data ) ) {
+            return false;
+        }
+
+        $data = trim( $data );
+
+        if ( 'N;' === $data ) {
+            return true;
+        }
+
+        if ( ! preg_match( '/^[adObis]:/', $data ) ) {
+            return false;
+        }
+
+        return @unserialize( $data ) !== false || 'b:0;' === $data;
     }
 }
 
@@ -527,20 +645,77 @@ if ( ! function_exists( 'update_option' ) ) {
     }
 }
 
+if ( ! function_exists( 'add_post_meta' ) ) {
+    function add_post_meta( $post_id, $key, $value, $unique = false ) {
+        $check = apply_filters( 'add_post_metadata', null, $post_id, $key, $value, $unique );
+        if ( null !== $check ) {
+            return $check;
+        }
+
+        if ( $unique && isset( $GLOBALS['tts_test_post_meta'][ $post_id ][ $key ] ) ) {
+            return false;
+        }
+
+        $GLOBALS['tts_test_post_meta'][ $post_id ][ $key ] = maybe_serialize( $value );
+
+        return true;
+    }
+}
+
 if ( ! function_exists( 'get_post_meta' ) ) {
     function get_post_meta( $post_id, $key, $single = false ) {
-        if ( isset( $GLOBALS['tts_test_post_meta'][ $post_id ][ $key ] ) ) {
-            $value = $GLOBALS['tts_test_post_meta'][ $post_id ][ $key ];
-            return $single ? $value : array( $value );
+        $check = apply_filters( 'get_post_metadata', null, $post_id, $key, $single );
+        if ( null !== $check ) {
+            return $check;
         }
-        return $single ? '' : array();
+
+        if ( '' === $key ) {
+            $all = $GLOBALS['tts_test_post_meta'][ $post_id ] ?? array();
+            $result = array();
+
+            foreach ( $all as $meta_key => $meta_value ) {
+                $result[ $meta_key ] = maybe_unserialize( $meta_value );
+            }
+
+            return $result;
+        }
+
+        if ( ! isset( $GLOBALS['tts_test_post_meta'][ $post_id ][ $key ] ) ) {
+            return $single ? '' : array();
+        }
+
+        $value = maybe_unserialize( $GLOBALS['tts_test_post_meta'][ $post_id ][ $key ] );
+
+        return $single ? $value : array( $value );
     }
 }
 
 if ( ! function_exists( 'update_post_meta' ) ) {
-    function update_post_meta( $post_id, $key, $value ) {
-        $GLOBALS['tts_test_post_meta'][ $post_id ][ $key ] = $value;
+    function update_post_meta( $post_id, $key, $value, $prev_value = '' ) {
+        $check = apply_filters( 'update_post_metadata', null, $post_id, $key, $value, $prev_value );
+        if ( null !== $check ) {
+            return $check;
+        }
+
+        $GLOBALS['tts_test_post_meta'][ $post_id ][ $key ] = maybe_serialize( $value );
+
         return true;
+    }
+}
+
+if ( ! function_exists( 'delete_post_meta' ) ) {
+    function delete_post_meta( $post_id, $key, $value = '' ) {
+        $check = apply_filters( 'delete_post_metadata', null, $post_id, $key, $value, false );
+        if ( null !== $check ) {
+            return $check;
+        }
+
+        if ( isset( $GLOBALS['tts_test_post_meta'][ $post_id ][ $key ] ) ) {
+            unset( $GLOBALS['tts_test_post_meta'][ $post_id ][ $key ] );
+            return true;
+        }
+
+        return false;
     }
 }
 
@@ -603,9 +778,53 @@ if ( ! isset( $GLOBALS['wpdb'] ) ) {
     class TTS_Test_WPDB {
         public $postmeta = 'wp_postmeta';
         public $posts    = 'wp_posts';
+        public $prefix   = 'wp_';
 
         public function get_results( $query ) {
             return $GLOBALS['tts_test_wpdb_results'];
+        }
+
+        public function get_var( $query ) {
+            if ( preg_match( '/post_id\s*=\s*(\d+)/', $query, $matches ) ) {
+                $post_id = (int) $matches[1];
+                if ( preg_match( "/meta_key\s*=\s*'([^']+)'/", $query, $key_match ) ) {
+                    $meta_key = stripslashes( $key_match[1] );
+                    return $GLOBALS['tts_test_post_meta'][ $post_id ][ $meta_key ] ?? null;
+                }
+            }
+
+            return null;
+        }
+
+        public function insert( $table, $data, $format = array() ) {
+            return true;
+        }
+
+        public function query( $query ) {
+            return true;
+        }
+
+        public function prepare( $query, ...$args ) {
+            if ( empty( $args ) ) {
+                return $query;
+            }
+
+            $processed = $query;
+
+            foreach ( $args as $arg ) {
+                $replacement = is_numeric( $arg ) ? (string) $arg : "'" . addslashes( (string) $arg ) . "'";
+                $processed   = preg_replace( '/%s|%d/', $replacement, $processed, 1 );
+            }
+
+            return $processed;
+        }
+
+        public function esc_like( $text ) {
+            return addslashes( $text );
+        }
+
+        public function get_charset_collate() {
+            return 'DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
         }
     }
     $GLOBALS['wpdb'] = new TTS_Test_WPDB();
@@ -644,6 +863,7 @@ function tts_reset_test_state() {
     $GLOBALS['tts_current_screen']      = null;
     $GLOBALS['tts_test_transients']     = array();
     $GLOBALS['tts_is_user_logged_in']   = null;
+    $GLOBALS['tts_http_responses']      = array();
 
     $_GET     = array();
     $_POST    = array();

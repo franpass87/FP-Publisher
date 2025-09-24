@@ -127,6 +127,7 @@ add_action( 'plugins_loaded', function () {
 
     // Load support files from the includes directory using whitelist for security.
     $tsap_includes = array(
+        'class-tts-secure-storage.php',
         'class-tts-advanced-utils.php',
         'class-tts-analytics.php',
         'class-tts-backup.php',
@@ -174,6 +175,10 @@ add_action( 'plugins_loaded', function () {
         if ( file_exists( $file ) ) {
             require_once $file;
         }
+    }
+
+    if ( class_exists( 'TTS_Secure_Storage' ) ) {
+        TTS_Secure_Storage::instance();
     }
 
     // Load REST API endpoints after other includes.
