@@ -70,6 +70,20 @@ class TTS_Secure_Storage {
     );
 
     /**
+     * Indicates whether the environment supports OpenSSL-based encryption.
+     *
+     * @var bool
+     */
+    private $encryption_supported = true;
+
+    /**
+     * Tracks whether a plaintext fallback warning has been emitted.
+     *
+     * @var bool
+     */
+    private $encryption_warning_emitted = false;
+
+    /**
      * Retrieve the shared instance.
      *
      * @return TTS_Secure_Storage
@@ -83,10 +97,26 @@ class TTS_Secure_Storage {
     }
 
     /**
+     * Reset the shared instance. Intended for internal/test usage.
+     *
+     * @internal
+     *
+     * @return void
+     */
+    public static function reset_instance() {
+        self::$instance = null;
+    }
+
+    /**
      * Register WordPress hooks.
      */
     private function __construct() {
-        $this->sensitive_meta_keys = apply_filters( 'tts_sensitive_meta_keys', $this->sensitive_meta_keys );
+        $this->encryption_supported = $this->determine_encryption_support();
+        $this->sensitive_meta_keys  = apply_filters( 'tts_sensitive_meta_keys', $this->sensitive_meta_keys );
+
+        if ( ! $this->encryption_supported ) {
+            $this->emit_encryption_disabled_warning( array( 'context' => 'bootstrap' ) );
+        }
 
         if ( function_exists( 'add_filter' ) ) {
             add_filter( 'add_post_metadata', array( $this, 'filter_add_post_metadata' ), 10, 5 );
@@ -221,6 +251,10 @@ class TTS_Secure_Storage {
      * @return string|false
      */
     public function encrypt_for_storage( $value, $context = array() ) {
+        if ( ! $this->encryption_supported ) {
+            return $this->fallback_to_plaintext_storage( $value, $context );
+        }
+
         if ( is_string( $value ) && $this->is_encrypted_string( $value ) ) {
             return $value;
         }
@@ -229,18 +263,30 @@ class TTS_Secure_Storage {
 
         if ( empty( $key_info['key'] ) ) {
             $this->log_security_warning( 'Unable to resolve encryption key for secure storage.', $context );
-            return false;
+            return $this->fallback_to_plaintext_storage( $value, $context );
         }
 
         $plain_value   = $this->normalize_plain_value( $value );
         $iv_length     = openssl_cipher_iv_length( self::CIPHER_METHOD );
-        $iv            = random_bytes( $iv_length );
-        $tag           = '';
-        $ciphertext    = openssl_encrypt( $plain_value, self::CIPHER_METHOD, $key_info['key'], OPENSSL_RAW_DATA, $iv, $tag );
+
+        if ( ! is_int( $iv_length ) || $iv_length <= 0 ) {
+            $this->log_security_warning( 'Unable to determine IV length for secure storage cipher.', $context );
+            return $this->fallback_to_plaintext_storage( $value, $context );
+        }
+
+        $iv = $this->generate_random_bytes( $iv_length );
+
+        if ( ! is_string( $iv ) || strlen( $iv ) !== $iv_length ) {
+            $this->log_security_warning( 'Unable to generate a cryptographically secure IV for secure storage.', $context );
+            return $this->fallback_to_plaintext_storage( $value, $context );
+        }
+
+        $tag        = '';
+        $ciphertext = openssl_encrypt( $plain_value, self::CIPHER_METHOD, $key_info['key'], OPENSSL_RAW_DATA, $iv, $tag );
 
         if ( false === $ciphertext ) {
             $this->log_security_warning( 'OpenSSL failed to encrypt metadata payload.', $context );
-            return false;
+            return $this->fallback_to_plaintext_storage( $value, $context );
         }
 
         $payload = array(
@@ -256,7 +302,7 @@ class TTS_Secure_Storage {
 
         if ( false === $json ) {
             $this->log_security_warning( 'Unable to encode encryption payload for storage.', $context );
-            return false;
+            return $this->fallback_to_plaintext_storage( $value, $context );
         }
 
         return self::ENCRYPTION_PREFIX . base64_encode( $json );
@@ -271,6 +317,14 @@ class TTS_Secure_Storage {
      * @return mixed
      */
     public function decrypt_from_storage( $value, $context = array() ) {
+        if ( ! $this->encryption_supported ) {
+            if ( is_string( $value ) && $this->is_encrypted_string( $value ) ) {
+                $this->emit_encryption_disabled_warning( $context );
+            }
+
+            return maybe_unserialize( $value );
+        }
+
         if ( ! is_string( $value ) || ! $this->is_encrypted_string( $value ) ) {
             return maybe_unserialize( $value );
         }
@@ -318,6 +372,109 @@ class TTS_Secure_Storage {
         }
 
         return maybe_unserialize( $plain );
+    }
+
+    /**
+     * Determine whether the environment can perform encryption operations.
+     *
+     * @return bool
+     */
+    private function determine_encryption_support() {
+        $supported = function_exists( 'openssl_encrypt' )
+            && function_exists( 'openssl_decrypt' )
+            && function_exists( 'openssl_cipher_iv_length' );
+
+        if ( function_exists( 'apply_filters' ) ) {
+            $supported = (bool) apply_filters( 'tts_secure_storage_encryption_supported', $supported );
+        }
+
+        return $supported;
+    }
+
+    /**
+     * Generate cryptographically secure random bytes with fallbacks.
+     *
+     * @param int $length Number of bytes required.
+     *
+     * @return string|false
+     */
+    private function generate_random_bytes( $length ) {
+        $length = (int) $length;
+
+        if ( $length <= 0 ) {
+            return false;
+        }
+
+        if ( function_exists( 'random_bytes' ) ) {
+            try {
+                $bytes = random_bytes( $length );
+                if ( is_string( $bytes ) && strlen( $bytes ) === $length ) {
+                    return $bytes;
+                }
+            } catch ( \Throwable $exception ) {
+                // Fall back to other generators when random_bytes fails.
+            }
+        }
+
+        if ( function_exists( 'openssl_random_pseudo_bytes' ) ) {
+            $strong = false;
+            $bytes  = openssl_random_pseudo_bytes( $length, $strong );
+            if ( false !== $bytes && $strong && strlen( $bytes ) === $length ) {
+                return $bytes;
+            }
+        }
+
+        if ( function_exists( 'random_int' ) ) {
+            $bytes = '';
+
+            try {
+                for ( $i = 0; $i < $length; $i++ ) {
+                    $bytes .= chr( random_int( 0, 255 ) );
+                }
+
+                if ( strlen( $bytes ) === $length ) {
+                    return $bytes;
+                }
+            } catch ( \Throwable $exception ) {
+                // If random_int fails we will fall back to plaintext storage.
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Fallback when encryption is not available. Stores plaintext safely and logs once.
+     *
+     * @param mixed $value   Original value.
+     * @param array $context Contextual information.
+     *
+     * @return string
+     */
+    private function fallback_to_plaintext_storage( $value, $context = array() ) {
+        $this->emit_encryption_disabled_warning( $context );
+
+        return is_string( $value ) ? $value : maybe_serialize( $value );
+    }
+
+    /**
+     * Emit a single warning when encryption support is unavailable.
+     *
+     * @param array $context Additional logging context.
+     *
+     * @return void
+     */
+    private function emit_encryption_disabled_warning( $context = array() ) {
+        if ( $this->encryption_warning_emitted ) {
+            return;
+        }
+
+        $this->encryption_warning_emitted = true;
+
+        $this->log_security_warning(
+            'Secure storage encryption is unavailable; sensitive metadata will be stored in plaintext.',
+            $context
+        );
     }
 
     /**
