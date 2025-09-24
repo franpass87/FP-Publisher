@@ -20,6 +20,70 @@ if ( ! defined( 'TSAP_PLUGIN_DIR' ) ) {
     define( 'TSAP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 }
 
+require_once TSAP_PLUGIN_DIR . 'includes/class-tts-service-container.php';
+
+if ( ! function_exists( 'tsap_service_container' ) ) {
+    /**
+     * Retrieve the shared service container instance.
+     *
+     * @return TTS_Service_Container
+     */
+    function tsap_service_container() {
+        static $container = null;
+
+        if ( null === $container ) {
+            $container = new TTS_Service_Container();
+        }
+
+        return $container;
+    }
+}
+
+if ( ! function_exists( 'tsap_register_default_services' ) ) {
+    /**
+     * Register core services with the container.
+     *
+     * @return void
+     */
+    function tsap_register_default_services() {
+        $container = tsap_service_container();
+
+        if ( ! $container->has( 'logger' ) && class_exists( 'TTS_Logger_Service' ) ) {
+            $container->set( 'logger', function () {
+                return new TTS_Logger_Service();
+            } );
+        }
+
+        if ( ! $container->has( 'integration_hub' ) && class_exists( 'TTS_Integration_Hub' ) ) {
+            $container->set( 'integration_hub', function () {
+                return new TTS_Integration_Hub();
+            } );
+        }
+
+        if ( ! $container->has( 'scheduler' ) && class_exists( 'TTS_Scheduler' ) ) {
+            $container->set( 'scheduler', function ( TTS_Service_Container $c ) {
+                return new TTS_Scheduler( $c->get( 'integration_hub' ) );
+            } );
+        }
+
+        if ( ! $container->has( 'rate_limiter' ) && class_exists( 'TTS_Rate_Limiter' ) ) {
+            $container->set( 'rate_limiter', function ( TTS_Service_Container $c ) {
+                return new TTS_Rate_Limiter( $c->get( 'logger' ) );
+            } );
+        }
+
+        if ( ! $container->has( 'security_audit' ) && class_exists( 'TTS_Security_Audit' ) ) {
+            $container->set( 'security_audit', function () {
+                return new TTS_Security_Audit();
+            } );
+        }
+
+        if ( function_exists( 'do_action' ) ) {
+            do_action( 'tsap_container_registered', $container );
+        }
+    }
+}
+
 register_activation_hook( __FILE__, 'tsap_plugin_activate' );
 
 /**
@@ -115,8 +179,19 @@ add_action( 'plugins_loaded', function () {
     // Load REST API endpoints after other includes.
     require_once TSAP_PLUGIN_DIR . 'includes/class-tts-rest.php';
 
-    if ( class_exists( 'TTS_Security_Audit' ) && ! isset( $GLOBALS['tts_security_audit'] ) ) {
-        $GLOBALS['tts_security_audit'] = new TTS_Security_Audit();
+    tsap_register_default_services();
+
+    $container = tsap_service_container();
+
+    // Ensure core services are bootstrapped so their hooks are registered.
+    foreach ( array( 'integration_hub', 'scheduler', 'rate_limiter', 'security_audit' ) as $service_id ) {
+        if ( $container->has( $service_id ) ) {
+            $container->get( $service_id );
+        }
+    }
+
+    if ( function_exists( 'do_action' ) ) {
+        do_action( 'tsap_container_bootstrapped', $container );
     }
 
     // Load admin files when in the dashboard.
@@ -129,19 +204,47 @@ add_action( 'plugins_loaded', function () {
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-frequency-status-page.php';
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-frequency-dashboard-widget.php';
 
-        new TTS_Admin();
-        $GLOBALS['tts_calendar_page'] = new TTS_Calendar_Page();
-        $GLOBALS['tts_health_page'] = new TTS_Health_Page();
-        $GLOBALS['tts_analytics_page'] = new TTS_Analytics_Page();
-        $GLOBALS['tts_log_page'] = new TTS_Log_Page();
-        $GLOBALS['tts_frequency_status_page'] = new TTS_Frequency_Status_Page();
-        
+        $admin_services = array(
+            'admin.controller'            => function () {
+                return new TTS_Admin();
+            },
+            'admin.calendar_page'         => function () {
+                return new TTS_Calendar_Page();
+            },
+            'admin.health_page'           => function () {
+                return new TTS_Health_Page();
+            },
+            'admin.analytics_page'        => function () {
+                return new TTS_Analytics_Page();
+            },
+            'admin.log_page'              => function () {
+                return new TTS_Log_Page();
+            },
+            'admin.frequency_status_page' => function () {
+                return new TTS_Frequency_Status_Page();
+            },
+        );
+
+        foreach ( $admin_services as $service_id => $factory ) {
+            if ( ! $container->has( $service_id ) ) {
+                $container->set( $service_id, $factory );
+            }
+
+            $container->get( $service_id );
+        }
+
         // Initialize content source management
         new TTS_Content_Source();
-        
+
         // Load AI Features page
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-ai-features-page.php';
-        $GLOBALS['tts_ai_features_page'] = new TTS_AI_Features_Page();
+        if ( ! $container->has( 'admin.ai_features_page' ) ) {
+            $container->set( 'admin.ai_features_page', function () {
+                return new TTS_AI_Features_Page();
+            } );
+        }
+
+        $container->get( 'admin.ai_features_page' );
 
         add_action( 'admin_enqueue_scripts', function( $hook ) {
             if ( 'fp-publisher_page_fp-publisher-calendar' !== $hook ) {

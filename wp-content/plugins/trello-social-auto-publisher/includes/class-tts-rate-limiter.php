@@ -48,9 +48,24 @@ class TTS_Rate_Limiter {
     );
 
     /**
-     * Initialize rate limiter
+     * Logger instance used for observability.
+     *
+     * @var object|null
      */
-    public function __construct() {
+    private $logger;
+
+    /**
+     * Initialize rate limiter
+     *
+     * @param object|null $logger Optional PSR-3 compatible logger.
+     */
+    public function __construct( $logger = null ) {
+        if ( is_object( $logger ) && is_callable( array( $logger, 'log' ) ) ) {
+            $this->logger = $logger;
+        } else {
+            $this->logger = null;
+        }
+
         add_action( 'wp_ajax_tts_check_rate_limits', array( $this, 'ajax_check_rate_limits' ) );
         add_action( 'wp_ajax_tts_reset_rate_limits', array( $this, 'ajax_reset_rate_limits' ) );
         add_action( 'wp_ajax_tts_get_quota_status', array( $this, 'ajax_get_quota_status' ) );
@@ -512,7 +527,7 @@ class TTS_Rate_Limiter {
             delete_transient( $key );
         }
         
-        TTS_Logger::log( "Rate limits reset for platform: {$platform}" );
+        $this->log_message( "Rate limits reset for platform: {$platform}" );
         
         return array(
             'success' => true,
@@ -563,7 +578,7 @@ class TTS_Rate_Limiter {
             update_option( 'tts_api_request_logs', array_values( $filtered_logs ) );
         }
         
-        TTS_Logger::log( 'Rate limit cleanup completed' );
+        $this->log_message( 'Rate limit cleanup completed' );
     }
 
     /**
@@ -580,14 +595,14 @@ class TTS_Rate_Limiter {
     public function smart_delay( $platform ) {
         $status = $this->get_rate_limit_status( $platform );
         $health_score = $status['health_score']['score'];
-        
+
         // Implement smart delays based on usage
         // Use non-blocking delay by scheduling a delayed action instead of sleep()
         if ( $health_score < 20 ) {
             // Schedule emergency throttling - delay next request by 5 seconds
             set_transient( 'tts_emergency_throttle_' . get_current_user_id(), time() + 5, 10 );
         } elseif ( $health_score < 40 ) {
-            // Schedule critical throttling - delay next request by 2 seconds  
+            // Schedule critical throttling - delay next request by 2 seconds
             set_transient( 'tts_critical_throttle_' . get_current_user_id(), time() + 2, 5 );
         } elseif ( $health_score < 60 ) {
             // Schedule warning throttling - delay next request by 1 second
@@ -595,7 +610,24 @@ class TTS_Rate_Limiter {
         }
         // No delay for good/excellent health scores
     }
-}
 
-// Initialize rate limiter
-new TTS_Rate_Limiter();
+    /**
+     * Write log messages using the injected logger when available.
+     *
+     * @param string $message Message to record.
+     * @param string $level   Severity level.
+     * @param array  $context Additional context details.
+     *
+     * @return void
+     */
+    private function log_message( $message, $level = 'info', $context = array() ) {
+        if ( $this->logger && is_callable( array( $this->logger, 'log' ) ) ) {
+            call_user_func( array( $this->logger, 'log' ), $message, $level, $context );
+            return;
+        }
+
+        if ( class_exists( 'TTS_Logger' ) ) {
+            TTS_Logger::log( $message, $level, $context );
+        }
+    }
+}

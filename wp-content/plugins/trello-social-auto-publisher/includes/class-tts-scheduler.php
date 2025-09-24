@@ -789,5 +789,3 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
         return isset( $delays[ $attempt - 1 ] ) ? $delays[ $attempt - 1 ] : end( $delays );
     }
 }
-
-new TTS_Scheduler();
