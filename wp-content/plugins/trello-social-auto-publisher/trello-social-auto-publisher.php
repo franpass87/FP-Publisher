@@ -60,15 +60,39 @@ if ( ! function_exists( 'tsap_register_default_services' ) ) {
             } );
         }
 
-        if ( ! $container->has( 'scheduler' ) && class_exists( 'TTS_Scheduler' ) ) {
-            $container->set( 'scheduler', function ( TTS_Service_Container $c ) {
-                return new TTS_Scheduler( $c->get( 'integration_hub' ) );
-            } );
-        }
-
         if ( ! $container->has( 'rate_limiter' ) && class_exists( 'TTS_Rate_Limiter' ) ) {
             $container->set( 'rate_limiter', function ( TTS_Service_Container $c ) {
                 return new TTS_Rate_Limiter( $c->get( 'logger' ) );
+            } );
+        }
+
+        if ( ! $container->has( 'error_recovery' ) && class_exists( 'TTS_Error_Recovery' ) ) {
+            $container->set( 'error_recovery', function () {
+                return new TTS_Error_Recovery();
+            } );
+        }
+
+        if ( ! $container->has( 'channel_queue' ) && class_exists( 'TTS_Channel_Queue' ) ) {
+            $container->set( 'channel_queue', function () {
+                return new TTS_Channel_Queue();
+            } );
+        }
+
+        if ( ! $container->has( 'publisher_guard' ) && class_exists( 'TTS_Publisher_Guard' ) ) {
+            $container->set( 'publisher_guard', function ( TTS_Service_Container $c ) {
+                return new TTS_Publisher_Guard( $c->get( 'rate_limiter' ), $c->get( 'error_recovery' ) );
+            } );
+        }
+
+        if ( ! $container->has( 'scheduler' ) && class_exists( 'TTS_Scheduler' ) ) {
+            $container->set( 'scheduler', function ( TTS_Service_Container $c ) {
+                $integration = $c->get( 'integration_hub' );
+                $queue       = $c->has( 'channel_queue' ) ? $c->get( 'channel_queue' ) : null;
+                $limiter     = $c->has( 'rate_limiter' ) ? $c->get( 'rate_limiter' ) : null;
+                $recovery    = $c->has( 'error_recovery' ) ? $c->get( 'error_recovery' ) : null;
+                $guard       = $c->has( 'publisher_guard' ) ? $c->get( 'publisher_guard' ) : null;
+
+                return new TTS_Scheduler( $integration, null, $queue, $limiter, $recovery, $guard );
             } );
         }
 
@@ -144,8 +168,10 @@ add_action( 'plugins_loaded', function () {
         'class-tts-notifier.php',
         'class-tts-performance.php',
         'class-tts-rate-limiter.php',
+        'class-tts-channel-queue.php',
         'class-tts-operating-contracts.php',
         'class-tts-scheduler.php',
+        'class-tts-publisher-guard.php',
         'class-tts-security-audit.php',
         'class-tts-settings.php',
         'class-tts-shortener.php',
@@ -189,7 +215,7 @@ add_action( 'plugins_loaded', function () {
     $container = tsap_service_container();
 
     // Ensure core services are bootstrapped so their hooks are registered.
-    foreach ( array( 'integration_hub', 'scheduler', 'rate_limiter', 'security_audit' ) as $service_id ) {
+    foreach ( array( 'integration_hub', 'channel_queue', 'error_recovery', 'scheduler', 'rate_limiter', 'publisher_guard', 'security_audit' ) as $service_id ) {
         if ( $container->has( $service_id ) ) {
             $container->get( $service_id );
         }

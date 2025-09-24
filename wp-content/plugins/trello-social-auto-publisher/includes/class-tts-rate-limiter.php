@@ -66,6 +66,8 @@ class TTS_Rate_Limiter {
             $this->logger = null;
         }
 
+        $this->apply_custom_limits();
+
         add_action( 'wp_ajax_tts_check_rate_limits', array( $this, 'ajax_check_rate_limits' ) );
         add_action( 'wp_ajax_tts_reset_rate_limits', array( $this, 'ajax_reset_rate_limits' ) );
         add_action( 'wp_ajax_tts_get_quota_status', array( $this, 'ajax_get_quota_status' ) );
@@ -75,6 +77,31 @@ class TTS_Rate_Limiter {
         if ( ! wp_next_scheduled( 'tts_hourly_rate_limit_cleanup' ) ) {
             wp_schedule_event( time(), 'hourly', 'tts_hourly_rate_limit_cleanup' );
         }
+    }
+
+    /**
+     * Merge custom limits coming from configuration.
+     */
+    private function apply_custom_limits() {
+        $config = get_option( 'tts_channel_limits', array() );
+
+        if ( ! is_array( $config ) ) {
+            $config = array();
+        }
+
+        foreach ( $config as $channel => $settings ) {
+            if ( ! is_array( $settings ) || ! isset( $settings['rate_limits'] ) ) {
+                continue;
+            }
+
+            $channel_key = sanitize_key( $channel );
+            $overrides   = is_array( $settings['rate_limits'] ) ? $settings['rate_limits'] : array();
+            $defaults    = isset( $this->rate_limits[ $channel_key ] ) ? $this->rate_limits[ $channel_key ] : array();
+
+            $this->rate_limits[ $channel_key ] = wp_parse_args( $overrides, $defaults );
+        }
+
+        $this->rate_limits = apply_filters( 'tts_rate_limiter_limits', $this->rate_limits );
     }
 
     /**
