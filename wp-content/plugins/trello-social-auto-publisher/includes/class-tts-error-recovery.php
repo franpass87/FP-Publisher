@@ -51,6 +51,36 @@ class TTS_Error_Recovery {
     }
 
     /**
+     * Assess severity for an error payload.
+     *
+     * @param mixed $error Error instance/data.
+     *
+     * @return int Severity constant.
+     */
+    public function assess_error_severity( $error ) {
+        $normalized = $this->normalize_error( $error );
+        return $this->determine_severity( $normalized );
+    }
+
+    /**
+     * Human readable severity label.
+     *
+     * @param int $severity Severity constant.
+     *
+     * @return string
+     */
+    public function get_severity_label( $severity ) {
+        $severity_names = array(
+            self::SEVERITY_LOW      => 'low',
+            self::SEVERITY_MEDIUM   => 'medium',
+            self::SEVERITY_HIGH     => 'high',
+            self::SEVERITY_CRITICAL => 'critical',
+        );
+
+        return $severity_names[ $severity ] ?? 'unknown';
+    }
+
+    /**
      * Add custom cron schedules
      */
     public function add_custom_cron_schedules( $schedules ) {
@@ -82,17 +112,34 @@ class TTS_Error_Recovery {
         $error_data = $this->normalize_error( $error );
         $severity = $this->determine_severity( $error_data );
         $strategy = $this->determine_retry_strategy( $error_data, $operation );
-        
+        $skip_retry_queue = ! empty( $context['skip_retry_queue'] );
+
         // Log error with context
         $this->log_error( $error_data, $operation, $context, $severity );
-        
+
         // Determine if retry is appropriate
         if ( $this->should_retry( $error_data, $operation, $context ) ) {
-            return $this->queue_for_retry( $error_data, $operation, $context, $strategy );
+            if ( $skip_retry_queue ) {
+                $retry_count = ( $context['retry_count'] ?? 0 ) + 1;
+
+                return array(
+                    'status'        => 'retry_delegated',
+                    'retry_count'   => $retry_count,
+                    'strategy'      => $strategy,
+                    'severity'      => $severity,
+                    'severity_label' => $this->get_severity_label( $severity ),
+                );
+            }
+
+            return $this->queue_for_retry( $error_data, $operation, $context, $strategy, $severity );
         }
-        
+
         // Handle non-retryable errors
-        return $this->handle_permanent_failure( $error_data, $operation, $context );
+        $result = $this->handle_permanent_failure( $error_data, $operation, $context, $severity );
+        $result['severity']       = $severity;
+        $result['severity_label'] = $this->get_severity_label( $severity );
+
+        return $result;
     }
 
     /**
@@ -217,10 +264,10 @@ class TTS_Error_Recovery {
     /**
      * Queue operation for retry
      */
-    private function queue_for_retry( $error_data, $operation, $context, $strategy ) {
+    private function queue_for_retry( $error_data, $operation, $context, $strategy, $severity ) {
         $retry_count = ( $context['retry_count'] ?? 0 ) + 1;
         $next_attempt = $this->calculate_next_attempt( $retry_count, $strategy );
-        
+
         $retry_item = array(
             'id' => uniqid( 'retry_' ),
             'operation' => $operation,
@@ -235,18 +282,20 @@ class TTS_Error_Recovery {
         
         $this->add_to_retry_queue( $retry_item );
         
-        TTS_Logger::log( 
-            sprintf( 'Operation queued for retry: %s (attempt %d/%d)', 
-                $operation, $retry_count, $this->max_retries 
+        TTS_Logger::log(
+            sprintf( 'Operation queued for retry: %s (attempt %d/%d)',
+                $operation, $retry_count, $this->max_retries
             ),
             'info'
         );
-        
+
         return array(
             'status' => 'queued_for_retry',
             'retry_count' => $retry_count,
             'next_attempt' => $next_attempt,
-            'strategy' => $strategy
+            'strategy' => $strategy,
+            'severity' => $severity,
+            'severity_label' => $this->get_severity_label( $severity ),
         );
     }
 
@@ -704,24 +753,26 @@ class TTS_Error_Recovery {
     /**
      * Handle permanent failure
      */
-    private function handle_permanent_failure( $error_data, $operation, $context ) {
+    private function handle_permanent_failure( $error_data, $operation, $context, $severity ) {
         // Log permanent failure
-        TTS_Logger::log( 
-            sprintf( 'Permanent failure for operation: %s. Error: %s', 
-                $operation, $error_data['message'] 
+        TTS_Logger::log(
+            sprintf( 'Permanent failure for operation: %s. Error: %s',
+                $operation, $error_data['message']
             ),
             'error'
         );
-        
+
         // Send notification for critical failures
-        if ( $this->determine_severity( $error_data ) >= self::SEVERITY_HIGH ) {
+        if ( $severity >= self::SEVERITY_HIGH ) {
             $this->send_failure_notification( $error_data, $operation, $context );
         }
-        
+
         return array(
             'status' => 'permanent_failure',
             'error' => $error_data,
-            'operation' => $operation
+            'operation' => $operation,
+            'severity' => $severity,
+            'severity_label' => $this->get_severity_label( $severity ),
         );
     }
 
