@@ -3928,8 +3928,15 @@ class TTS_Admin {
                 return wp_send_json_error( array( 'message' => __( 'Failed to access the upload directory. Please try again later.', 'fp-publisher' ) ), 500 );
             }
 
-            $file_path    = trailingslashit( $upload_dir['path'] ) . $filename;
-            $encoded_data = json_encode( $result['data'], JSON_PRETTY_PRINT );
+            $file_path = trailingslashit( $upload_dir['path'] ) . $filename;
+            $encoded_data = isset( $result['encoded'] ) ? $result['encoded'] : wp_json_encode( $result['data'], JSON_PRETTY_PRINT );
+
+            if ( ! is_string( $encoded_data ) || '' === $encoded_data ) {
+                error_log( 'TTS_Admin: Export encoding returned an invalid payload for ' . $file_path );
+
+                return wp_send_json_error( array( 'message' => __( 'Failed to encode the export package.', 'fp-publisher' ) ), 500 );
+            }
+
             $file_written = file_put_contents( $file_path, $encoded_data );
 
             if ( false === $file_written ) {
@@ -3947,7 +3954,13 @@ class TTS_Admin {
             );
         }
 
-        return wp_send_json_error( array( 'message' => sanitize_text_field( $result['error'] ) ), 500 );
+        $error_message = isset( $result['error'] ) ? sanitize_text_field( $result['error'] ) : __( 'Export failed due to an unexpected error.', 'fp-publisher' );
+
+        if ( isset( $result['error_code'] ) ) {
+            error_log( 'TTS_Admin: Export error [' . $result['error_code'] . '] ' . $error_message );
+        }
+
+        return wp_send_json_error( array( 'message' => $error_message ), 500 );
     }
     
     /**
