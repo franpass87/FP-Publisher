@@ -73,6 +73,51 @@ $tests = array(
 
         tts_assert_equals( 'hello', $masked['note'], 'Non-sensitive fields should remain unchanged.' );
     },
+    'plaintext_fallback_when_encryption_unavailable' => function () {
+        tts_reset_test_state();
+
+        $disable_encryption = function () {
+            return false;
+        };
+
+        add_filter( 'tts_secure_storage_encryption_supported', $disable_encryption );
+
+        TTS_Secure_Storage::reset_instance();
+        TTS_Secure_Storage::instance();
+
+        $post_id = 207;
+        $token   = 'fallback-token-value';
+
+        update_post_meta( $post_id, '_tts_fb_token', $token );
+
+        tts_assert_true(
+            isset( $GLOBALS['tts_test_post_meta'][ $post_id ]['_tts_fb_token'] ),
+            'Meta value should be stored even when encryption support is missing.'
+        );
+
+        $stored_value = $GLOBALS['tts_test_post_meta'][ $post_id ]['_tts_fb_token'];
+
+        tts_assert_false(
+            is_string( $stored_value ) && 0 === strpos( $stored_value, TTS_Secure_Storage::ENCRYPTION_PREFIX ),
+            'Secure prefix should not be applied when encryption is unavailable.'
+        );
+
+        tts_assert_equals(
+            $token,
+            maybe_unserialize( $stored_value ),
+            'Plaintext fallback should preserve the original value.'
+        );
+
+        $retrieved = get_post_meta( $post_id, '_tts_fb_token', true );
+
+        tts_assert_equals(
+            $token,
+            $retrieved,
+            'Retrieving fallback metadata should return the original value.'
+        );
+
+        tts_reset_test_state();
+    },
 );
 
 foreach ( $tests as $name => $test ) {

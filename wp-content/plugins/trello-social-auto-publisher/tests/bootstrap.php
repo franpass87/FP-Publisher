@@ -1372,6 +1372,10 @@ function tts_reset_test_state() {
     $GLOBALS['tts_registered_deactivation_hooks'] = array();
     $GLOBALS['tts_is_admin']              = false;
 
+    if ( class_exists( 'TTS_Secure_Storage' ) && method_exists( 'TTS_Secure_Storage', 'reset_instance' ) ) {
+        TTS_Secure_Storage::reset_instance();
+    }
+
     $_GET     = array();
     $_POST    = array();
     $_REQUEST = array();
