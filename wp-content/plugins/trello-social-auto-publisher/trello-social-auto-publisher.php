@@ -22,6 +22,47 @@ if ( ! defined( 'TSAP_PLUGIN_DIR' ) ) {
 
 require_once TSAP_PLUGIN_DIR . 'includes/class-tts-service-container.php';
 
+if ( ! function_exists( 'tsap_load_textdomain' ) ) {
+    /**
+     * Load the plugin text domain for translations.
+     *
+     * @return void
+     */
+    function tsap_load_textdomain() {
+        $domain = 'fp-publisher';
+
+        $locale = 'en_US';
+
+        if ( function_exists( 'determine_locale' ) ) {
+            $locale = determine_locale();
+        } elseif ( function_exists( 'get_locale' ) ) {
+            $locale = get_locale();
+        }
+
+        if ( function_exists( 'apply_filters' ) ) {
+            $locale = apply_filters( 'plugin_locale', $locale, $domain );
+        }
+
+        if ( function_exists( 'unload_textdomain' ) ) {
+            unload_textdomain( $domain );
+        }
+
+        if ( defined( 'WP_LANG_DIR' ) && function_exists( 'load_textdomain' ) ) {
+            $mofile = trailingslashit( WP_LANG_DIR ) . 'plugins/' . $domain . '-' . $locale . '.mo';
+
+            if ( file_exists( $mofile ) ) {
+                load_textdomain( $domain, $mofile );
+            }
+        }
+
+        if ( function_exists( 'load_plugin_textdomain' ) ) {
+            load_plugin_textdomain( $domain, false, dirname( plugin_basename( __FILE__ ) ) . '/languages/' );
+        }
+    }
+
+    add_action( 'plugins_loaded', 'tsap_load_textdomain', 5 );
+}
+
 if ( ! function_exists( 'tsap_service_container' ) ) {
     /**
      * Retrieve the shared service container instance.
