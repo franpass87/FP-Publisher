@@ -183,6 +183,15 @@ class TTS_Content_Source {
         
         $source = get_post_meta( $post->ID, '_tts_content_source', true );
 
+        $show_trello_disabled_notice = false;
+        $trello_notice_state         = '';
+        $stored_notice       = get_post_meta( $post->ID, '_tts_trello_disabled_notice', true );
+        if ( is_string( $stored_notice ) && '' !== $stored_notice ) {
+            $trello_notice_state        = $stored_notice;
+            $show_trello_disabled_notice = true;
+            delete_post_meta( $post->ID, '_tts_trello_disabled_notice' );
+        }
+
         if ( empty( $source ) ) {
             $requested_source = $this->get_requested_source();
             if ( '' !== $requested_source ) {
@@ -191,11 +200,13 @@ class TTS_Content_Source {
         }
 
         $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
-        $show_trello_disabled_notice = false;
 
         if ( ! $trello_enabled && 'trello' === $source ) {
             $source                     = 'manual';
             $show_trello_disabled_notice = true;
+            if ( '' === $trello_notice_state ) {
+                $trello_notice_state = 'disabled';
+            }
         }
 
         $source_reference = get_post_meta( $post->ID, '_tts_source_reference', true );
@@ -219,7 +230,13 @@ class TTS_Content_Source {
         echo '</select>';
 
         if ( $show_trello_disabled_notice ) {
-            echo '<p class="description tts-content-source-warning">' . esc_html__( 'Trello integration is disabled. Manual creation will be used for this post unless you choose another source.', 'fp-publisher' ) . '</p>';
+            $notice_message = __( 'Trello integration is disabled. Manual creation will be used for this post unless you choose another source.', 'fp-publisher' );
+
+            if ( 'converted' === $trello_notice_state ) {
+                $notice_message = __( 'Your Trello selection was converted to Manual because the Trello integration was disabled when the post was saved.', 'fp-publisher' );
+            }
+
+            echo '<p class="description tts-content-source-warning">' . esc_html( $notice_message ) . '</p>';
         }
         echo '</td>';
         echo '</tr>';
@@ -262,8 +279,22 @@ class TTS_Content_Source {
             }
         }
 
+        $trello_notice_flag = '';
+        $trello_enabled     = (bool) get_option( 'tts_trello_enabled', 1 );
+
+        if ( null !== $source && 'trello' === $source && ! $trello_enabled ) {
+            $source              = 'manual';
+            $trello_notice_flag  = 'converted';
+        }
+
         if ( null !== $source && ( '' === $source || array_key_exists( $source, self::SOURCES ) ) ) {
             update_post_meta( $post_id, '_tts_content_source', $source );
+        }
+
+        if ( 'converted' === $trello_notice_flag ) {
+            update_post_meta( $post_id, '_tts_trello_disabled_notice', $trello_notice_flag );
+        } else {
+            delete_post_meta( $post_id, '_tts_trello_disabled_notice' );
         }
 
         // Save source reference.
