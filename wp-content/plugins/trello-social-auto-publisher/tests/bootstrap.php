@@ -67,6 +67,9 @@ $GLOBALS['tts_registered_activation_hooks'] = array();
 $GLOBALS['tts_registered_deactivation_hooks'] = array();
 $GLOBALS['tts_registered_rest_routes'] = array();
 $GLOBALS['tts_is_admin']              = false;
+$GLOBALS['tts_loaded_textdomains']    = array();
+$GLOBALS['tts_loaded_plugin_textdomains'] = array();
+$GLOBALS['tts_unloaded_textdomains']  = array();
 
 if ( ! function_exists( '__' ) ) {
     function __( $text, $domain = null ) {
@@ -145,6 +148,65 @@ if ( ! function_exists( 'esc_url_raw' ) ) {
 if ( ! function_exists( 'esc_js' ) ) {
     function esc_js( $text ) {
         return addslashes( (string) $text );
+    }
+}
+
+if ( ! function_exists( 'get_locale' ) ) {
+    function get_locale() {
+        return 'en_US';
+    }
+}
+
+if ( ! function_exists( 'determine_locale' ) ) {
+    function determine_locale() {
+        return get_locale();
+    }
+}
+
+if ( ! function_exists( 'unload_textdomain' ) ) {
+    function unload_textdomain( $domain ) {
+        $GLOBALS['tts_unloaded_textdomains'][] = $domain;
+
+        return true;
+    }
+}
+
+if ( ! function_exists( 'load_textdomain' ) ) {
+    function load_textdomain( $domain, $mofile ) {
+        $GLOBALS['tts_loaded_textdomains'][] = array(
+            'domain' => $domain,
+            'mofile' => $mofile,
+        );
+
+        return true;
+    }
+}
+
+if ( ! function_exists( 'load_plugin_textdomain' ) ) {
+    function load_plugin_textdomain( $domain, $deprecated = false, $plugin_rel_path = '' ) {
+        unset( $deprecated );
+
+        $GLOBALS['tts_loaded_plugin_textdomains'][] = array(
+            'domain' => $domain,
+            'path'   => $plugin_rel_path,
+        );
+
+        return true;
+    }
+}
+
+if ( ! function_exists( 'plugin_basename' ) ) {
+    function plugin_basename( $file ) {
+        $file = str_replace( '\\', '/', (string) $file );
+
+        $plugins_dir = dirname( TSAP_PLUGIN_DIR );
+        $plugins_dir = rtrim( str_replace( '\\', '/', $plugins_dir ), '/' );
+
+        if ( '' !== $plugins_dir && 0 === strpos( $file, $plugins_dir ) ) {
+            $file = ltrim( substr( $file, strlen( $plugins_dir ) ), '/' );
+        }
+
+        return $file;
     }
 }
 
@@ -1371,6 +1433,9 @@ function tts_reset_test_state() {
     $GLOBALS['tts_registered_activation_hooks'] = array();
     $GLOBALS['tts_registered_deactivation_hooks'] = array();
     $GLOBALS['tts_is_admin']              = false;
+    $GLOBALS['tts_loaded_textdomains']    = array();
+    $GLOBALS['tts_loaded_plugin_textdomains'] = array();
+    $GLOBALS['tts_unloaded_textdomains']  = array();
 
     if ( class_exists( 'TTS_Secure_Storage' ) && method_exists( 'TTS_Secure_Storage', 'reset_instance' ) ) {
         TTS_Secure_Storage::reset_instance();
