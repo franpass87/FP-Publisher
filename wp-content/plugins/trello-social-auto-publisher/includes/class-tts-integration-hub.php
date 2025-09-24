@@ -1544,7 +1544,7 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
      */
     private function sync_hubspot_data( $integration_id, $credentials, $data_type ) {
         $data_types = array( 'contacts', 'companies', 'deals', 'campaigns' );
-        
+
         if ( $data_type === 'all' ) {
             $types_to_sync = $data_types;
         } else {
@@ -1581,6 +1581,248 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
             'data_types' => $types_to_sync,
             'last_sync' => current_time( 'mysql' )
         );
+    }
+
+    /**
+     * Sync Salesforce data.
+     *
+     * @param int    $integration_id Integration ID.
+     * @param array  $credentials    Credentials.
+     * @param string $data_type      Data type.
+     *
+     * @return array|WP_Error Sync result or error.
+     */
+    private function sync_salesforce_data( $integration_id, $credentials, $data_type ) {
+        $instance_url = isset( $credentials['instance_url'] ) ? trim( $credentials['instance_url'] ) : '';
+        $access_token = isset( $credentials['access_token'] ) ? trim( $credentials['access_token'] ) : '';
+
+        if ( '' === $access_token && ! empty( $credentials['security_token'] ) ) {
+            $access_token = trim( $credentials['security_token'] );
+        }
+
+        if ( '' === $instance_url ) {
+            return new WP_Error( 'missing_instance_url', __( 'A Salesforce instance URL is required to sync data.', 'fp-publisher' ) );
+        }
+
+        if ( ! preg_match( '#^https?://#i', $instance_url ) ) {
+            $instance_url = 'https://' . ltrim( $instance_url, '/' );
+        }
+
+        if ( ! wp_http_validate_url( $instance_url ) ) {
+            return new WP_Error( 'invalid_instance_url', __( 'The Salesforce instance URL is not valid.', 'fp-publisher' ) );
+        }
+
+        if ( '' === $access_token ) {
+            return new WP_Error( 'missing_access_token', __( 'A Salesforce access token or security token is required.', 'fp-publisher' ) );
+        }
+
+        $supported_types = array(
+            'leads'         => 'SELECT Id, FirstName, LastName, Company, Email, Phone, Status, LeadSource, CreatedDate FROM Lead ORDER BY CreatedDate DESC LIMIT 200',
+            'contacts'      => 'SELECT Id, FirstName, LastName, Email, Phone, AccountId, CreatedDate FROM Contact ORDER BY CreatedDate DESC LIMIT 200',
+            'opportunities' => 'SELECT Id, Name, Amount, StageName, CloseDate, CreatedDate FROM Opportunity ORDER BY LastModifiedDate DESC LIMIT 200',
+            'campaigns'     => 'SELECT Id, Name, Status, Type, StartDate, EndDate, CreatedDate FROM Campaign ORDER BY CreatedDate DESC LIMIT 200',
+        );
+
+        if ( 'all' === $data_type ) {
+            $types_to_sync = array_keys( $supported_types );
+        } else {
+            $slug = sanitize_key( $data_type );
+
+            if ( ! isset( $supported_types[ $slug ] ) ) {
+                return new WP_Error( 'invalid_data_type', __( 'Unsupported Salesforce data type requested.', 'fp-publisher' ) );
+            }
+
+            $types_to_sync = array( $slug );
+        }
+
+        $total_synced = 0;
+        $total_failed = 0;
+        $normalized_instance = rtrim( $instance_url, '/' );
+
+        foreach ( $types_to_sync as $type_slug ) {
+            $query   = $supported_types[ $type_slug ];
+            $records = $this->fetch_salesforce_records( $normalized_instance, $access_token, $query, $type_slug );
+
+            if ( is_wp_error( $records ) ) {
+                $total_failed++;
+                $this->maybe_record_event(
+                    'error',
+                    __( 'Salesforce sync failed.', 'fp-publisher' ),
+                    array(
+                        'integration_id' => (int) $integration_id,
+                        'data_type'      => $type_slug,
+                        'error'          => $records->get_error_message(),
+                    )
+                );
+                continue;
+            }
+
+            if ( empty( $records['data'] ) ) {
+                continue;
+            }
+
+            $this->store_integration_data( $integration_id, $type_slug, $records['data'] );
+            $total_synced += count( $records['data'] );
+        }
+
+        return array(
+            'synced_records' => $total_synced,
+            'failed_records' => $total_failed,
+            'data_types'     => $types_to_sync,
+            'last_sync'      => current_time( 'mysql' ),
+        );
+    }
+
+    /**
+     * Fetch records from Salesforce using a SOQL query.
+     *
+     * @param string $instance_url Instance base URL.
+     * @param string $access_token Access token.
+     * @param string $query        SOQL query.
+     * @param string $data_type    Data type identifier.
+     *
+     * @return array|WP_Error
+     */
+    private function fetch_salesforce_records( $instance_url, $access_token, $query, $data_type ) {
+        $endpoint    = trailingslashit( $instance_url ) . 'services/data/v57.0/query';
+        $request_url = add_query_arg( array( 'q' => $query ), $endpoint );
+
+        $normalized_records = array();
+        $attempts           = 0;
+        $max_pages          = 5;
+
+        while ( $request_url && $attempts < $max_pages ) {
+            $response = wp_remote_get(
+                $request_url,
+                array(
+                    'timeout' => 20,
+                    'headers' => array(
+                        'Authorization' => 'Bearer ' . $access_token,
+                        'Accept'        => 'application/json',
+                    ),
+                )
+            );
+
+            if ( is_wp_error( $response ) ) {
+                return new WP_Error(
+                    'salesforce_request_failed',
+                    sprintf( __( 'Salesforce request failed: %s', 'fp-publisher' ), $response->get_error_message() )
+                );
+            }
+
+            $status_code = wp_remote_retrieve_response_code( $response );
+            $body        = wp_remote_retrieve_body( $response );
+            $data        = json_decode( $body, true );
+
+            if ( 200 !== $status_code || ! is_array( $data ) ) {
+                $error_message = __( 'Unexpected response from Salesforce.', 'fp-publisher' );
+
+                if ( is_array( $data ) && isset( $data[0]['message'] ) ) {
+                    $error_message = $data[0]['message'];
+                } elseif ( is_array( $data ) && isset( $data['message'] ) ) {
+                    $error_message = $data['message'];
+                } elseif ( ! empty( $body ) ) {
+                    $error_message = $body;
+                }
+
+                return new WP_Error( 'salesforce_api_error', $error_message, $status_code );
+            }
+
+            if ( isset( $data['records'] ) && is_array( $data['records'] ) ) {
+                foreach ( $data['records'] as $record ) {
+                    if ( ! is_array( $record ) ) {
+                        continue;
+                    }
+
+                    $normalized_records[] = $this->normalize_salesforce_record( $record, $data_type );
+                }
+            }
+
+            if ( empty( $data['nextRecordsUrl'] ) ) {
+                break;
+            }
+
+            $request_url = rtrim( $instance_url, '/' ) . $data['nextRecordsUrl'];
+            $attempts++;
+        }
+
+        return array(
+            'data' => $normalized_records,
+        );
+    }
+
+    /**
+     * Normalize Salesforce record for storage.
+     *
+     * @param array  $record    Salesforce record.
+     * @param string $data_type Data type identifier.
+     *
+     * @return array
+     */
+    private function normalize_salesforce_record( array $record, $data_type ) {
+        $hash_source = function_exists( 'wp_json_encode' ) ? wp_json_encode( $record ) : json_encode( $record );
+        $id_value    = isset( $record['Id'] ) ? (string) $record['Id'] : md5( (string) $hash_source );
+
+        $created_raw = isset( $record['CreatedDate'] ) ? (string) $record['CreatedDate'] : '';
+        $created_ts  = strtotime( $created_raw );
+        $created_at  = false !== $created_ts ? gmdate( 'Y-m-d H:i:s', $created_ts ) : current_time( 'mysql' );
+
+        $normalized = array(
+            'id'           => $id_value,
+            'type'         => $data_type,
+            'created_date' => $created_at,
+        );
+
+        switch ( $data_type ) {
+            case 'leads':
+                $normalized['first_name'] = isset( $record['FirstName'] ) ? sanitize_text_field( (string) $record['FirstName'] ) : '';
+                $normalized['last_name']  = isset( $record['LastName'] ) ? sanitize_text_field( (string) $record['LastName'] ) : '';
+                $normalized['company']    = isset( $record['Company'] ) ? sanitize_text_field( (string) $record['Company'] ) : '';
+                $email                    = isset( $record['Email'] ) ? (string) $record['Email'] : '';
+                if ( '' !== $email ) {
+                    $email = function_exists( 'sanitize_email' ) ? sanitize_email( $email ) : sanitize_text_field( $email );
+                }
+                $normalized['email']      = $email;
+                $normalized['phone']      = isset( $record['Phone'] ) ? sanitize_text_field( (string) $record['Phone'] ) : '';
+                $normalized['status']     = isset( $record['Status'] ) ? sanitize_text_field( (string) $record['Status'] ) : '';
+                $normalized['lead_source'] = isset( $record['LeadSource'] ) ? sanitize_text_field( (string) $record['LeadSource'] ) : '';
+                break;
+
+            case 'contacts':
+                $normalized['first_name'] = isset( $record['FirstName'] ) ? sanitize_text_field( (string) $record['FirstName'] ) : '';
+                $normalized['last_name']  = isset( $record['LastName'] ) ? sanitize_text_field( (string) $record['LastName'] ) : '';
+                $email                    = isset( $record['Email'] ) ? (string) $record['Email'] : '';
+                if ( '' !== $email ) {
+                    $email = function_exists( 'sanitize_email' ) ? sanitize_email( $email ) : sanitize_text_field( $email );
+                }
+                $normalized['email']      = $email;
+                $normalized['phone']      = isset( $record['Phone'] ) ? sanitize_text_field( (string) $record['Phone'] ) : '';
+                $normalized['account_id'] = isset( $record['AccountId'] ) ? sanitize_text_field( (string) $record['AccountId'] ) : '';
+                break;
+
+            case 'opportunities':
+                $normalized['name']  = isset( $record['Name'] ) ? sanitize_text_field( (string) $record['Name'] ) : '';
+                $normalized['amount'] = isset( $record['Amount'] ) && is_numeric( $record['Amount'] ) ? (float) $record['Amount'] : 0.0;
+                $normalized['stage'] = isset( $record['StageName'] ) ? sanitize_text_field( (string) $record['StageName'] ) : '';
+                $close_raw           = isset( $record['CloseDate'] ) ? (string) $record['CloseDate'] : '';
+                $close_ts            = '' !== $close_raw ? strtotime( $close_raw ) : false;
+                $normalized['close_date'] = false !== $close_ts ? gmdate( 'Y-m-d', $close_ts ) : sanitize_text_field( $close_raw );
+                break;
+
+            case 'campaigns':
+                $normalized['name']       = isset( $record['Name'] ) ? sanitize_text_field( (string) $record['Name'] ) : '';
+                $normalized['status']     = isset( $record['Status'] ) ? sanitize_text_field( (string) $record['Status'] ) : '';
+                $normalized['type_label'] = isset( $record['Type'] ) ? sanitize_text_field( (string) $record['Type'] ) : '';
+                $start_raw                = isset( $record['StartDate'] ) ? (string) $record['StartDate'] : '';
+                $end_raw                  = isset( $record['EndDate'] ) ? (string) $record['EndDate'] : '';
+                $start_ts                 = '' !== $start_raw ? strtotime( $start_raw ) : false;
+                $end_ts                   = '' !== $end_raw ? strtotime( $end_raw ) : false;
+                $normalized['start_date'] = false !== $start_ts ? gmdate( 'Y-m-d', $start_ts ) : sanitize_text_field( $start_raw );
+                $normalized['end_date']   = false !== $end_ts ? gmdate( 'Y-m-d', $end_ts ) : sanitize_text_field( $end_raw );
+                break;
+        }
+
+        return $normalized;
     }
 
     /**
@@ -1900,7 +2142,7 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
         $api_key = $credentials['api_key'];
         $datacenter = substr( $api_key, strpos( $api_key, '-' ) + 1 );
         $base_url = "https://{$datacenter}.api.mailchimp.com/3.0";
-        
+
         $endpoints = array(
             'lists' => "/lists?count=100",
             'campaigns' => "/campaigns?count=100",
@@ -1963,6 +2205,400 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
             'data' => $processed_data,
             'total' => $data['total_items'] ?? count( $processed_data )
         );
+    }
+
+    /**
+     * Sync Google Analytics data.
+     *
+     * @param int    $integration_id Integration ID.
+     * @param array  $credentials    Credentials.
+     * @param string $data_type      Data type identifier.
+     *
+     * @return array|WP_Error Sync result or error.
+     */
+    private function sync_google_analytics_data( $integration_id, $credentials, $data_type ) {
+        $service_account_json = isset( $credentials['service_account_json'] ) ? trim( $credentials['service_account_json'] ) : '';
+        $view_id              = isset( $credentials['view_id'] ) ? trim( $credentials['view_id'] ) : '';
+
+        if ( '' === $service_account_json ) {
+            return new WP_Error( 'missing_credentials', __( 'Google service account credentials are required to sync analytics data.', 'fp-publisher' ) );
+        }
+
+        if ( '' === $view_id ) {
+            return new WP_Error( 'missing_view_id', __( 'A Google Analytics View ID is required to sync reports.', 'fp-publisher' ) );
+        }
+
+        $access_token = $this->get_google_analytics_access_token( $service_account_json );
+        if ( is_wp_error( $access_token ) ) {
+            return $access_token;
+        }
+
+        $report_definitions = array(
+            'overview' => array(
+                'metrics'    => array(
+                    'ga:sessions'  => 'sessions',
+                    'ga:users'     => 'users',
+                    'ga:pageviews' => 'pageviews',
+                    'ga:bounceRate'=> 'bounce_rate',
+                ),
+                'dimensions' => array( 'ga:date' ),
+                'date_range' => array( 'startDate' => '7daysAgo', 'endDate' => 'today' ),
+            ),
+            'top_pages' => array(
+                'metrics'    => array(
+                    'ga:pageviews'       => 'pageviews',
+                    'ga:uniquePageviews' => 'unique_pageviews',
+                    'ga:avgTimeOnPage'   => 'avg_time_on_page',
+                ),
+                'dimensions' => array( 'ga:pagePath' ),
+                'orderBys'   => array(
+                    array(
+                        'fieldName' => 'ga:pageviews',
+                        'sortOrder' => 'DESCENDING',
+                    ),
+                ),
+                'pageSize'   => 25,
+                'date_range' => array( 'startDate' => '30daysAgo', 'endDate' => 'today' ),
+            ),
+            'traffic_sources' => array(
+                'metrics'    => array(
+                    'ga:sessions' => 'sessions',
+                    'ga:users'    => 'users',
+                    'ga:newUsers' => 'new_users',
+                ),
+                'dimensions' => array( 'ga:sourceMedium' ),
+                'orderBys'   => array(
+                    array(
+                        'fieldName' => 'ga:sessions',
+                        'sortOrder' => 'DESCENDING',
+                    ),
+                ),
+                'pageSize'   => 25,
+                'date_range' => array( 'startDate' => '30daysAgo', 'endDate' => 'today' ),
+            ),
+        );
+
+        if ( 'all' === $data_type ) {
+            $types_to_sync = array_keys( $report_definitions );
+        } else {
+            $slug = sanitize_key( $data_type );
+
+            if ( ! isset( $report_definitions[ $slug ] ) ) {
+                return new WP_Error( 'invalid_data_type', __( 'Unsupported Google Analytics data set requested.', 'fp-publisher' ) );
+            }
+
+            $types_to_sync = array( $slug );
+        }
+
+        $total_synced = 0;
+        $total_failed = 0;
+
+        foreach ( $types_to_sync as $type_slug ) {
+            $config = $report_definitions[ $type_slug ];
+            $report = $this->fetch_google_analytics_report( $access_token, $view_id, $config, $type_slug );
+
+            if ( is_wp_error( $report ) ) {
+                $total_failed++;
+                $this->maybe_record_event(
+                    'error',
+                    __( 'Google Analytics sync failed.', 'fp-publisher' ),
+                    array(
+                        'integration_id' => (int) $integration_id,
+                        'data_type'      => $type_slug,
+                        'error'          => $report->get_error_message(),
+                    )
+                );
+                continue;
+            }
+
+            if ( empty( $report['data'] ) ) {
+                continue;
+            }
+
+            $this->store_integration_data( $integration_id, $type_slug, $report['data'] );
+            $total_synced += count( $report['data'] );
+        }
+
+        return array(
+            'synced_records' => $total_synced,
+            'failed_records' => $total_failed,
+            'data_types'     => $types_to_sync,
+            'last_sync'      => current_time( 'mysql' ),
+        );
+    }
+
+    /**
+     * Obtain a Google Analytics access token from a service account.
+     *
+     * @param string $service_account_json Service account JSON.
+     *
+     * @return string|WP_Error Access token or error.
+     */
+    private function get_google_analytics_access_token( $service_account_json ) {
+        if ( ! function_exists( 'openssl_sign' ) ) {
+            return new WP_Error( 'missing_openssl', __( 'The OpenSSL PHP extension is required to authenticate with Google Analytics.', 'fp-publisher' ) );
+        }
+
+        $service_account = json_decode( $service_account_json, true );
+
+        if ( empty( $service_account ) || ! isset( $service_account['client_email'], $service_account['private_key'] ) ) {
+            return new WP_Error( 'invalid_service_account', __( 'Invalid Google service account JSON.', 'fp-publisher' ) );
+        }
+
+        $token_uri = $service_account['token_uri'] ?? 'https://oauth2.googleapis.com/token';
+        $scope     = 'https://www.googleapis.com/auth/analytics.readonly';
+
+        $header_json = wp_json_encode( array( 'alg' => 'RS256', 'typ' => 'JWT' ) );
+        if ( false === $header_json ) {
+            return new WP_Error( 'jwt_encoding_failed', __( 'Failed to encode the Google authentication header.', 'fp-publisher' ) );
+        }
+
+        $jwt_header = $this->base64_url_encode( $header_json );
+        if ( '' === $jwt_header ) {
+            return new WP_Error( 'jwt_encoding_failed', __( 'Failed to encode the Google authentication header.', 'fp-publisher' ) );
+        }
+
+        $now    = time();
+        $claims = array(
+            'iss'   => $service_account['client_email'],
+            'scope' => $scope,
+            'aud'   => $token_uri,
+            'exp'   => $now + 3600,
+            'iat'   => $now,
+        );
+
+        $claims_json = wp_json_encode( $claims );
+        if ( false === $claims_json ) {
+            return new WP_Error( 'jwt_encoding_failed', __( 'Failed to encode the Google authentication claims.', 'fp-publisher' ) );
+        }
+
+        $jwt_claim   = $this->base64_url_encode( $claims_json );
+        $signing_str = $jwt_header . '.' . $jwt_claim;
+
+        $private_key_resource = openssl_pkey_get_private( $service_account['private_key'] );
+        if ( false === $private_key_resource ) {
+            return new WP_Error( 'invalid_private_key', __( 'Unable to parse the Google private key.', 'fp-publisher' ) );
+        }
+
+        $signature        = '';
+        $signature_success = openssl_sign( $signing_str, $signature, $private_key_resource, 'sha256WithRSAEncryption' );
+        openssl_free_key( $private_key_resource );
+
+        if ( ! $signature_success ) {
+            return new WP_Error( 'jwt_signature_failed', __( 'Failed to sign the Google service account JWT.', 'fp-publisher' ) );
+        }
+
+        $assertion = $signing_str . '.' . $this->base64_url_encode( $signature );
+
+        $token_response = wp_remote_post(
+            $token_uri,
+            array(
+                'timeout' => 20,
+                'headers' => array(
+                    'Content-Type' => 'application/x-www-form-urlencoded',
+                ),
+                'body'    => array(
+                    'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                    'assertion'  => $assertion,
+                ),
+            )
+        );
+
+        if ( is_wp_error( $token_response ) ) {
+            return new WP_Error( 'google_token_request_failed', sprintf( __( 'Google token request failed: %s', 'fp-publisher' ), $token_response->get_error_message() ) );
+        }
+
+        $token_status = wp_remote_retrieve_response_code( $token_response );
+        $token_body   = wp_remote_retrieve_body( $token_response );
+        $token_data   = json_decode( $token_body, true );
+
+        if ( 200 !== $token_status || empty( $token_data['access_token'] ) ) {
+            $error_message = __( 'Unexpected response while obtaining a Google access token.', 'fp-publisher' );
+
+            if ( is_array( $token_data ) && isset( $token_data['error_description'] ) ) {
+                $error_message = $token_data['error_description'];
+            } elseif ( is_array( $token_data ) && isset( $token_data['error'] ) ) {
+                $error_message = $token_data['error'];
+            } elseif ( ! empty( $token_body ) ) {
+                $error_message = $token_body;
+            }
+
+            return new WP_Error( 'google_token_error', $error_message, $token_status );
+        }
+
+        return (string) $token_data['access_token'];
+    }
+
+    /**
+     * Fetch and normalize a Google Analytics report.
+     *
+     * @param string $access_token Access token.
+     * @param string $view_id      View identifier.
+     * @param array  $config       Report configuration.
+     * @param string $data_type    Data type slug.
+     *
+     * @return array|WP_Error
+     */
+    private function fetch_google_analytics_report( $access_token, $view_id, array $config, $data_type ) {
+        $endpoint = 'https://analyticsreporting.googleapis.com/v4/reports:batchGet';
+
+        $request = array(
+            'viewId'     => (string) $view_id,
+            'dateRanges' => array(
+                array(
+                    'startDate' => $config['date_range']['startDate'] ?? '30daysAgo',
+                    'endDate'   => $config['date_range']['endDate'] ?? 'today',
+                ),
+            ),
+            'metrics'    => array(),
+        );
+
+        foreach ( $config['metrics'] as $metric => $alias ) {
+            $request['metrics'][] = array( 'expression' => $metric );
+        }
+
+        if ( ! empty( $config['dimensions'] ) ) {
+            $request['dimensions'] = array();
+            foreach ( $config['dimensions'] as $dimension ) {
+                $request['dimensions'][] = array( 'name' => $dimension );
+            }
+        }
+
+        if ( ! empty( $config['orderBys'] ) ) {
+            $request['orderBys'] = $config['orderBys'];
+        }
+
+        if ( ! empty( $config['pageSize'] ) ) {
+            $request['pageSize'] = (int) $config['pageSize'];
+        }
+
+        $payload = array( 'reportRequests' => array( $request ) );
+        $payload_json = wp_json_encode( $payload );
+
+        if ( false === $payload_json ) {
+            return new WP_Error( 'json_encoding_error', __( 'Failed to encode the Google Analytics request payload.', 'fp-publisher' ) );
+        }
+
+        $response = wp_remote_post(
+            $endpoint,
+            array(
+                'timeout' => 30,
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $access_token,
+                    'Content-Type'  => 'application/json',
+                ),
+                'body'    => $payload_json,
+            )
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error( 'google_analytics_request_failed', sprintf( __( 'Google Analytics request failed: %s', 'fp-publisher' ), $response->get_error_message() ) );
+        }
+
+        $status_code = wp_remote_retrieve_response_code( $response );
+        $body        = wp_remote_retrieve_body( $response );
+        $data        = json_decode( $body, true );
+
+        if ( 200 !== $status_code ) {
+            $error_message = __( 'Unexpected response from the Google Analytics Reporting API.', 'fp-publisher' );
+
+            if ( is_array( $data ) && isset( $data['error']['message'] ) ) {
+                $error_message = $data['error']['message'];
+            } elseif ( ! empty( $body ) ) {
+                $error_message = $body;
+            }
+
+            return new WP_Error( 'google_analytics_error', $error_message, $status_code );
+        }
+
+        $reports = $data['reports'] ?? array();
+        if ( empty( $reports ) || ! isset( $reports[0]['data']['rows'] ) || ! is_array( $reports[0]['data']['rows'] ) ) {
+            return array( 'data' => array() );
+        }
+
+        $rows        = $reports[0]['data']['rows'];
+        $normalized  = array();
+
+        foreach ( $rows as $row ) {
+            if ( ! is_array( $row ) ) {
+                continue;
+            }
+
+            $normalized[] = $this->normalize_google_analytics_row( $row, $data_type, $config, $view_id );
+        }
+
+        return array( 'data' => $normalized );
+    }
+
+    /**
+     * Normalize a Google Analytics report row.
+     *
+     * @param array  $row       Row data.
+     * @param string $data_type Data type slug.
+     * @param array  $config    Report configuration.
+     * @param string $view_id   View identifier.
+     *
+     * @return array
+     */
+    private function normalize_google_analytics_row( array $row, $data_type, array $config, $view_id ) {
+        $dimensions = isset( $row['dimensions'] ) && is_array( $row['dimensions'] ) ? $row['dimensions'] : array();
+        $metrics    = isset( $row['metrics'][0]['values'] ) && is_array( $row['metrics'][0]['values'] ) ? $row['metrics'][0]['values'] : array();
+
+        $normalized = array(
+            'type'    => $data_type,
+            'view_id' => (string) $view_id,
+        );
+
+        switch ( $data_type ) {
+            case 'overview':
+                $date_dimension         = isset( $dimensions[0] ) ? preg_replace( '/[^0-9]/', '', (string) $dimensions[0] ) : '';
+                $normalized['id']       = '' !== $date_dimension ? $date_dimension : md5( wp_json_encode( $row ) );
+                $normalized['date']     = ( strlen( $date_dimension ) === 8 )
+                    ? substr( $date_dimension, 0, 4 ) . '-' . substr( $date_dimension, 4, 2 ) . '-' . substr( $date_dimension, 6, 2 )
+                    : ( isset( $dimensions[0] ) ? sanitize_text_field( (string) $dimensions[0] ) : '' );
+                break;
+
+            case 'top_pages':
+                $page_path              = isset( $dimensions[0] ) ? (string) $dimensions[0] : '';
+                $normalized['page_path'] = sanitize_text_field( $page_path );
+                $normalized['id']        = '' !== $page_path ? $page_path : md5( wp_json_encode( $row ) );
+                break;
+
+            case 'traffic_sources':
+                $source_medium              = isset( $dimensions[0] ) ? (string) $dimensions[0] : '';
+                $normalized['source_medium'] = sanitize_text_field( $source_medium );
+                $normalized['id']            = '' !== $source_medium ? $source_medium : md5( wp_json_encode( $row ) );
+                break;
+
+            default:
+                $normalized['id'] = md5( wp_json_encode( $row ) );
+                break;
+        }
+
+        $metric_index = 0;
+        foreach ( $config['metrics'] as $metric => $alias ) {
+            $value = isset( $metrics[ $metric_index ] ) ? $metrics[ $metric_index ] : null;
+
+            if ( null === $value ) {
+                $normalized[ $alias ] = null;
+            } elseif ( is_numeric( $value ) ) {
+                $numeric_value = (float) $value;
+                $alias_lower   = strtolower( $alias );
+
+                if ( false !== strpos( $alias_lower, 'rate' ) || false !== strpos( $alias_lower, 'avg' ) ) {
+                    $normalized[ $alias ] = round( $numeric_value, 4 );
+                } else {
+                    $rounded = round( $numeric_value );
+                    $normalized[ $alias ] = abs( $numeric_value - $rounded ) < 0.0001 ? (int) $rounded : round( $numeric_value, 4 );
+                }
+            } else {
+                $normalized[ $alias ] = sanitize_text_field( (string) $value );
+            }
+
+            $metric_index++;
+        }
+
+        return $normalized;
     }
 
     /**
