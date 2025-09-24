@@ -59,6 +59,13 @@ $GLOBALS['tts_registered_post_meta']  = array();
 $GLOBALS['tts_registered_roles']      = array();
 $GLOBALS['tts_test_posts']            = array();
 $GLOBALS['tts_deleted_posts']         = array();
+$GLOBALS['tts_cleared_scheduled_hooks'] = array();
+$GLOBALS['tts_unscheduled_actions']   = array();
+$GLOBALS['tts_scheduled_actions']     = array();
+$GLOBALS['tts_scheduled_single_events'] = array();
+$GLOBALS['tts_registered_activation_hooks'] = array();
+$GLOBALS['tts_registered_deactivation_hooks'] = array();
+$GLOBALS['tts_is_admin']              = false;
 
 if ( ! function_exists( '__' ) ) {
     function __( $text, $domain = null ) {
@@ -113,6 +120,12 @@ if ( ! function_exists( 'esc_attr_e' ) ) {
 if ( ! function_exists( 'esc_attr' ) ) {
     function esc_attr( $text ) {
         return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
+    }
+}
+
+if ( ! function_exists( 'is_admin' ) ) {
+    function is_admin() {
+        return ! empty( $GLOBALS['tts_is_admin'] );
     }
 }
 
@@ -392,6 +405,10 @@ if ( ! class_exists( 'WP_Role' ) ) {
             $this->capabilities[ $capability ] = (bool) $grant;
         }
 
+        public function remove_cap( $capability ) {
+            unset( $this->capabilities[ $capability ] );
+        }
+
         public function has_cap( $capability ) {
             return ! empty( $this->capabilities[ $capability ] );
         }
@@ -409,9 +426,27 @@ if ( ! function_exists( 'add_role' ) ) {
     }
 }
 
+if ( ! function_exists( 'remove_role' ) ) {
+    function remove_role( $role ) {
+        unset( $GLOBALS['tts_registered_roles'][ $role ] );
+    }
+}
+
 if ( ! function_exists( 'get_role' ) ) {
     function get_role( $role ) {
         return $GLOBALS['tts_registered_roles'][ $role ] ?? null;
+    }
+}
+
+if ( ! function_exists( 'register_activation_hook' ) ) {
+    function register_activation_hook( $file, $callback ) {
+        $GLOBALS['tts_registered_activation_hooks'][ $file ] = $callback;
+    }
+}
+
+if ( ! function_exists( 'register_deactivation_hook' ) ) {
+    function register_deactivation_hook( $file, $callback ) {
+        $GLOBALS['tts_registered_deactivation_hooks'][ $file ] = $callback;
     }
 }
 
@@ -745,6 +780,54 @@ if ( ! function_exists( 'wp_schedule_event' ) ) {
             'timestamp'  => $timestamp,
             'recurrence' => $recurrence,
             'args'       => $args,
+        );
+
+        return true;
+    }
+}
+
+if ( ! function_exists( 'wp_schedule_single_event' ) ) {
+    function wp_schedule_single_event( $timestamp, $hook, $args = array() ) {
+        $GLOBALS['tts_scheduled_single_events'][] = array(
+            'hook'      => $hook,
+            'timestamp' => $timestamp,
+            'args'      => $args,
+        );
+
+        return true;
+    }
+}
+
+if ( ! function_exists( 'wp_clear_scheduled_hook' ) ) {
+    function wp_clear_scheduled_hook( $hook, $args = array() ) {
+        $GLOBALS['tts_cleared_scheduled_hooks'][] = array(
+            'hook' => $hook,
+            'args' => $args,
+        );
+
+        return true;
+    }
+}
+
+if ( ! function_exists( 'as_schedule_single_action' ) ) {
+    function as_schedule_single_action( $timestamp, $hook, $args = array(), $group = '' ) {
+        $GLOBALS['tts_scheduled_actions'][] = array(
+            'hook'      => $hook,
+            'timestamp' => $timestamp,
+            'args'      => $args,
+            'group'     => $group,
+        );
+
+        return uniqid( 'action_', true );
+    }
+}
+
+if ( ! function_exists( 'as_unschedule_all_actions' ) ) {
+    function as_unschedule_all_actions( $hook, $args = null, $group = null ) {
+        $GLOBALS['tts_unscheduled_actions'][] = array(
+            'hook'  => $hook,
+            'args'  => $args,
+            'group' => $group,
         );
 
         return true;
@@ -1203,6 +1286,13 @@ function tts_reset_test_state() {
     $GLOBALS['tts_registered_roles']      = array();
     $GLOBALS['tts_test_posts']            = array();
     $GLOBALS['tts_deleted_posts']         = array();
+    $GLOBALS['tts_cleared_scheduled_hooks'] = array();
+    $GLOBALS['tts_unscheduled_actions']   = array();
+    $GLOBALS['tts_scheduled_actions']     = array();
+    $GLOBALS['tts_scheduled_single_events'] = array();
+    $GLOBALS['tts_registered_activation_hooks'] = array();
+    $GLOBALS['tts_registered_deactivation_hooks'] = array();
+    $GLOBALS['tts_is_admin']              = false;
 
     $_GET     = array();
     $_POST    = array();

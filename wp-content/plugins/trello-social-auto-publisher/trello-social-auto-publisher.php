@@ -109,6 +109,7 @@ if ( ! function_exists( 'tsap_register_default_services' ) ) {
 }
 
 register_activation_hook( __FILE__, 'tsap_plugin_activate' );
+register_deactivation_hook( __FILE__, 'tsap_plugin_deactivate' );
 
 /**
  * Handle plugin activation tasks.
@@ -136,6 +137,60 @@ function tsap_plugin_activate() {
 
     if ( class_exists( 'TTS_Integration_Hub' ) ) {
         TTS_Integration_Hub::install();
+    }
+}
+
+/**
+ * Handle plugin deactivation tasks.
+ */
+function tsap_plugin_deactivate() {
+    $scheduled_hooks = array(
+        'tts_refresh_tokens',
+        'tts_fetch_metrics',
+        'tts_check_links',
+        'tts_daily_competitor_analysis',
+        'tts_check_publishing_frequencies',
+        'tts_hourly_rate_limit_cleanup',
+        'tts_process_retry_queue',
+        'tts_database_cleanup',
+        'tts_weekly_cleanup',
+        'tts_hourly_cache_cleanup',
+        'tts_daily_backup',
+        'tts_hourly_health_check',
+        'tts_daily_system_report',
+        'tts_daily_security_cleanup',
+        'tts_integration_sync',
+        'tts_integration_sync_single',
+        'tts_purge_old_logs',
+    );
+
+    foreach ( $scheduled_hooks as $hook ) {
+        if ( function_exists( 'wp_clear_scheduled_hook' ) ) {
+            wp_clear_scheduled_hook( $hook );
+        }
+    }
+
+    $channel_queue_file = TSAP_PLUGIN_DIR . 'includes/class-tts-channel-queue.php';
+    if ( ! class_exists( 'TTS_Channel_Queue' ) && file_exists( $channel_queue_file ) ) {
+        require_once $channel_queue_file;
+    }
+
+    if ( function_exists( 'as_unschedule_all_actions' ) ) {
+        as_unschedule_all_actions( 'tts_publish_social_post' );
+        as_unschedule_all_actions( 'tts_integration_sync_single' );
+
+        if ( class_exists( 'TTS_Channel_Queue' ) ) {
+            as_unschedule_all_actions( TTS_Channel_Queue::ACTION_HOOK );
+        }
+    }
+
+    $cpt_file = TSAP_PLUGIN_DIR . 'includes/class-tts-cpt.php';
+    if ( ! class_exists( 'TTS_CPT' ) && file_exists( $cpt_file ) ) {
+        require_once $cpt_file;
+    }
+
+    if ( class_exists( 'TTS_CPT' ) && is_callable( array( 'TTS_CPT', 'remove_roles' ) ) ) {
+        TTS_CPT::remove_roles();
     }
 }
 

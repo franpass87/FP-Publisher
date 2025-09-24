@@ -77,15 +77,15 @@ class TTS_CPT {
         $roles = array(
             'fp_publisher_manager'  => array(
                 'name' => __( 'FP Publisher Manager', 'fp-publisher' ),
-                'caps' => $this->get_manager_capabilities(),
+                'caps' => self::get_manager_capabilities(),
             ),
             'fp_publisher_editor'   => array(
                 'name' => __( 'FP Publisher Editor', 'fp-publisher' ),
-                'caps' => $this->get_editor_capabilities(),
+                'caps' => self::get_editor_capabilities(),
             ),
             'fp_publisher_reviewer' => array(
                 'name' => __( 'FP Publisher Reviewer', 'fp-publisher' ),
-                'caps' => $this->get_reviewer_capabilities(),
+                'caps' => self::get_reviewer_capabilities(),
             ),
         );
 
@@ -105,8 +105,32 @@ class TTS_CPT {
 
         $admin_role = get_role( 'administrator' );
         if ( $admin_role instanceof WP_Role ) {
-            foreach ( array_keys( $this->get_manager_capabilities() ) as $capability ) {
+            foreach ( array_keys( self::get_manager_capabilities() ) as $capability ) {
                 $admin_role->add_cap( $capability );
+            }
+        }
+    }
+
+    /**
+     * Remove custom roles and capabilities during plugin deactivation.
+     */
+    public static function remove_roles() {
+        $roles = array(
+            'fp_publisher_manager',
+            'fp_publisher_editor',
+            'fp_publisher_reviewer',
+        );
+
+        foreach ( $roles as $role_key ) {
+            if ( function_exists( 'remove_role' ) ) {
+                remove_role( $role_key );
+            }
+        }
+
+        $admin_role = get_role( 'administrator' );
+        if ( $admin_role instanceof WP_Role ) {
+            foreach ( array_keys( self::get_manager_capabilities() ) as $capability ) {
+                $admin_role->remove_cap( $capability );
             }
         }
     }
@@ -116,7 +140,7 @@ class TTS_CPT {
      *
      * @return array<string, bool>
      */
-    private function get_post_management_capabilities() {
+    private static function get_post_management_capabilities() {
         return array(
             'tts_read_social_post'              => true,
             'tts_read_social_posts'             => true,
@@ -141,7 +165,7 @@ class TTS_CPT {
      *
      * @return array<string, bool>
      */
-    private function get_manager_capabilities() {
+    private static function get_manager_capabilities() {
         return array_merge(
             array(
                 'read'                  => true,
@@ -154,7 +178,7 @@ class TTS_CPT {
                 'tts_import_data'       => true,
                 'tts_approve_posts'     => true,
             ),
-            $this->get_post_management_capabilities()
+            self::get_post_management_capabilities()
         );
     }
 
@@ -163,14 +187,14 @@ class TTS_CPT {
      *
      * @return array<string, bool>
      */
-    private function get_editor_capabilities() {
+    private static function get_editor_capabilities() {
         return array_merge(
             array(
                 'read'             => true,
                 'tts_view_reports' => true,
                 'tts_approve_posts'=> true,
             ),
-            $this->get_post_management_capabilities()
+            self::get_post_management_capabilities()
         );
     }
 
@@ -179,7 +203,7 @@ class TTS_CPT {
      *
      * @return array<string, bool>
      */
-    private function get_reviewer_capabilities() {
+    private static function get_reviewer_capabilities() {
         return array(
             'read'                          => true,
             'tts_read_social_post'          => true,
