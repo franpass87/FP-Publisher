@@ -75,6 +75,12 @@ This document outlines the comprehensive security audit and quality improvements
 - **Prepared statements**: Verified all database queries use proper prepared statements
 - **SQL injection protection**: Confirmed all dynamic queries are properly escaped
 
+### 4. Zero-Trust Access Controls
+- **Centralized AJAX hardening**: Every admin AJAX hook now maps to a nonce/capability pair through `enforce_ajax_security`, returning structured 403 errors instead of silently failing. 【F:wp-content/plugins/trello-social-auto-publisher/admin/class-tts-admin.php†L24-L144】
+- **REST endpoint gating**: Manual publish/status routes validate the `X-WP-Nonce` header and require `tts_publish_social_posts`/`tts_read_social_posts` alongside object-level caps, preventing replay or privilege escalation. 【F:wp-content/plugins/trello-social-auto-publisher/includes/class-tts-rest.php†L27-L95】
+- **Granular roles & meta policies**: Custom manager/editor/reviewer roles receive curated capability sets, and every critical post meta field is protected via capability-aware `auth_callback` logic to enforce least privilege. 【F:wp-content/plugins/trello-social-auto-publisher/includes/class-tts-cpt.php†L76-L409】
+- **Regression coverage**: New admin security tests assert CSRF rejection, capability enforcement, sanitized payloads, and REST permission behavior to guard against regressions. 【F:wp-content/plugins/trello-social-auto-publisher/tests/test-admin-security.php†L10-L198】
+
 ## Performance Optimizations
 
 ### 1. Database Performance
@@ -152,6 +158,7 @@ This document outlines the comprehensive security audit and quality improvements
 - **Nonce verification**: All AJAX endpoints verified
 - **Capability checks**: All admin functions verified
 - **Input sanitization**: All user inputs properly escaped
+- **Automated attack simulations**: Added unit coverage for CSRF denial, privilege escalation attempts, and HTML injection to codify the zero-trust model. 【F:wp-content/plugins/trello-social-auto-publisher/tests/test-admin-security.php†L10-L198】
 
 ### 3. Performance Testing
 - **Database queries**: Optimized queries benchmarked

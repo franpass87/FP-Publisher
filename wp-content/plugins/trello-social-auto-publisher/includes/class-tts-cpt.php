@@ -19,6 +19,7 @@ class TTS_CPT {
      */
     public function __construct() {
         add_action( 'init', array( $this, 'register_post_type' ) );
+        add_action( 'init', array( $this, 'register_roles' ) );
         add_action( 'init', array( $this, 'register_meta_fields' ) );
         add_action( 'add_meta_boxes_tts_social_post', array( $this, 'add_schedule_metabox' ) );
         add_action( 'add_meta_boxes_tts_social_post', array( $this, 'add_preview_metabox' ) );
@@ -46,9 +47,260 @@ class TTS_CPT {
             'supports'           => array( 'title', 'editor', 'custom-fields', 'thumbnail' ),
             'show_in_rest'       => true,
             'label'              => __( 'Social Posts', 'fp-publisher' ),
+            'capability_type'    => array( 'tts_social_post', 'tts_social_posts' ),
+            'map_meta_cap'       => true,
+            'capabilities'       => array(
+                'edit_post'              => 'tts_edit_social_post',
+                'read_post'              => 'tts_read_social_post',
+                'delete_post'            => 'tts_delete_social_post',
+                'edit_posts'             => 'tts_edit_social_posts',
+                'edit_others_posts'      => 'tts_edit_others_social_posts',
+                'publish_posts'          => 'tts_publish_social_posts',
+                'read_private_posts'     => 'tts_read_private_social_posts',
+                'delete_posts'           => 'tts_delete_social_posts',
+                'delete_private_posts'   => 'tts_delete_private_social_posts',
+                'delete_published_posts' => 'tts_delete_published_social_posts',
+                'delete_others_posts'    => 'tts_delete_others_social_posts',
+                'edit_private_posts'     => 'tts_edit_private_social_posts',
+                'edit_published_posts'   => 'tts_edit_published_social_posts',
+                'create_posts'           => 'tts_create_social_posts',
+            ),
         );
 
         register_post_type( 'tts_social_post', $args );
+    }
+
+    /**
+     * Ensure custom roles exist and administrators receive required capabilities.
+     */
+    public function register_roles() {
+        $roles = array(
+            'fp_publisher_manager'  => array(
+                'name' => __( 'FP Publisher Manager', 'fp-publisher' ),
+                'caps' => $this->get_manager_capabilities(),
+            ),
+            'fp_publisher_editor'   => array(
+                'name' => __( 'FP Publisher Editor', 'fp-publisher' ),
+                'caps' => $this->get_editor_capabilities(),
+            ),
+            'fp_publisher_reviewer' => array(
+                'name' => __( 'FP Publisher Reviewer', 'fp-publisher' ),
+                'caps' => $this->get_reviewer_capabilities(),
+            ),
+        );
+
+        foreach ( $roles as $role_key => $role_data ) {
+            $role = get_role( $role_key );
+
+            if ( ! $role ) {
+                $role = add_role( $role_key, $role_data['name'], $role_data['caps'] );
+            } elseif ( $role instanceof WP_Role ) {
+                foreach ( $role_data['caps'] as $capability => $grant ) {
+                    if ( $grant ) {
+                        $role->add_cap( $capability );
+                    }
+                }
+            }
+        }
+
+        $admin_role = get_role( 'administrator' );
+        if ( $admin_role instanceof WP_Role ) {
+            foreach ( array_keys( $this->get_manager_capabilities() ) as $capability ) {
+                $admin_role->add_cap( $capability );
+            }
+        }
+    }
+
+    /**
+     * Core capabilities shared between roles that manage social posts.
+     *
+     * @return array<string, bool>
+     */
+    private function get_post_management_capabilities() {
+        return array(
+            'tts_read_social_post'              => true,
+            'tts_read_social_posts'             => true,
+            'tts_read_private_social_posts'     => true,
+            'tts_edit_social_post'              => true,
+            'tts_edit_social_posts'             => true,
+            'tts_edit_private_social_posts'     => true,
+            'tts_edit_published_social_posts'   => true,
+            'tts_edit_others_social_posts'      => true,
+            'tts_create_social_posts'           => true,
+            'tts_publish_social_posts'          => true,
+            'tts_delete_social_post'            => true,
+            'tts_delete_social_posts'           => true,
+            'tts_delete_private_social_posts'   => true,
+            'tts_delete_published_social_posts' => true,
+            'tts_delete_others_social_posts'    => true,
+        );
+    }
+
+    /**
+     * Capabilities granted to manager role.
+     *
+     * @return array<string, bool>
+     */
+    private function get_manager_capabilities() {
+        return array_merge(
+            array(
+                'read'                  => true,
+                'tts_manage_clients'    => true,
+                'tts_manage_integrations'=> true,
+                'tts_manage_system'     => true,
+                'tts_manage_health'     => true,
+                'tts_view_reports'      => true,
+                'tts_export_data'       => true,
+                'tts_import_data'       => true,
+                'tts_approve_posts'     => true,
+            ),
+            $this->get_post_management_capabilities()
+        );
+    }
+
+    /**
+     * Capabilities for editors handling social posts.
+     *
+     * @return array<string, bool>
+     */
+    private function get_editor_capabilities() {
+        return array_merge(
+            array(
+                'read'             => true,
+                'tts_view_reports' => true,
+                'tts_approve_posts'=> true,
+            ),
+            $this->get_post_management_capabilities()
+        );
+    }
+
+    /**
+     * Capabilities for reviewers who approve content.
+     *
+     * @return array<string, bool>
+     */
+    private function get_reviewer_capabilities() {
+        return array(
+            'read'                          => true,
+            'tts_read_social_post'          => true,
+            'tts_read_social_posts'         => true,
+            'tts_read_private_social_posts' => true,
+            'tts_view_reports'              => true,
+            'tts_approve_posts'             => true,
+        );
+    }
+
+    /**
+     * Determine if the current user can manage post meta with the provided capabilities.
+     *
+     * @param array<int, string> $required_capabilities Capabilities that must be granted.
+     * @param int                $post_id               Optional post context.
+     *
+     * @return bool
+     */
+    private function user_can_manage_meta( array $required_capabilities, $post_id ) {
+        foreach ( $required_capabilities as $capability ) {
+            if ( ! current_user_can( $capability ) ) {
+                return false;
+            }
+        }
+
+        $post_id = absint( $post_id );
+        if ( $post_id > 0 && ! current_user_can( 'edit_post', $post_id ) ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if the current user can manage editor-level meta fields.
+     *
+     * @param int $post_id Post context.
+     *
+     * @return bool
+     */
+    private function can_manage_editor_meta( $post_id ) {
+        return $this->user_can_manage_meta( array( 'tts_edit_social_posts' ), $post_id );
+    }
+
+    /**
+     * Check if the current user can manage approval-specific meta fields.
+     *
+     * @param int $post_id Post context.
+     *
+     * @return bool
+     */
+    private function can_manage_approval_meta( $post_id ) {
+        return $this->user_can_manage_meta( array( 'tts_approve_posts' ), $post_id );
+    }
+
+    /**
+     * Check if the current user can manage client specific meta fields.
+     *
+     * @param int $post_id Post context.
+     *
+     * @return bool
+     */
+    private function can_manage_client_meta( $post_id ) {
+        return $this->user_can_manage_meta( array( 'tts_manage_clients', 'tts_edit_social_posts' ), $post_id );
+    }
+
+    /**
+     * Authorization callback for editor-level post meta.
+     *
+     * @param bool   $allowed  Whether the meta operation is currently allowed.
+     * @param string $meta_key Meta key being modified.
+     * @param int    $post_id  Post identifier.
+     *
+     * @return bool
+     */
+    public function authorize_editor_meta( $allowed, $meta_key, $post_id, $user_id = 0, $cap = '', $caps = array() ) {
+        unset( $meta_key, $user_id, $cap, $caps );
+
+        if ( ! $this->can_manage_editor_meta( $post_id ) ) {
+            return false;
+        }
+
+        return (bool) $allowed;
+    }
+
+    /**
+     * Authorization callback for approval-specific post meta.
+     *
+     * @param bool   $allowed  Whether the meta operation is currently allowed.
+     * @param string $meta_key Meta key being modified.
+     * @param int    $post_id  Post identifier.
+     *
+     * @return bool
+     */
+    public function authorize_approval_meta( $allowed, $meta_key, $post_id, $user_id = 0, $cap = '', $caps = array() ) {
+        unset( $meta_key, $user_id, $cap, $caps );
+
+        if ( ! $this->can_manage_approval_meta( $post_id ) ) {
+            return false;
+        }
+
+        return (bool) $allowed;
+    }
+
+    /**
+     * Authorization callback for client assignment meta.
+     *
+     * @param bool   $allowed  Whether the meta operation is currently allowed.
+     * @param string $meta_key Meta key being modified.
+     * @param int    $post_id  Post identifier.
+     *
+     * @return bool
+     */
+    public function authorize_client_meta( $allowed, $meta_key, $post_id, $user_id = 0, $cap = '', $caps = array() ) {
+        unset( $meta_key, $user_id, $cap, $caps );
+
+        if ( ! $this->can_manage_client_meta( $post_id ) ) {
+            return false;
+        }
+
+        return (bool) $allowed;
     }
 
     /**
@@ -62,6 +314,7 @@ class TTS_CPT {
                 'show_in_rest' => true,
                 'single'       => true,
                 'type'         => 'integer',
+                'auth_callback' => array( $this, 'authorize_client_meta' ),
             )
         );
 
@@ -76,6 +329,7 @@ class TTS_CPT {
                     'type' => 'string',
                 ),
                 'default'      => array(),
+                'auth_callback' => array( $this, 'authorize_editor_meta' ),
             )
         );
 
@@ -87,6 +341,7 @@ class TTS_CPT {
                 'single'       => true,
                 'type'         => 'boolean',
                 'default'      => false,
+                'auth_callback' => array( $this, 'authorize_approval_meta' ),
             )
         );
 
@@ -98,6 +353,7 @@ class TTS_CPT {
                 'single'       => true,
                 'type'         => 'boolean',
                 'default'      => false,
+                'auth_callback' => array( $this, 'authorize_editor_meta' ),
             )
         );
 
@@ -109,6 +365,7 @@ class TTS_CPT {
                 'single'       => true,
                 'type'         => 'integer',
                 'default'      => 0,
+                'auth_callback' => array( $this, 'authorize_editor_meta' ),
             )
         );
 
@@ -122,6 +379,7 @@ class TTS_CPT {
                     'single'       => true,
                     'type'         => 'string',
                     'default'      => '',
+                    'auth_callback' => array( $this, 'authorize_editor_meta' ),
                 )
             );
         }
@@ -134,6 +392,7 @@ class TTS_CPT {
                 'single'       => true,
                 'type'         => 'string',
                 'default'      => '',
+                'auth_callback' => array( $this, 'authorize_editor_meta' ),
             )
         );
 
@@ -145,6 +404,7 @@ class TTS_CPT {
                 'single'       => true,
                 'type'         => 'string',
                 'default'      => '',
+                'auth_callback' => array( $this, 'authorize_editor_meta' ),
             )
         );
     }
@@ -231,6 +491,10 @@ class TTS_CPT {
      * Register the approval status meta box.
      */
     public function add_approval_metabox() {
+        if ( ! current_user_can( 'tts_approve_posts' ) ) {
+            return;
+        }
+
         add_meta_box(
             'tts_approval_status',
             __( 'Stato di approvazione', 'fp-publisher' ),
@@ -413,7 +677,7 @@ class TTS_CPT {
             return;
         }
 
-        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+        if ( ! $this->can_manage_editor_meta( $post_id ) ) {
             return;
         }
 
@@ -438,7 +702,7 @@ class TTS_CPT {
             return;
         }
 
-        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+        if ( ! $this->can_manage_editor_meta( $post_id ) ) {
             return;
         }
 
@@ -478,7 +742,7 @@ class TTS_CPT {
             return;
         }
 
-        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+        if ( ! $this->can_manage_editor_meta( $post_id ) ) {
             return;
         }
 
@@ -504,7 +768,7 @@ class TTS_CPT {
             return;
         }
 
-        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+        if ( ! $this->can_manage_editor_meta( $post_id ) ) {
             return;
         }
 
@@ -540,7 +804,7 @@ class TTS_CPT {
             return;
         }
 
-        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+        if ( ! $this->can_manage_editor_meta( $post_id ) ) {
             return;
         }
 
@@ -564,6 +828,11 @@ class TTS_CPT {
      * @param WP_Post $post Current post object.
      */
     public function render_approval_metabox( $post ) {
+        if ( ! current_user_can( 'tts_approve_posts' ) ) {
+            echo '<p>' . esc_html__( 'You do not have permission to change approval status.', 'fp-publisher' ) . '</p>';
+            return;
+        }
+
         wp_nonce_field( 'tts_approval_metabox', 'tts_approval_nonce' );
         $approved = (bool) get_post_meta( $post->ID, '_tts_approved', true );
         echo '<label><input type="checkbox" name="_tts_approved" value="1" ' . checked( $approved, true, false ) . ' /> ';
@@ -582,7 +851,7 @@ class TTS_CPT {
             return;
         }
 
-        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+        if ( ! $this->can_manage_approval_meta( $post_id ) ) {
             return;
         }
 

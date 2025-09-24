@@ -22,6 +22,128 @@ class TTS_Admin {
     private $missing_method_notices = array();
 
     /**
+     * Security requirements for AJAX handlers.
+     *
+     * @var array<string, array{nonce_action: string, capabilities: array<int, string>, nonce_field?: string}>
+     */
+    private $ajax_action_security = array(
+        'ajax_get_lists' => array(
+            'nonce_action' => 'tts_wizard',
+            'capabilities' => array( 'tts_manage_clients' ),
+        ),
+        'ajax_refresh_posts' => array(
+            'nonce_action' => 'tts_dashboard',
+            'capabilities' => array( 'tts_read_social_posts' ),
+        ),
+        'ajax_delete_post' => array(
+            'nonce_action' => 'tts_dashboard',
+            'capabilities' => array( 'tts_delete_social_posts' ),
+        ),
+        'ajax_bulk_action' => array(
+            'nonce_action' => 'tts_dashboard',
+            'capabilities' => array( 'tts_edit_social_posts' ),
+        ),
+        'ajax_test_connection' => array(
+            'nonce_action' => 'tts_test_connection',
+            'capabilities' => array( 'tts_manage_integrations' ),
+        ),
+        'ajax_check_rate_limits' => array(
+            'nonce_action' => 'tts_check_rate_limits',
+            'capabilities' => array( 'tts_manage_integrations' ),
+        ),
+        'ajax_save_social_settings' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_manage_integrations' ),
+        ),
+        'ajax_export_data' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_export_data' ),
+        ),
+        'ajax_import_data' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_import_data' ),
+        ),
+        'ajax_system_maintenance' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_manage_system' ),
+        ),
+        'ajax_generate_report' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_view_reports' ),
+        ),
+        'ajax_quick_connection_check' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_manage_integrations' ),
+        ),
+        'ajax_refresh_health' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_manage_health' ),
+        ),
+        'ajax_show_export_modal' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_export_data' ),
+        ),
+        'ajax_show_import_modal' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_import_data' ),
+        ),
+        'ajax_test_client_connections' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_manage_clients' ),
+        ),
+        'ajax_test_single_connection' => array(
+            'nonce_action' => 'tts_ajax_nonce',
+            'capabilities' => array( 'tts_manage_integrations' ),
+        ),
+    );
+
+    /**
+     * Validate nonce and capability requirements for AJAX handlers.
+     *
+     * @param string               $context   AJAX handler context.
+     * @param array<string, mixed> $overrides Optional overrides for nonce/capability evaluation.
+     *
+     * @return bool
+     */
+    private function enforce_ajax_security( $context, array $overrides = array() ) {
+        if ( ! isset( $this->ajax_action_security[ $context ] ) ) {
+            return true;
+        }
+
+        $config       = $this->ajax_action_security[ $context ];
+        $nonce_action = isset( $overrides['nonce_action'] ) ? $overrides['nonce_action'] : $config['nonce_action'];
+        $nonce_field  = isset( $config['nonce_field'] ) ? $config['nonce_field'] : 'nonce';
+
+        if ( ! check_ajax_referer( $nonce_action, $nonce_field, false ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
+                403
+            );
+            return false;
+        }
+
+        $capabilities = array();
+        if ( isset( $config['capabilities'] ) ) {
+            $capabilities = (array) $config['capabilities'];
+        }
+        if ( isset( $overrides['capabilities'] ) ) {
+            $capabilities = array_merge( $capabilities, (array) $overrides['capabilities'] );
+        }
+
+        foreach ( $capabilities as $capability ) {
+            if ( ! current_user_can( $capability ) ) {
+                wp_send_json_error(
+                    array( 'message' => __( 'You do not have permission to perform this action.', 'fp-publisher' ) ),
+                    403
+                );
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Hook into WordPress actions.
      */
     public function __construct() {
@@ -918,146 +1040,161 @@ class TTS_Admin {
      * AJAX callback: fetch lists for a Trello board.
      */
     public function ajax_get_lists() {
-        check_ajax_referer( 'tts_wizard', 'nonce' );
-
-        // Check user capabilities
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( __( 'You do not have permission to perform this action.', 'fp-publisher' ) );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
 
         if ( ! (bool) get_option( 'tts_trello_enabled', 1 ) ) {
-            wp_send_json_error( __( 'Trello integration is disabled.', 'fp-publisher' ) );
+            return wp_send_json_error( __( 'Trello integration is disabled.', 'fp-publisher' ), 400 );
         }
 
-        $board = isset( $_POST['board'] ) ? sanitize_text_field( $_POST['board'] ) : '';
-        $key   = isset( $_POST['key'] ) ? sanitize_text_field( $_POST['key'] ) : '';
-        $token = isset( $_POST['token'] ) ? sanitize_text_field( $_POST['token'] ) : '';
+        $board = isset( $_POST['board'] ) ? sanitize_text_field( wp_unslash( $_POST['board'] ) ) : '';
+        $key   = isset( $_POST['key'] ) ? sanitize_text_field( wp_unslash( $_POST['key'] ) ) : '';
+        $token = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
 
-        // Enhanced validation with specific error messages
         if ( empty( $board ) ) {
-            wp_send_json_error( __( 'Board ID is required.', 'fp-publisher' ) );
+            return wp_send_json_error( __( 'Board ID is required.', 'fp-publisher' ), 400 );
         }
         if ( empty( $key ) ) {
-            wp_send_json_error( __( 'Trello API key is required.', 'fp-publisher' ) );
+            return wp_send_json_error( __( 'Trello API key is required.', 'fp-publisher' ), 400 );
         }
         if ( empty( $token ) ) {
-            wp_send_json_error( __( 'Trello token is required.', 'fp-publisher' ) );
+            return wp_send_json_error( __( 'Trello token is required.', 'fp-publisher' ), 400 );
         }
 
-        // Validate board ID format (should be 24 character hex string)
         if ( ! preg_match( '/^[a-f0-9]{24}$/i', $board ) ) {
-            wp_send_json_error( __( 'Invalid board ID format.', 'fp-publisher' ) );
+            return wp_send_json_error( __( 'Invalid board ID format.', 'fp-publisher' ), 400 );
         }
 
         $response = wp_remote_get(
             'https://api.trello.com/1/boards/' . rawurlencode( $board ) . '/lists?key=' . rawurlencode( $key ) . '&token=' . rawurlencode( $token ),
             array( 'timeout' => 20 )
         );
-        
+
         if ( is_wp_error( $response ) ) {
             error_log( 'TTS AJAX Error: ' . $response->get_error_message() );
-            wp_send_json_error( 
-                sprintf( 
-                    __( 'Failed to connect to Trello API: %s', 'fp-publisher' ), 
-                    $response->get_error_message() 
-                ) 
+
+            return wp_send_json_error(
+                sprintf(
+                    __( 'Failed to connect to Trello API: %s', 'fp-publisher' ),
+                    $response->get_error_message()
+                ),
+                502
             );
         }
 
         $http_code = wp_remote_retrieve_response_code( $response );
-        if ( $http_code !== 200 ) {
+        if ( 200 !== $http_code ) {
             error_log( "TTS AJAX Error: HTTP $http_code from Trello API" );
-            wp_send_json_error( 
-                sprintf( 
-                    __( 'Trello API returned error code %d. Please check your credentials.', 'fp-publisher' ), 
-                    $http_code 
-                ) 
+
+            return wp_send_json_error(
+                sprintf(
+                    __( 'Trello API returned error code %d. Please check your credentials.', 'fp-publisher' ),
+                    $http_code
+                ),
+                502
             );
         }
 
         $body = wp_remote_retrieve_body( $response );
         $data = json_decode( $body, true );
-        
+
         if ( json_last_error() !== JSON_ERROR_NONE ) {
             error_log( 'TTS AJAX Error: Invalid JSON response from Trello API' );
-            wp_send_json_error( __( 'Invalid response from Trello API.', 'fp-publisher' ) );
+
+            return wp_send_json_error( __( 'Invalid response from Trello API.', 'fp-publisher' ), 502 );
         }
 
-        wp_send_json_success( $data );
+        return wp_send_json_success( $data );
     }
 
     /**
      * AJAX callback: refresh posts data for dashboard.
      */
     public function ajax_refresh_posts() {
-        check_ajax_referer( 'tts_dashboard', 'nonce' );
-
-        // Check user capabilities
-        if ( ! current_user_can( 'edit_posts' ) ) {
-            wp_send_json_error( __( 'You do not have permission to view posts.', 'fp-publisher' ) );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
 
         try {
-            $posts = get_posts(array(
-                'post_type' => 'tts_social_post',
-                'posts_per_page' => 10,
-                'post_status' => 'any',
-                'orderby' => 'date',
-                'order' => 'DESC',
-                'meta_query' => array(
-                    'relation' => 'OR',
-                    array(
-                        'key' => '_tts_publish_at',
-                        'compare' => 'EXISTS'
+            $posts = get_posts(
+                array(
+                    'post_type'      => 'tts_social_post',
+                    'posts_per_page' => 10,
+                    'post_status'    => 'any',
+                    'orderby'        => 'date',
+                    'order'          => 'DESC',
+                    'meta_query'     => array(
+                        'relation' => 'OR',
+                        array(
+                            'key'     => '_tts_publish_at',
+                            'compare' => 'EXISTS',
+                        ),
+                        array(
+                            'key'     => '_tts_publish_at',
+                            'compare' => 'NOT EXISTS',
+                        ),
                     ),
-                    array(
-                        'key' => '_tts_publish_at',
-                        'compare' => 'NOT EXISTS'
-                    )
                 )
-            ));
+            );
 
             if ( empty( $posts ) ) {
-                wp_send_json_success( array(
-                    'posts' => array(),
-                    'message' => __( 'No posts found.', 'fp-publisher' ),
-                    'timestamp' => current_time( 'timestamp' )
-                ) );
+                return wp_send_json_success(
+                    array(
+                        'posts'     => array(),
+                        'message'   => __( 'No posts found.', 'fp-publisher' ),
+                        'timestamp' => current_time( 'timestamp' ),
+                    )
+                );
             }
 
             $formatted_posts = array();
             foreach ( $posts as $post ) {
-                $channel = get_post_meta( $post->ID, '_tts_social_channel', true );
-                $status = get_post_meta( $post->ID, '_published_status', true );
+                $channels   = get_post_meta( $post->ID, '_tts_social_channel', true );
+                $status     = get_post_meta( $post->ID, '_published_status', true );
                 $publish_at = get_post_meta( $post->ID, '_tts_publish_at', true );
-                
+
+                $channels = is_array( $channels ) ? $channels : ( $channels ? array( $channels ) : array() );
+                $channels = array_map( 'sanitize_text_field', $channels );
+
+                $title       = wp_strip_all_tags( wp_trim_words( $post->post_title, 10 ) );
+                $status_safe = $status ? sanitize_text_field( $status ) : 'scheduled';
+                $publish_safe = $publish_at ? sanitize_text_field( $publish_at ) : sanitize_text_field( $post->post_date );
+
+                $edit_link = '';
+                if ( current_user_can( 'edit_post', $post->ID ) ) {
+                    $edit_link = esc_url_raw( get_edit_post_link( $post->ID ) );
+                }
+
                 $formatted_posts[] = array(
-                    'ID' => intval( $post->ID ),
-                    'title' => wp_trim_words( $post->post_title, 10 ),
-                    'channel' => is_array( $channel ) ? $channel : array( $channel ),
-                    'status' => $status ?: 'scheduled',
-                    'publish_at' => $publish_at ?: $post->post_date,
-                    'edit_link' => current_user_can( 'edit_post', $post->ID ) ? get_edit_post_link( $post->ID ) : ''
+                    'ID'         => intval( $post->ID ),
+                    'title'      => $title,
+                    'channel'    => $channels,
+                    'status'     => $status_safe,
+                    'publish_at' => $publish_safe,
+                    'edit_link'  => $edit_link,
                 );
             }
 
-            wp_send_json_success( array(
-                'posts' => $formatted_posts,
-                'message' => sprintf( 
-                    _n( 
-                        '%d post refreshed successfully', 
-                        '%d posts refreshed successfully', 
-                        count( $formatted_posts ), 
-                        'fp-publisher' 
-                    ), 
-                    count( $formatted_posts ) 
-                ),
-                'timestamp' => current_time( 'timestamp' )
-            ) );
-
+            return wp_send_json_success(
+                array(
+                    'posts'     => $formatted_posts,
+                    'message'   => sprintf(
+                        _n(
+                            '%d post refreshed successfully',
+                            '%d posts refreshed successfully',
+                            count( $formatted_posts ),
+                            'fp-publisher'
+                        ),
+                        count( $formatted_posts )
+                    ),
+                    'timestamp' => current_time( 'timestamp' ),
+                )
+            );
         } catch ( Exception $e ) {
             error_log( 'TTS Refresh Posts Error: ' . $e->getMessage() );
-            wp_send_json_error( __( 'An error occurred while refreshing posts. Please try again.', 'fp-publisher' ) );
+
+            return wp_send_json_error( __( 'An error occurred while refreshing posts. Please try again.', 'fp-publisher' ), 500 );
         }
     }
 
@@ -1065,132 +1202,131 @@ class TTS_Admin {
      * AJAX callback: delete a social post.
      */
     public function ajax_delete_post() {
-        check_ajax_referer( 'tts_dashboard', 'nonce' );
-
-        // Rate limiting check
-        if (!$this->check_rate_limit('delete_post', 20, 60)) {
-            wp_send_json_error(__('Too many delete requests. Please wait a moment and try again.', 'fp-publisher'));
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
 
-        if (!current_user_can('delete_posts')) {
-            wp_send_json_error(__('You do not have permission to delete posts.', 'fp-publisher'));
+        if ( ! $this->check_rate_limit( 'delete_post', 20, 60 ) ) {
+            return wp_send_json_error( __( 'Too many delete requests. Please wait a moment and try again.', 'fp-publisher' ), 429 );
         }
 
-        $post_id = isset($_POST['postId']) ? intval($_POST['postId']) : 0;
-        
-        if (!$post_id || $post_id <= 0) {
-            wp_send_json_error(__('Invalid post ID.', 'fp-publisher'));
+        $post_id = isset( $_POST['postId'] ) ? absint( wp_unslash( $_POST['postId'] ) ) : 0;
+
+        if ( ! $post_id ) {
+            return wp_send_json_error( __( 'Invalid post ID.', 'fp-publisher' ), 400 );
         }
 
-        $post = get_post($post_id);
-        if (!$post || $post->post_type !== 'tts_social_post') {
-            wp_send_json_error(__('Post not found.', 'fp-publisher'));
+        $post = get_post( $post_id );
+        if ( ! $post || 'tts_social_post' !== $post->post_type ) {
+            return wp_send_json_error( __( 'Post not found.', 'fp-publisher' ), 404 );
         }
 
-        // Check specific delete permission for this post
-        if (!current_user_can('delete_post', $post_id)) {
-            wp_send_json_error(__('You do not have permission to delete this specific post.', 'fp-publisher'));
+        if ( ! current_user_can( 'delete_post', $post_id ) ) {
+            return wp_send_json_error( __( 'You do not have permission to delete this specific post.', 'fp-publisher' ), 403 );
         }
 
-        $result = wp_delete_post($post_id, true);
-        
-        if ($result) {
-            wp_send_json_success(array(
-                'message' => __('Post deleted successfully.', 'fp-publisher'),
-                'refresh' => true
-            ));
-        } else {
-            wp_send_json_error(__('Failed to delete post.', 'fp-publisher'));
+        $result = wp_delete_post( $post_id, true );
+
+        if ( $result ) {
+            return wp_send_json_success(
+                array(
+                    'message' => __( 'Post deleted successfully.', 'fp-publisher' ),
+                    'refresh' => true,
+                )
+            );
         }
+
+        return wp_send_json_error( __( 'Failed to delete post.', 'fp-publisher' ), 500 );
     }
 
     /**
      * AJAX callback: handle bulk actions on social posts.
      */
     public function ajax_bulk_action() {
-        check_ajax_referer( 'tts_dashboard', 'nonce' );
-
-        // Rate limiting check
-        if (!$this->check_rate_limit('bulk_action', 10, 60)) {
-            wp_send_json_error(__('Too many requests. Please wait a moment and try again.', 'fp-publisher'));
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
 
-        if (!current_user_can('edit_posts')) {
-            wp_send_json_error(__('You do not have permission to perform this action.', 'fp-publisher'));
+        if ( ! $this->check_rate_limit( 'bulk_action', 10, 60 ) ) {
+            return wp_send_json_error( __( 'Too many requests. Please wait a moment and try again.', 'fp-publisher' ), 429 );
         }
 
-        $action = isset($_POST['bulkAction']) ? sanitize_text_field($_POST['bulkAction']) : '';
-        $post_ids = isset($_POST['postIds']) ? array_map('intval', $_POST['postIds']) : array();
+        $action   = isset( $_POST['bulkAction'] ) ? sanitize_key( wp_unslash( $_POST['bulkAction'] ) ) : '';
+        $post_ids = isset( $_POST['postIds'] ) ? array_map( 'absint', (array) wp_unslash( $_POST['postIds'] ) ) : array();
 
-        // Input validation
-        if (!$action || empty($post_ids)) {
-            wp_send_json_error(__('Invalid action or no posts selected.', 'fp-publisher'));
+        if ( ! $action || empty( $post_ids ) ) {
+            return wp_send_json_error( __( 'Invalid action or no posts selected.', 'fp-publisher' ), 400 );
         }
 
-        // Validate action is allowed
-        $allowed_actions = array('delete', 'approve', 'revoke');
-        if (!in_array($action, $allowed_actions, true)) {
-            wp_send_json_error(__('Invalid action specified.', 'fp-publisher'));
+        $allowed_actions = array( 'delete', 'approve', 'revoke' );
+        if ( ! in_array( $action, $allowed_actions, true ) ) {
+            return wp_send_json_error( __( 'Invalid action specified.', 'fp-publisher' ), 400 );
         }
 
-        // Limit number of posts that can be processed at once
-        if (count($post_ids) > 100) {
-            wp_send_json_error(__('Too many posts selected. Please select 100 or fewer posts.', 'fp-publisher'));
+        if ( count( $post_ids ) > 100 ) {
+            return wp_send_json_error( __( 'Too many posts selected. Please select 100 or fewer posts.', 'fp-publisher' ), 400 );
+        }
+
+        if ( 'delete' === $action && ! current_user_can( 'tts_delete_social_posts' ) ) {
+            return wp_send_json_error( __( 'You do not have permission to delete social posts.', 'fp-publisher' ), 403 );
+        }
+
+        if ( in_array( $action, array( 'approve', 'revoke' ), true ) && ! current_user_can( 'tts_approve_posts' ) ) {
+            return wp_send_json_error( __( 'You do not have permission to approve social posts.', 'fp-publisher' ), 403 );
         }
 
         $processed = 0;
-        $errors = array();
+        $errors    = array();
 
-        foreach ($post_ids as $post_id) {
-            // Additional validation for each post ID
-            if ($post_id <= 0) {
-                $errors[] = __('Invalid post ID provided.', 'fp-publisher');
+        foreach ( $post_ids as $post_id ) {
+            if ( $post_id <= 0 ) {
+                $errors[] = __( 'Invalid post ID provided.', 'fp-publisher' );
                 continue;
             }
 
-            $post = get_post($post_id);
-            if (!$post || $post->post_type !== 'tts_social_post') {
-                $errors[] = sprintf(__('Post ID %d not found.', 'fp-publisher'), $post_id);
+            $post = get_post( $post_id );
+            if ( ! $post || 'tts_social_post' !== $post->post_type ) {
+                $errors[] = sprintf( __( 'Post ID %d not found.', 'fp-publisher' ), $post_id );
                 continue;
             }
 
-            switch ($action) {
+            switch ( $action ) {
                 case 'delete':
-                    if (current_user_can('delete_post', $post_id)) {
-                        if (wp_delete_post($post_id, true)) {
+                    if ( current_user_can( 'delete_post', $post_id ) ) {
+                        if ( wp_delete_post( $post_id, true ) ) {
                             $processed++;
                         } else {
-                            $errors[] = sprintf(__('Failed to delete post ID %d.', 'fp-publisher'), $post_id);
+                            $errors[] = sprintf( __( 'Failed to delete post ID %d.', 'fp-publisher' ), $post_id );
                         }
                     } else {
-                        $errors[] = sprintf(__('You do not have permission to delete post ID %d.', 'fp-publisher'), $post_id);
+                        $errors[] = sprintf( __( 'You do not have permission to delete post ID %d.', 'fp-publisher' ), $post_id );
                     }
                     break;
 
                 case 'approve':
-                    if (current_user_can('edit_post', $post_id)) {
-                        update_post_meta($post_id, '_tts_approved', true);
-                        do_action('save_post_tts_social_post', $post_id, $post, true);
-                        do_action('tts_post_approved', $post_id);
+                    if ( current_user_can( 'edit_post', $post_id ) ) {
+                        update_post_meta( $post_id, '_tts_approved', true );
+                        do_action( 'save_post_tts_social_post', $post_id, $post, true );
+                        do_action( 'tts_post_approved', $post_id );
                         $processed++;
                     } else {
-                        $errors[] = sprintf(__('You do not have permission to approve post ID %d.', 'fp-publisher'), $post_id);
+                        $errors[] = sprintf( __( 'You do not have permission to approve post ID %d.', 'fp-publisher' ), $post_id );
                     }
                     break;
 
                 case 'revoke':
-                    if (current_user_can('edit_post', $post_id)) {
-                        delete_post_meta($post_id, '_tts_approved');
-                        do_action('save_post_tts_social_post', $post_id, $post, true);
+                    if ( current_user_can( 'edit_post', $post_id ) ) {
+                        delete_post_meta( $post_id, '_tts_approved' );
+                        do_action( 'save_post_tts_social_post', $post_id, $post, true );
                         $processed++;
                     } else {
-                        $errors[] = sprintf(__('You do not have permission to revoke approval for post ID %d.', 'fp-publisher'), $post_id);
+                        $errors[] = sprintf( __( 'You do not have permission to revoke approval for post ID %d.', 'fp-publisher' ), $post_id );
                     }
                     break;
             }
         }
 
-        if ($processed > 0) {
+        if ( $processed > 0 ) {
             $message = sprintf(
                 _n(
                     '%d post processed successfully.',
@@ -1201,19 +1337,21 @@ class TTS_Admin {
                 $processed
             );
 
-            if (!empty($errors)) {
-                $message .= ' ' . sprintf(__('However, %d errors occurred.', 'fp-publisher'), count($errors));
+            if ( ! empty( $errors ) ) {
+                $message .= ' ' . sprintf( __( 'However, %d errors occurred.', 'fp-publisher' ), count( $errors ) );
             }
 
-            wp_send_json_success(array(
-                'message' => $message,
-                'processed' => $processed,
-                'errors' => $errors,
-                'refresh' => true
-            ));
-        } else {
-            wp_send_json_error(__('No posts were processed.', 'fp-publisher') . ' ' . implode(' ', $errors));
+            return wp_send_json_success(
+                array(
+                    'message'   => $message,
+                    'processed' => $processed,
+                    'errors'    => $errors,
+                    'refresh'   => true,
+                )
+            );
         }
+
+        return wp_send_json_error( __( 'No posts were processed.', 'fp-publisher' ) . ' ' . implode( ' ', $errors ), 400 );
     }
 
     /**
@@ -3479,79 +3617,82 @@ class TTS_Admin {
      * AJAX handler for testing social media connections.
      */
     public function ajax_test_connection() {
-        check_ajax_referer( 'tts_test_connection', 'nonce' );
-        
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( __( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
-        
-        $platform = sanitize_key( $_POST['platform'] );
-        $settings = get_option( 'tts_social_apps', array() );
-        $platform_settings = isset( $settings[$platform] ) ? $settings[$platform] : array();
-        
-        $result = $this->test_platform_connection( $platform, $platform_settings );
-        
-        if ( $result['success'] ) {
-            wp_send_json_success( array( 'message' => $result['message'] ) );
-        } else {
-            wp_send_json_error( array( 'message' => $result['message'] ) );
+
+        $platform = isset( $_POST['platform'] ) ? sanitize_key( wp_unslash( $_POST['platform'] ) ) : '';
+        if ( empty( $platform ) ) {
+            return wp_send_json_error( array( 'message' => __( 'Invalid platform specified.', 'fp-publisher' ) ), 400 );
         }
+
+        $settings           = get_option( 'tts_social_apps', array() );
+        $platform_settings  = isset( $settings[ $platform ] ) && is_array( $settings[ $platform ] ) ? $settings[ $platform ] : array();
+        $result             = $this->test_platform_connection( $platform, $platform_settings );
+        $sanitized_response = array( 'message' => sanitize_text_field( $result['message'] ) );
+
+        if ( ! empty( $result['success'] ) ) {
+            return wp_send_json_success( $sanitized_response );
+        }
+
+        return wp_send_json_error( $sanitized_response, 500 );
     }
     
     /**
      * AJAX handler for checking API rate limits.
      */
     public function ajax_check_rate_limits() {
-        check_ajax_referer( 'tts_check_rate_limits', 'nonce' );
-
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( __( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
 
-        $platform = sanitize_key( $_POST['platform'] );
+        $platform = isset( $_POST['platform'] ) ? sanitize_key( wp_unslash( $_POST['platform'] ) ) : '';
+        if ( empty( $platform ) ) {
+            return wp_send_json_error( __( 'Invalid platform specified.', 'fp-publisher' ), 400 );
+        }
+
         $limits = $this->get_platform_rate_limits( $platform );
 
-        wp_send_json_success( $limits );
+        return wp_send_json_success( $limits );
     }
 
     /**
      * AJAX handler for saving social media settings.
      */
     public function ajax_save_social_settings() {
-        check_ajax_referer( 'tts_ajax_nonce', 'nonce' );
-
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'fp-publisher' ) ) );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
 
-        $platform = isset( $_POST['platform'] ) ? sanitize_key( wp_unslash( $_POST['platform'] ) ) : '';
+        $platform    = isset( $_POST['platform'] ) ? sanitize_key( wp_unslash( $_POST['platform'] ) ) : '';
         $credentials = isset( $_POST['credentials'] ) ? wp_unslash( $_POST['credentials'] ) : array();
 
         if ( empty( $platform ) ) {
-            wp_send_json_error( array( 'message' => __( 'Invalid platform specified.', 'fp-publisher' ) ) );
+            return wp_send_json_error( array( 'message' => __( 'Invalid platform specified.', 'fp-publisher' ) ), 400 );
         }
 
         if ( ! is_array( $credentials ) ) {
-            wp_send_json_error( array( 'message' => __( 'Invalid credentials payload.', 'fp-publisher' ) ) );
+            return wp_send_json_error( array( 'message' => __( 'Invalid credentials payload.', 'fp-publisher' ) ), 400 );
         }
 
         $sanitized_credentials = array();
 
         foreach ( $credentials as $key => $value ) {
-            $sanitized_key = sanitize_key( $key );
-            $sanitized_credentials[ $sanitized_key ] = sanitize_text_field( $value );
+            $sanitized_key                       = sanitize_key( $key );
+            $sanitized_credentials[ $sanitized_key ] = sanitize_text_field( wp_unslash( $value ) );
         }
 
-        $social_apps = get_option( 'tts_social_apps', array() );
-        $social_apps[ $platform ] = $sanitized_credentials;
+        $social_apps                = get_option( 'tts_social_apps', array() );
+        $social_apps[ $platform ]   = $sanitized_credentials;
+        $previous_social_app_values = get_option( 'tts_social_apps', array() );
 
         $updated = update_option( 'tts_social_apps', $social_apps );
 
-        if ( false === $updated && get_option( 'tts_social_apps', array() ) !== $social_apps ) {
-            wp_send_json_error( array( 'message' => __( 'Unable to save social media credentials. Please try again.', 'fp-publisher' ) ) );
+        if ( false === $updated && $previous_social_app_values !== $social_apps ) {
+            return wp_send_json_error( array( 'message' => __( 'Unable to save social media credentials. Please try again.', 'fp-publisher' ) ), 500 );
         }
 
-        wp_send_json_success( array( 'message' => __( 'Social media credentials saved successfully.', 'fp-publisher' ) ) );
+        return wp_send_json_success( array( 'message' => __( 'Social media credentials saved successfully.', 'fp-publisher' ) ) );
     }
 
     /**
@@ -3847,76 +3988,70 @@ class TTS_Admin {
      * AJAX handler for data export.
      */
     public function ajax_export_data() {
-        check_ajax_referer( 'tts_ajax_nonce', 'nonce' );
-        
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'fp-publisher' ) ) );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
-        
+
         $export_options = array(
-            'settings' => isset( $_POST['export_settings'] ) && $_POST['export_settings'] === 'true',
-            'social_apps' => isset( $_POST['export_social_apps'] ) && $_POST['export_social_apps'] === 'true',
-            'clients' => isset( $_POST['export_clients'] ) && $_POST['export_clients'] === 'true',
-            'posts' => isset( $_POST['export_posts'] ) && $_POST['export_posts'] === 'true',
-            'logs' => isset( $_POST['export_logs'] ) && $_POST['export_logs'] === 'true',
-            'analytics' => isset( $_POST['export_analytics'] ) && $_POST['export_analytics'] === 'true',
-            'include_secrets' => isset( $_POST['export_include_secrets'] ) && in_array( $_POST['export_include_secrets'], array( 'true', 'on', '1' ), true )
+            'settings'        => isset( $_POST['export_settings'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_settings'] ) ),
+            'social_apps'     => isset( $_POST['export_social_apps'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_social_apps'] ) ),
+            'clients'         => isset( $_POST['export_clients'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_clients'] ) ),
+            'posts'           => isset( $_POST['export_posts'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_posts'] ) ),
+            'logs'            => isset( $_POST['export_logs'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_logs'] ) ),
+            'analytics'       => isset( $_POST['export_analytics'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_analytics'] ) ),
+            'include_secrets' => isset( $_POST['export_include_secrets'] ) && in_array( sanitize_text_field( wp_unslash( $_POST['export_include_secrets'] ) ), array( 'true', 'on', '1' ), true ),
         );
-        
+
         $result = TTS_Advanced_Utils::export_data( $export_options );
-        
+
         if ( $result['success'] ) {
-            // Create download file
-            $filename = 'tts-export-' . date( 'Y-m-d-H-i-s' ) . '.json';
+            $filename   = 'tts-export-' . date( 'Y-m-d-H-i-s' ) . '.json';
             $upload_dir = wp_upload_dir();
 
             if ( ! empty( $upload_dir['error'] ) ) {
                 error_log( 'TTS_Admin: Export failed - ' . $upload_dir['error'] );
-                wp_send_json_error( array( 'message' => __( 'Failed to access the upload directory. Please try again later.', 'fp-publisher' ) ) );
+
+                return wp_send_json_error( array( 'message' => __( 'Failed to access the upload directory. Please try again later.', 'fp-publisher' ) ), 500 );
             }
 
-            $file_path = $upload_dir['path'] . '/' . $filename;
-            $file_written = file_put_contents( $file_path, json_encode( $result['data'], JSON_PRETTY_PRINT ) );
+            $file_path    = trailingslashit( $upload_dir['path'] ) . $filename;
+            $encoded_data = json_encode( $result['data'], JSON_PRETTY_PRINT );
+            $file_written = file_put_contents( $file_path, $encoded_data );
 
             if ( false === $file_written ) {
                 error_log( 'TTS_Admin: Failed to write export file to ' . $file_path );
-                wp_send_json_error( array( 'message' => __( 'Failed to write the export file. Please check file permissions and try again.', 'fp-publisher' ) ) );
+
+                return wp_send_json_error( array( 'message' => __( 'Failed to write the export file. Please check file permissions and try again.', 'fp-publisher' ) ), 500 );
             }
 
-            wp_send_json_success( array(
-                'message' => __( 'Export completed successfully', 'fp-publisher' ),
-                'download_url' => $upload_dir['url'] . '/' . $filename,
-                'file_size' => $result['file_size']
-            ) );
-        } else {
-            wp_send_json_error( array( 'message' => $result['error'] ) );
+            return wp_send_json_success(
+                array(
+                    'message'      => __( 'Export completed successfully', 'fp-publisher' ),
+                    'download_url' => trailingslashit( $upload_dir['url'] ) . $filename,
+                    'file_size'    => $result['file_size'],
+                )
+            );
         }
+
+        return wp_send_json_error( array( 'message' => sanitize_text_field( $result['error'] ) ), 500 );
     }
     
     /**
      * AJAX handler for data import.
      */
     public function ajax_import_data() {
-        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
-            wp_send_json_error(
-                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
-                403
-            );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
-        
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'fp-publisher' ) ) );
-        }
-        
+
         if ( ! isset( $_FILES['import_file'] ) ) {
-            wp_send_json_error( array( 'message' => __( 'No file provided', 'fp-publisher' ) ) );
+            return wp_send_json_error( array( 'message' => __( 'No file provided', 'fp-publisher' ) ), 400 );
         }
-        
+
         $file = $_FILES['import_file'];
 
         if ( ! isset( $file['error'] ) || UPLOAD_ERR_OK !== $file['error'] ) {
             $error_message = __( 'File upload failed.', 'fp-publisher' );
-
             if ( isset( $file['error'] ) ) {
                 switch ( $file['error'] ) {
                     case UPLOAD_ERR_INI_SIZE:
@@ -3944,139 +4079,127 @@ class TTS_Admin {
                 }
             }
 
-            wp_send_json_error( array( 'message' => $error_message ) );
+            return wp_send_json_error( array( 'message' => $error_message ), 400 );
         }
 
         if ( ! isset( $file['tmp_name'] ) || ! is_uploaded_file( $file['tmp_name'] ) ) {
-            wp_send_json_error( array( 'message' => __( 'Invalid uploaded file.', 'fp-publisher' ) ) );
+            return wp_send_json_error( array( 'message' => __( 'Invalid uploaded file.', 'fp-publisher' ) ), 400 );
         }
 
         $file_contents = file_get_contents( $file['tmp_name'] );
 
         if ( false === $file_contents ) {
-            wp_send_json_error( array( 'message' => __( 'Unable to read the uploaded file.', 'fp-publisher' ) ) );
+            return wp_send_json_error( array( 'message' => __( 'Unable to read the uploaded file.', 'fp-publisher' ) ), 500 );
         }
 
         $import_data = json_decode( $file_contents, true );
-        
+
         if ( json_last_error() !== JSON_ERROR_NONE ) {
-            wp_send_json_error( array( 'message' => __( 'Invalid JSON file', 'fp-publisher' ) ) );
+            return wp_send_json_error( array( 'message' => __( 'Invalid JSON file', 'fp-publisher' ) ), 400 );
         }
-        
+
         $import_options = array(
-            'overwrite_settings' => isset( $_POST['overwrite_settings'] ) && $_POST['overwrite_settings'] === 'true',
-            'overwrite_social_apps' => isset( $_POST['overwrite_social_apps'] ) && $_POST['overwrite_social_apps'] === 'true',
-            'import_clients' => isset( $_POST['import_clients'] ) && $_POST['import_clients'] === 'true',
-            'import_posts' => isset( $_POST['import_posts'] ) && $_POST['import_posts'] === 'true'
+            'overwrite_settings'    => isset( $_POST['overwrite_settings'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['overwrite_settings'] ) ),
+            'overwrite_social_apps' => isset( $_POST['overwrite_social_apps'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['overwrite_social_apps'] ) ),
+            'import_clients'        => isset( $_POST['import_clients'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['import_clients'] ) ),
+            'import_posts'          => isset( $_POST['import_posts'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['import_posts'] ) ),
         );
-        
+
         $result = TTS_Advanced_Utils::import_data( $import_data, $import_options );
-        
+
         if ( $result['success'] ) {
-            wp_send_json_success( array( 
-                'message' => __( 'Import completed successfully', 'fp-publisher' ),
-                'log' => $result['log']
-            ) );
-        } else {
-            wp_send_json_error( array( 'message' => $result['error'] ) );
+            return wp_send_json_success(
+                array(
+                    'message' => __( 'Import completed successfully', 'fp-publisher' ),
+                    'log'     => $result['log'],
+                )
+            );
         }
+
+        return wp_send_json_error( array( 'message' => sanitize_text_field( $result['error'] ) ), 500 );
     }
-    
+
     /**
      * AJAX handler for system maintenance.
      */
     public function ajax_system_maintenance() {
-        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
-            wp_send_json_error(
-                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
-                403
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
+        }
+
+        $tasks = array(
+            'optimize_database' => isset( $_POST['optimize_database'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['optimize_database'] ) ),
+            'clear_cache'       => isset( $_POST['clear_cache'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['clear_cache'] ) ),
+            'cleanup_logs'      => isset( $_POST['cleanup_logs'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['cleanup_logs'] ) ),
+            'update_statistics' => isset( $_POST['update_statistics'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['update_statistics'] ) ),
+            'check_health'      => isset( $_POST['check_health'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['check_health'] ) ),
+        );
+
+        $result = TTS_Advanced_Utils::system_maintenance( $tasks );
+
+        if ( $result['success'] ) {
+            return wp_send_json_success(
+                array(
+                    'message' => __( 'System maintenance completed', 'fp-publisher' ),
+                    'log'     => $result['log'],
+                )
             );
         }
-        
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'fp-publisher' ) ) );
-        }
-        
-        $tasks = array(
-            'optimize_database' => isset( $_POST['optimize_database'] ) && $_POST['optimize_database'] === 'true',
-            'clear_cache' => isset( $_POST['clear_cache'] ) && $_POST['clear_cache'] === 'true',
-            'cleanup_logs' => isset( $_POST['cleanup_logs'] ) && $_POST['cleanup_logs'] === 'true',
-            'update_statistics' => isset( $_POST['update_statistics'] ) && $_POST['update_statistics'] === 'true',
-            'check_health' => isset( $_POST['check_health'] ) && $_POST['check_health'] === 'true'
-        );
-        
-        $result = TTS_Advanced_Utils::system_maintenance( $tasks );
-        
-        if ( $result['success'] ) {
-            wp_send_json_success( array( 
-                'message' => __( 'System maintenance completed', 'fp-publisher' ),
-                'log' => $result['log']
-            ) );
-        } else {
-            wp_send_json_error( array( 'message' => __( 'Maintenance failed', 'fp-publisher' ) ) );
-        }
+
+        return wp_send_json_error( array( 'message' => __( 'Maintenance failed', 'fp-publisher' ) ), 500 );
     }
     
     /**
      * AJAX handler for system report generation.
      */
     public function ajax_generate_report() {
-        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
-            wp_send_json_error(
-                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
-                403
-            );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
-        
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'fp-publisher' ) ) );
-        }
-        
+
         $report = TTS_Advanced_Utils::generate_system_report();
-        
-        wp_send_json_success( array( 
-            'message' => __( 'System report generated', 'fp-publisher' ),
-            'report' => $report
-        ) );
+
+        return wp_send_json_success(
+            array(
+                'message' => __( 'System report generated', 'fp-publisher' ),
+                'report'  => $report,
+            )
+        );
     }
     
     /**
      * AJAX handler for quick connection check.
      */
     public function ajax_quick_connection_check() {
-        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
-            wp_send_json_error(
-                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
-                403
-            );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
-        
-        $platform = isset( $_POST['platform'] ) ? sanitize_key( $_POST['platform'] ) : '';
+
+        $platform = isset( $_POST['platform'] ) ? sanitize_key( wp_unslash( $_POST['platform'] ) ) : '';
 
         $status_messages = array(
             'not-configured' => __( 'App credentials not configured', 'fp-publisher' ),
-            'configured' => __( 'Ready to connect accounts', 'fp-publisher' ),
-            'connected' => __( 'Account connected', 'fp-publisher' ),
-            'error' => __( 'Connection error. Please try again.', 'fp-publisher' ),
+            'configured'     => __( 'Ready to connect accounts', 'fp-publisher' ),
+            'connected'      => __( 'Account connected', 'fp-publisher' ),
+            'error'          => __( 'Connection error. Please try again.', 'fp-publisher' ),
         );
 
         if ( empty( $platform ) ) {
-            wp_send_json_success(
+            return wp_send_json_success(
                 array(
                     'status'  => 'error',
                     'message' => $status_messages['error'],
                 )
             );
-            return;
         }
 
         $connection_status = $this->check_platform_connection_status( $platform );
-        $status = isset( $connection_status['status'] ) ? $connection_status['status'] : 'error';
-        $message = isset( $connection_status['message'] ) && '' !== $connection_status['message']
-            ? $connection_status['message']
+        $status            = isset( $connection_status['status'] ) ? sanitize_key( $connection_status['status'] ) : 'error';
+        $message           = isset( $connection_status['message'] ) && '' !== $connection_status['message']
+            ? sanitize_text_field( $connection_status['message'] )
             : ( isset( $status_messages[ $status ] ) ? $status_messages[ $status ] : $status_messages['error'] );
 
-        wp_send_json_success(
+        return wp_send_json_success(
             array(
                 'status'  => $status,
                 'message' => $message,
@@ -4105,41 +4228,28 @@ class TTS_Admin {
      * AJAX handler for health check refresh.
      */
     public function ajax_refresh_health() {
-        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
-            wp_send_json_error(
-                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
-                403
-            );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
-        
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'fp-publisher' ) ) );
-        }
-        
-        // Perform fresh health check
+
         $health_data = TTS_Monitoring::perform_health_check();
-        
-        wp_send_json_success( array( 
-            'message' => __( 'Health check completed', 'fp-publisher' ),
-            'health_data' => $health_data
-        ) );
+
+        return wp_send_json_success(
+            array(
+                'message'     => __( 'Health check completed', 'fp-publisher' ),
+                'health_data' => $health_data,
+            )
+        );
     }
     
     /**
      * AJAX handler for showing export modal.
      */
     public function ajax_show_export_modal() {
-        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
-            wp_send_json_error(
-                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
-                403
-            );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
-        
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'fp-publisher' ) ) );
-        }
-        
+
         ob_start();
         ?>
         <div class="tts-modal-content">
@@ -4192,27 +4302,22 @@ class TTS_Admin {
         </div>
         <?php
         $modal_html = ob_get_clean();
-        
-        wp_send_json_success( array( 
-            'modal_html' => $modal_html
-        ) );
+
+        return wp_send_json_success(
+            array(
+                'modal_html' => $modal_html,
+            )
+        );
     }
     
     /**
      * AJAX handler for showing import modal.
      */
     public function ajax_show_import_modal() {
-        if ( ! check_ajax_referer( 'tts_ajax_nonce', 'nonce', false ) ) {
-            wp_send_json_error(
-                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
-                403
-            );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
-        
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'fp-publisher' ) ) );
-        }
-        
+
         ob_start();
         ?>
         <div class="tts-modal-content">
@@ -4258,10 +4363,12 @@ class TTS_Admin {
         </div>
         <?php
         $modal_html = ob_get_clean();
-        
-        wp_send_json_success( array( 
-            'modal_html' => $modal_html
-        ) );
+
+        return wp_send_json_success(
+            array(
+                'modal_html' => $modal_html,
+            )
+        );
     }
 
     /**
@@ -5235,105 +5342,94 @@ class TTS_Admin {
      * AJAX handler for testing client connections.
      */
     public function ajax_test_client_connections() {
-        check_ajax_referer( 'tts_ajax_nonce', 'nonce' );
-        
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( __( 'Insufficient permissions.', 'fp-publisher' ) );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
-        
-        $client_id = absint( $_POST['client_id'] );
+
+        $client_id = isset( $_POST['client_id'] ) ? absint( wp_unslash( $_POST['client_id'] ) ) : 0;
         if ( ! $client_id ) {
-            wp_send_json_error( __( 'Invalid client ID.', 'fp-publisher' ) );
+            return wp_send_json_error( __( 'Invalid client ID.', 'fp-publisher' ), 400 );
         }
-        
+
         $results = array();
-        
-        // Test Trello connection
-        $trello_key = get_post_meta( $client_id, '_tts_trello_key', true );
+
+        $trello_key   = get_post_meta( $client_id, '_tts_trello_key', true );
         $trello_token = get_post_meta( $client_id, '_tts_trello_token', true );
-        
+
         if ( $trello_key && $trello_token ) {
-            $trello_result = $this->test_trello_connection( $trello_key, $trello_token );
-            $results['Trello'] = $trello_result;
+            $results['Trello'] = $this->test_trello_connection( $trello_key, $trello_token );
         } else {
             $results['Trello'] = array(
                 'success' => false,
-                'message' => __( 'No Trello credentials configured', 'fp-publisher' )
+                'message' => __( 'No Trello credentials configured', 'fp-publisher' ),
             );
         }
-        
-        // Test Facebook connection
+
         $facebook_token = get_post_meta( $client_id, '_tts_fb_token', true );
         if ( $facebook_token ) {
-            $facebook_result = $this->test_facebook_client_connection( $facebook_token );
-            $results['Facebook'] = $facebook_result;
+            $results['Facebook'] = $this->test_facebook_client_connection( $facebook_token );
         } else {
             $results['Facebook'] = array(
                 'success' => false,
-                'message' => __( 'No Facebook token configured', 'fp-publisher' )
+                'message' => __( 'No Facebook token configured', 'fp-publisher' ),
             );
         }
-        
-        // Test Instagram connection
+
         $instagram_token = get_post_meta( $client_id, '_tts_ig_token', true );
         if ( $instagram_token ) {
-            $instagram_result = $this->test_instagram_client_connection( $instagram_token );
-            $results['Instagram'] = $instagram_result;
+            $results['Instagram'] = $this->test_instagram_client_connection( $instagram_token );
         } else {
             $results['Instagram'] = array(
                 'success' => false,
-                'message' => __( 'No Instagram token configured', 'fp-publisher' )
+                'message' => __( 'No Instagram token configured', 'fp-publisher' ),
             );
         }
-        
-        // Test YouTube connection
+
         $youtube_token = get_post_meta( $client_id, '_tts_yt_token', true );
         if ( $youtube_token ) {
-            $youtube_result = $this->test_youtube_client_connection( $youtube_token );
-            $results['YouTube'] = $youtube_result;
+            $results['YouTube'] = $this->test_youtube_client_connection( $youtube_token );
         } else {
             $results['YouTube'] = array(
                 'success' => false,
-                'message' => __( 'No YouTube token configured', 'fp-publisher' )
+                'message' => __( 'No YouTube token configured', 'fp-publisher' ),
             );
         }
-        
-        // Test TikTok connection
+
         $tiktok_token = get_post_meta( $client_id, '_tts_tt_token', true );
         if ( $tiktok_token ) {
-            $tiktok_result = $this->test_tiktok_client_connection( $tiktok_token );
-            $results['TikTok'] = $tiktok_result;
+            $results['TikTok'] = $this->test_tiktok_client_connection( $tiktok_token );
         } else {
             $results['TikTok'] = array(
                 'success' => false,
-                'message' => __( 'No TikTok token configured', 'fp-publisher' )
+                'message' => __( 'No TikTok token configured', 'fp-publisher' ),
             );
         }
-        
-        wp_send_json_success( array( 'results' => $results ) );
+
+        return wp_send_json_success( array( 'results' => $results ) );
     }
 
     /**
      * AJAX handler for testing single platform connection.
      */
     public function ajax_test_single_connection() {
-        check_ajax_referer( 'tts_ajax_nonce', 'nonce' );
-        
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( __( 'Insufficient permissions.', 'fp-publisher' ) );
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
         }
-        
-        $platform = sanitize_key( $_POST['platform'] );
+
+        $platform = isset( $_POST['platform'] ) ? sanitize_key( wp_unslash( $_POST['platform'] ) ) : '';
         if ( ! $platform ) {
-            wp_send_json_error( __( 'Invalid platform.', 'fp-publisher' ) );
+            return wp_send_json_error( __( 'Invalid platform.', 'fp-publisher' ), 400 );
         }
-        
-        $social_apps = get_option( 'tts_social_apps', array() );
-        $platform_settings = isset( $social_apps[ $platform ] ) ? $social_apps[ $platform ] : array();
-        
-        $result = $this->test_platform_connection( $platform, $platform_settings );
-        
-        wp_send_json_success( $result );
+
+        $social_apps        = get_option( 'tts_social_apps', array() );
+        $platform_settings  = isset( $social_apps[ $platform ] ) && is_array( $social_apps[ $platform ] ) ? $social_apps[ $platform ] : array();
+        $result             = $this->test_platform_connection( $platform, $platform_settings );
+        $sanitized_response = array(
+            'success' => ! empty( $result['success'] ),
+            'message' => isset( $result['message'] ) ? sanitize_text_field( $result['message'] ) : '',
+        );
+
+        return wp_send_json_success( $sanitized_response );
     }
 
     /**
