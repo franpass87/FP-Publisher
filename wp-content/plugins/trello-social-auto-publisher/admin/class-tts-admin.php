@@ -14,6 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class TTS_Admin {
 
+    const DEFAULT_IMPORT_MAX_FILE_SIZE = 5 * MB_IN_BYTES;
+
     /**
      * Stores admin notices for missing menu callbacks.
      *
@@ -141,6 +143,38 @@ class TTS_Admin {
         }
 
         return true;
+    }
+
+    /**
+     * Determine the maximum allowed import file size.
+     *
+     * @return int Maximum file size in bytes.
+     */
+    private function get_max_import_file_size() {
+        $upload_limit = wp_convert_hr_to_bytes( ini_get( 'upload_max_filesize' ) );
+        $post_limit   = wp_convert_hr_to_bytes( ini_get( 'post_max_size' ) );
+
+        $limits = array_filter(
+            array(
+                self::DEFAULT_IMPORT_MAX_FILE_SIZE,
+                $upload_limit,
+                $post_limit,
+            ),
+            function ( $value ) {
+                return is_numeric( $value ) && $value > 0;
+            }
+        );
+
+        $limit = ! empty( $limits ) ? min( $limits ) : self::DEFAULT_IMPORT_MAX_FILE_SIZE;
+
+        /**
+         * Filter the maximum allowed import file size.
+         *
+         * @param int $limit Maximum file size in bytes.
+         */
+        $limit = apply_filters( 'tts_import_max_file_size', (int) $limit );
+
+        return max( 1, (int) $limit );
     }
 
     /**
@@ -3926,6 +3960,25 @@ class TTS_Admin {
 
         $file = $_FILES['import_file'];
 
+        $max_size = $this->get_max_import_file_size();
+
+        if ( empty( $file['size'] ) || ! is_numeric( $file['size'] ) ) {
+            return wp_send_json_error( array( 'message' => __( 'Invalid file upload.', 'fp-publisher' ) ), 400 );
+        }
+
+        if ( (int) $file['size'] > $max_size ) {
+            return wp_send_json_error(
+                array(
+                    'message' => sprintf(
+                        /* translators: %s: maximum allowed file size */
+                        __( 'The uploaded file exceeds the maximum allowed size of %s.', 'fp-publisher' ),
+                        size_format( $max_size )
+                    ),
+                ),
+                400
+            );
+        }
+
         if ( ! isset( $file['error'] ) || UPLOAD_ERR_OK !== $file['error'] ) {
             $error_message = __( 'File upload failed.', 'fp-publisher' );
             if ( isset( $file['error'] ) ) {
@@ -3960,6 +4013,16 @@ class TTS_Admin {
 
         if ( ! isset( $file['tmp_name'] ) || ! is_uploaded_file( $file['tmp_name'] ) ) {
             return wp_send_json_error( array( 'message' => __( 'Invalid uploaded file.', 'fp-publisher' ) ), 400 );
+        }
+
+        if ( ! function_exists( 'wp_check_filetype_and_ext' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+
+        $filetype = wp_check_filetype_and_ext( $file['tmp_name'], $file['name'], array( 'json' => 'application/json' ) );
+
+        if ( empty( $filetype['ext'] ) || 'json' !== $filetype['ext'] ) {
+            return wp_send_json_error( array( 'message' => __( 'The uploaded file must be a valid JSON export from FP Publisher.', 'fp-publisher' ) ), 400 );
         }
 
         $file_contents = file_get_contents( $file['tmp_name'] );

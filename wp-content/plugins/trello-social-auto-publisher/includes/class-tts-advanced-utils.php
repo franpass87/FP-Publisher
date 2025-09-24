@@ -301,13 +301,27 @@ class TTS_Advanced_Utils {
                         'post_type' => 'tts_client',
                         'post_status' => 'publish'
                     ) );
-                    
+
                     if ( $client_id && ! is_wp_error( $client_id ) ) {
                         // Import meta data
                         if ( isset( $client_data['meta'] ) ) {
                             foreach ( $client_data['meta'] as $key => $values ) {
+                                $meta_key = self::sanitize_import_meta_key( $key );
+
+                                if ( null === $meta_key ) {
+                                    continue;
+                                }
+
+                                $values = is_array( $values ) ? $values : array( $values );
+
                                 foreach ( $values as $value ) {
-                                    add_post_meta( $client_id, $key, maybe_unserialize( $value ) );
+                                    $meta_value = self::sanitize_import_meta_value( $value );
+
+                                    if ( null === $meta_value ) {
+                                        continue;
+                                    }
+
+                                    add_post_meta( $client_id, $meta_key, $meta_value );
                                 }
                             }
                         }
@@ -327,13 +341,27 @@ class TTS_Advanced_Utils {
                         'post_type' => 'tts_social_post',
                         'post_status' => 'draft' // Always import as draft for safety
                     ) );
-                    
+
                     if ( $post_id && ! is_wp_error( $post_id ) ) {
                         // Import meta data
                         if ( isset( $post_data['meta'] ) ) {
                             foreach ( $post_data['meta'] as $key => $values ) {
+                                $meta_key = self::sanitize_import_meta_key( $key );
+
+                                if ( null === $meta_key ) {
+                                    continue;
+                                }
+
+                                $values = is_array( $values ) ? $values : array( $values );
+
                                 foreach ( $values as $value ) {
-                                    add_post_meta( $post_id, $key, maybe_unserialize( $value ) );
+                                    $meta_value = self::sanitize_import_meta_value( $value );
+
+                                    if ( null === $meta_value ) {
+                                        continue;
+                                    }
+
+                                    add_post_meta( $post_id, $meta_key, $meta_value );
                                 }
                             }
                         }
@@ -387,6 +415,125 @@ class TTS_Advanced_Utils {
         }
         
         return array( 'valid' => true );
+    }
+
+    /**
+     * Sanitize an imported meta key.
+     *
+     * @param mixed $meta_key Raw meta key from the import file.
+     * @return string|null Sanitized meta key or null when the key is not permitted.
+     */
+    private static function sanitize_import_meta_key( $meta_key ) {
+        if ( ! is_string( $meta_key ) || '' === $meta_key ) {
+            return null;
+        }
+
+        $allowed_prefixes = self::get_allowed_import_meta_prefixes();
+
+        if ( ! empty( $allowed_prefixes ) ) {
+            $matches_prefix = false;
+
+            foreach ( $allowed_prefixes as $prefix ) {
+                if ( 0 === strpos( $meta_key, $prefix ) ) {
+                    $matches_prefix = true;
+                    break;
+                }
+            }
+
+            if ( ! $matches_prefix ) {
+                return null;
+            }
+        }
+
+        $sanitized_key = sanitize_key( $meta_key );
+
+        if ( '' === $sanitized_key ) {
+            return null;
+        }
+
+        return $sanitized_key;
+    }
+
+    /**
+     * Retrieve the list of allowed meta key prefixes for imports.
+     *
+     * @return array<int, string> Allowed prefixes. An empty array allows all keys.
+     */
+    private static function get_allowed_import_meta_prefixes() {
+        /**
+         * Filter the allowed meta key prefixes when importing data.
+         *
+         * Returning an empty array allows all meta keys that sanitize correctly.
+         *
+         * @param array<int, string> $prefixes Allowed prefixes.
+         */
+        $prefixes = apply_filters( 'tts_import_allowed_meta_prefixes', array() );
+
+        if ( ! is_array( $prefixes ) ) {
+            return array();
+        }
+
+        $prefixes = array_filter(
+            array_map(
+                function ( $prefix ) {
+                    return is_string( $prefix ) ? $prefix : '';
+                },
+                $prefixes
+            ),
+            function ( $prefix ) {
+                return '' !== $prefix;
+            }
+        );
+
+        return array_values( $prefixes );
+    }
+
+    /**
+     * Sanitize a meta value before storing it in the database.
+     *
+     * @param mixed $value Meta value from the import file.
+     * @return mixed|null Sanitized value or null when the value should be skipped.
+     */
+    private static function sanitize_import_meta_value( $value ) {
+        if ( is_object( $value ) ) {
+            $value = (array) $value;
+        }
+
+        if ( is_array( $value ) ) {
+            $sanitized = array();
+
+            foreach ( $value as $key => $item ) {
+                $clean = self::sanitize_import_meta_value( $item );
+
+                if ( null === $clean ) {
+                    continue;
+                }
+
+                $sanitized[ $key ] = $clean;
+            }
+
+            return $sanitized;
+        }
+
+        if ( null === $value ) {
+            return null;
+        }
+
+        if ( is_bool( $value ) || is_int( $value ) || is_float( $value ) ) {
+            return $value;
+        }
+
+        if ( is_string( $value ) ) {
+            if ( self::SECRET_PLACEHOLDER === $value ) {
+                return null;
+            }
+
+            $value = wp_kses_post( $value );
+
+            return trim( $value );
+        }
+
+        return null;
     }
 
     /**
