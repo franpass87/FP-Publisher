@@ -104,10 +104,58 @@ class TTS_REST {
     public function publish( WP_REST_Request $request ) {
         $id = intval( $request['id'] );
 
-        // Trigger publish via scheduler using the registered action hook.
+        if ( $id <= 0 ) {
+            return new WP_Error( 'invalid_post', __( 'Invalid post ID.', 'fp-publisher' ), array( 'status' => 404 ) );
+        }
+
+        $post = get_post( $id );
+
+        if ( ! $post ) {
+            return new WP_Error( 'invalid_post', __( 'Invalid post ID.', 'fp-publisher' ), array( 'status' => 404 ) );
+        }
+
+        if ( 'tts_social_post' !== $post->post_type ) {
+            return new WP_Error( 'invalid_post_type', __( 'The requested post is not managed by FP Publisher.', 'fp-publisher' ), array( 'status' => 400 ) );
+        }
+
+        if ( 'trash' === $post->post_status ) {
+            return new WP_Error( 'invalid_post_status', __( 'Cannot publish a trashed social post.', 'fp-publisher' ), array( 'status' => 409 ) );
+        }
+
+        $approved = (bool) get_post_meta( $id, '_tts_approved', true );
+
+        if ( ! $approved ) {
+            return new WP_Error( 'post_not_approved', __( 'The social post must be approved before publishing.', 'fp-publisher' ), array( 'status' => 409 ) );
+        }
+
+        $channels = get_post_meta( $id, '_tts_social_channel', true );
+        if ( empty( $channels ) ) {
+            return new WP_Error( 'missing_channels', __( 'No social channels are configured for this post.', 'fp-publisher' ), array( 'status' => 409 ) );
+        }
+
+        $channels = is_array( $channels ) ? $channels : array( $channels );
+        $channels = array_values( array_filter( array_map( 'sanitize_key', $channels ) ) );
+
+        if ( empty( $channels ) ) {
+            return new WP_Error( 'missing_channels', __( 'No valid social channels are configured for this post.', 'fp-publisher' ), array( 'status' => 409 ) );
+        }
+
+        if ( ! has_action( 'tts_publish_social_post' ) ) {
+            return new WP_Error( 'scheduler_unavailable', __( 'The scheduler is not available to process the publish request.', 'fp-publisher' ), array( 'status' => 503 ) );
+        }
+
         do_action( 'tts_publish_social_post', $id );
 
-        return rest_ensure_response( array( 'post_id' => $id ) );
+        $response = new WP_REST_Response(
+            array(
+                'post_id'  => $id,
+                'status'   => get_post_meta( $id, '_published_status', true ) ?: 'queued',
+                'channels' => $channels,
+            ),
+            202
+        );
+
+        return rest_ensure_response( $response );
     }
 
     /**
