@@ -28,6 +28,57 @@ $tests = array(
         tts_assert_contains( 'value="manual" selected="selected"', $output, 'Manual option should be selected when Trello meta persists.' );
         tts_assert_contains( 'Trello integration is disabled', $output, 'A notice should explain the Trello fallback.' );
     },
+    'save_meta_falls_back_to_manual_when_trello_disabled' => function () {
+        tts_reset_test_state();
+
+        update_option( 'tts_trello_enabled', 0 );
+
+        $post_id = 314;
+        $GLOBALS['tts_current_user_caps'] = array(
+            'edit_post_' . $post_id => true,
+        );
+
+        $_POST = array(
+            'tts_content_source_nonce' => 'nonce-tts_content_source_meta',
+            'tts_content_source'       => 'trello',
+            'tts_source_reference'     => 'CARD-314',
+        );
+
+        $content_source = new TTS_Content_Source();
+        $content_source->save_content_source_meta( $post_id );
+
+        tts_assert_equals(
+            'manual',
+            get_post_meta( $post_id, '_tts_content_source', true ),
+            'Trello selections should fall back to manual when the integration is disabled.'
+        );
+
+        tts_assert_equals(
+            'converted',
+            get_post_meta( $post_id, '_tts_trello_disabled_notice', true ),
+            'Fallbacks should set a one-time notice flag so the editor can inform the user.'
+        );
+
+        $post = (object) array( 'ID' => $post_id );
+
+        ob_start();
+        $content_source->render_content_source_metabox( $post );
+        $output = ob_get_clean();
+
+        tts_assert_contains(
+            'converted to Manual',
+            $output,
+            'The metabox should explain why the Trello selection was converted.'
+        );
+
+        tts_assert_equals(
+            '',
+            get_post_meta( $post_id, '_tts_trello_disabled_notice', true ),
+            'Rendering the metabox should clear the notice flag.'
+        );
+
+        unset( $_POST );
+    },
     'content_management_tabs_hide_trello' => function () {
         tts_reset_test_state();
 
