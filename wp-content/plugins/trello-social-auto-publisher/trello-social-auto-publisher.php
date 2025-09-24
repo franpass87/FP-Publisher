@@ -157,6 +157,7 @@ add_action( 'plugins_loaded', function () {
         'class-tts-backup.php',
         'class-tts-cache-manager.php',
         'class-tts-client.php',
+        'class-tts-asset-manager.php',
         'class-tts-content-source.php',
         'class-tts-cpt.php',
         'class-tts-error-recovery.php',
@@ -282,20 +283,9 @@ add_action( 'plugins_loaded', function () {
                 return;
             }
 
-            wp_enqueue_style(
-                'tts-calendar',
-                plugin_dir_url( __FILE__ ) . 'admin/css/tts-calendar.css',
-                array(),
-                '1.0'
-            );
-
-            wp_enqueue_script(
-                'tts-calendar',
-                plugin_dir_url( __FILE__ ) . 'admin/js/tts-calendar.js',
-                array( 'jquery' ),
-                '1.0',
-                true
-            );
+            TTS_Asset_Manager::enqueue_style( 'tts-calendar', 'admin/css/tts-calendar.css' );
+            TTS_Asset_Manager::register_script( 'tts-calendar', 'admin/js/tts-calendar.js', array( 'jquery' ) );
+            wp_enqueue_script( 'tts-calendar' );
         } );
     }
 

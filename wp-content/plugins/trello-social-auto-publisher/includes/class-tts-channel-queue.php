@@ -139,7 +139,7 @@ if ( ! class_exists( 'TTS_Channel_Queue' ) ) {
             $job['scheduled_for'] = isset( $job['scheduled_for'] ) ? (int) $job['scheduled_for'] : (int) $timestamp;
             $job['metadata']      = isset( $job['metadata'] ) && is_array( $job['metadata'] ) ? $job['metadata'] : array();
 
-            $job['metadata']['queued_at']    = isset( $job['metadata']['queued_at'] ) ? (int) $job['metadata']['queued_at'] : time();
+            $job['metadata']['queued_at']    = isset( $job['metadata']['queued_at'] ) ? (float) $job['metadata']['queued_at'] : microtime( true );
             $job['metadata']['scheduled_for'] = $job['scheduled_for'];
 
             $config                       = $this->get_channel_config( $job['channel'] );

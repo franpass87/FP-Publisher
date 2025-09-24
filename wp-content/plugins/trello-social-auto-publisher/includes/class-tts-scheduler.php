@@ -357,7 +357,7 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
         $current_attempt  = max( 1, $attempt_index + 1 );
         $max_attempts     = isset( $channel_state['max_attempts'] ) ? absint( $channel_state['max_attempts'] ) : ( isset( $job['max_attempts'] ) ? absint( $job['max_attempts'] ) : ( $channel_config['retry']['global_max'] ?? 5 ) );
         $channel_state['status']        = 'in_progress';
-        $channel_state['last_started']  = time();
+        $channel_state['last_started']  = microtime( true );
         $channel_state['attempts']      = $current_attempt;
         $channel_state['config']        = $channel_config;
         $channel_state['job_id']        = $job['job_id'] ?? ( $channel_state['job_id'] ?? uniqid( 'tts_job_', true ) );
@@ -367,8 +367,38 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
         $channel_state['last_error']    = $channel_state['last_error'] ?? null;
         $channel_state['last_updated']  = time();
 
+        $metadata = isset( $channel_state['metadata'] ) && is_array( $channel_state['metadata'] ) ? $channel_state['metadata'] : array();
+        if ( isset( $job['metadata'] ) && is_array( $job['metadata'] ) ) {
+            $metadata = array_merge( $metadata, $job['metadata'] );
+        }
+        $channel_state['metadata'] = $metadata;
+
+        if ( isset( $metadata['queued_at'] ) ) {
+            $channel_state['queued_at'] = (float) $metadata['queued_at'];
+        } elseif ( ! isset( $channel_state['queued_at'] ) ) {
+            $channel_state['queued_at'] = microtime( true );
+        }
+
         $state[ $channel ] = $channel_state;
         $this->set_channel_state( $post_id, $state );
+
+        $profiling_context = array(
+            'job_id'          => $channel_state['job_id'],
+            'post_id'         => $post_id,
+            'client_id'       => $client_id,
+            'channel'         => $channel,
+            'attempt'         => $current_attempt,
+            'max_attempts'    => $max_attempts,
+            'queued_by'       => isset( $metadata['queued_by'] ) ? sanitize_key( $metadata['queued_by'] ) : '',
+            'queued_at'       => $channel_state['queued_at'] ?? null,
+            'start_timestamp' => $channel_state['last_started'],
+        );
+
+        if ( isset( $metadata['scheduled_for'] ) ) {
+            $profiling_context['scheduled_for'] = $metadata['scheduled_for'];
+        }
+
+        do_action( 'tts_scheduler_job_started', $profiling_context );
 
         tts_log_event( $post_id, $channel, 'start', __( 'Publishing social post', 'fp-publisher' ), '' );
         $this->dispatch_integration_event( $post_id, $client_id, array( $channel ) );
@@ -506,15 +536,51 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
 
     private function handle_job_success( $post_id, $channel, $client_id, $current_attempt, array $state, $result, array $channel_config ) {
         $channel_state = isset( $state[ $channel ] ) ? $state[ $channel ] : array();
-        $channel_state['status']        = 'completed';
-        $channel_state['attempts']      = $current_attempt;
-        $channel_state['last_error']    = null;
-        $channel_state['completed_at']  = time();
-        $channel_state['next_attempt']  = null;
+        $metadata      = isset( $channel_state['metadata'] ) && is_array( $channel_state['metadata'] ) ? $channel_state['metadata'] : array();
+        $finished_at   = microtime( true );
+        $duration_ms   = isset( $channel_state['last_started'] ) ? max( 0, ( $finished_at - (float) $channel_state['last_started'] ) * 1000 ) : null;
+        $queue_latency_ms = null;
+
+        if ( isset( $channel_state['queued_at'] ) && isset( $channel_state['last_started'] ) ) {
+            $queue_latency_ms = max( 0, ( (float) $channel_state['last_started'] - (float) $channel_state['queued_at'] ) * 1000 );
+        }
+
+        $profiling_context = array(
+            'job_id'          => $channel_state['job_id'] ?? '',
+            'post_id'         => $post_id,
+            'client_id'       => $client_id,
+            'channel'         => $channel,
+            'attempt'         => $current_attempt,
+            'max_attempts'    => isset( $channel_state['max_attempts'] ) ? absint( $channel_state['max_attempts'] ) : $current_attempt,
+            'queued_by'       => isset( $metadata['queued_by'] ) ? sanitize_key( $metadata['queued_by'] ) : '',
+            'queued_at'       => $channel_state['queued_at'] ?? null,
+            'start_timestamp' => $channel_state['last_started'] ?? $finished_at,
+            'end_timestamp'   => $finished_at,
+        );
+
+        if ( null !== $duration_ms ) {
+            $profiling_context['duration_ms'] = $duration_ms;
+        }
+
+        if ( null !== $queue_latency_ms ) {
+            $profiling_context['queue_latency_ms'] = $queue_latency_ms;
+        }
+
+        if ( isset( $metadata['scheduled_for'] ) ) {
+            $profiling_context['scheduled_for'] = $metadata['scheduled_for'];
+        }
+
+        do_action( 'tts_scheduler_job_completed', $profiling_context, $result );
+
+        $channel_state['status']         = 'completed';
+        $channel_state['attempts']       = $current_attempt;
+        $channel_state['last_error']     = null;
+        $channel_state['completed_at']   = time();
+        $channel_state['next_attempt']   = null;
         $channel_state['scheduled_args'] = null;
-        $channel_state['action_group']  = null;
-        $channel_state['last_updated']  = time();
-        $state[ $channel ]              = $channel_state;
+        $channel_state['action_group']   = null;
+        $channel_state['last_updated']   = time();
+        $state[ $channel ]               = $channel_state;
         $this->set_channel_state( $post_id, $state );
 
         $log = get_post_meta( $post_id, '_tts_publish_log', true );
@@ -549,6 +615,15 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
 
     private function handle_job_failure( $post_id, $channel, $client_id, $current_attempt, $max_attempts, array $channel_config, $error, array $state, $guard_response = null ) {
         $channel_state = isset( $state[ $channel ] ) ? $state[ $channel ] : array();
+        $metadata      = isset( $channel_state['metadata'] ) && is_array( $channel_state['metadata'] ) ? $channel_state['metadata'] : array();
+        $finished_at   = microtime( true );
+        $duration_ms   = isset( $channel_state['last_started'] ) ? max( 0, ( $finished_at - (float) $channel_state['last_started'] ) * 1000 ) : null;
+        $queue_latency_ms = null;
+
+        if ( isset( $channel_state['queued_at'] ) && isset( $channel_state['last_started'] ) ) {
+            $queue_latency_ms = max( 0, ( (float) $channel_state['last_started'] - (float) $channel_state['queued_at'] ) * 1000 );
+        }
+
         $channel_state['status']       = 'retry_pending';
         $channel_state['attempts']     = $current_attempt;
         $channel_state['last_updated'] = time();
@@ -572,6 +647,34 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
             'severity' => $severity_label,
             'time'     => time(),
         );
+
+        $profiling_context = array(
+            'job_id'          => $channel_state['job_id'] ?? '',
+            'post_id'         => $post_id,
+            'client_id'       => $client_id,
+            'channel'         => $channel,
+            'attempt'         => $current_attempt,
+            'max_attempts'    => $max_attempts,
+            'queued_by'       => isset( $metadata['queued_by'] ) ? sanitize_key( $metadata['queued_by'] ) : '',
+            'queued_at'       => $channel_state['queued_at'] ?? null,
+            'start_timestamp' => $channel_state['last_started'] ?? $finished_at,
+            'end_timestamp'   => $finished_at,
+            'severity'        => $severity_label,
+        );
+
+        if ( null !== $duration_ms ) {
+            $profiling_context['duration_ms'] = $duration_ms;
+        }
+
+        if ( null !== $queue_latency_ms ) {
+            $profiling_context['queue_latency_ms'] = $queue_latency_ms;
+        }
+
+        if ( isset( $metadata['scheduled_for'] ) ) {
+            $profiling_context['scheduled_for'] = $metadata['scheduled_for'];
+        }
+
+        do_action( 'tts_scheduler_job_failed', $profiling_context, $error );
 
         $state[ $channel ] = $channel_state;
         $this->set_channel_state( $post_id, $state );
@@ -637,7 +740,7 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
             'attempt'           => $current_attempt,
             'max_attempts'      => $max_attempts,
             'metadata'          => array(
-                'queued_at'      => time(),
+                'queued_at'      => microtime( true ),
                 'scheduled_for'  => $next_timestamp,
                 'queued_by'      => 'scheduler_retry',
                 'last_error'     => $message,
@@ -665,6 +768,15 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
         $channel_state['job_id']        = $enqueued_job['job_id'] ?? $channel_state['job_id'];
         $channel_state['next_attempt']  = $next_timestamp;
         $channel_state['last_updated']  = time();
+        if ( isset( $enqueued_job['metadata'] ) && is_array( $enqueued_job['metadata'] ) ) {
+            $channel_state['metadata'] = isset( $channel_state['metadata'] ) && is_array( $channel_state['metadata'] )
+                ? array_merge( $channel_state['metadata'], $enqueued_job['metadata'] )
+                : $enqueued_job['metadata'];
+
+            if ( isset( $enqueued_job['metadata']['queued_at'] ) ) {
+                $channel_state['queued_at'] = (float) $enqueued_job['metadata']['queued_at'];
+            }
+        }
         $state[ $channel ]              = $channel_state;
         $this->set_channel_state( $post_id, $state );
 
@@ -983,8 +1095,9 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
             'scheduled_for'     => $timestamp,
             'metadata'          => array(
                 'request'       => $request->to_array(),
-                'queued_at'     => time(),
+                'queued_at'     => microtime( true ),
                 'scheduled_for' => $timestamp,
+                'queued_by'     => 'scheduler',
             ),
             'retry_blueprint'   => $config['retry'],
             'circuit_blueprint' => $config['circuit'],
@@ -1005,7 +1118,7 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
             'max_attempts'      => $config['retry']['global_max'] ?? 5,
             'scheduled_for'     => $timestamp,
             'metadata'          => array(
-                'queued_at'     => $timestamp,
+                'queued_at'     => microtime( true ),
                 'scheduled_for' => $timestamp,
                 'queued_by'     => 'adhoc',
             ),
@@ -1027,6 +1140,8 @@ class TTS_Scheduler implements TTS_Scheduler_Interface {
             'config'         => $config,
             'last_error'     => null,
             'last_updated'   => time(),
+            'queued_at'      => isset( $job['metadata']['queued_at'] ) ? (float) $job['metadata']['queued_at'] : microtime( true ),
+            'metadata'       => isset( $job['metadata'] ) && is_array( $job['metadata'] ) ? $job['metadata'] : array(),
         );
 
         $this->set_channel_state( $post_id, $state );

@@ -32,6 +32,8 @@ Thumbs.db
 
 # Build artifacts
 dist/
+!wp-content/plugins/trello-social-auto-publisher/admin/dist/
+!wp-content/plugins/trello-social-auto-publisher/admin/dist/**
 build/
 compiled/
 
