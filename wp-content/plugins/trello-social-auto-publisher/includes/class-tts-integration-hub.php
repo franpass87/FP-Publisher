@@ -1433,9 +1433,9 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
      */
     private function sync_integration_data( $integration_id, $data_type ) {
         global $wpdb;
-        
+
         $integrations_table = $wpdb->prefix . 'tts_integrations';
-        
+
         $integration = $wpdb->get_row(
             $wpdb->prepare( "SELECT * FROM $integrations_table WHERE id = %d", $integration_id ),
             ARRAY_A
@@ -1469,26 +1469,58 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
             'mailchimp' => array( $this, 'sync_mailchimp_data' ),
             'google_analytics' => array( $this, 'sync_google_analytics_data' )
         );
-        
+
+        /**
+         * Allow third-parties to register additional sync handlers or override existing ones.
+         *
+         * Handlers can be any valid PHP callable. They receive the integration identifier,
+         * decrypted credentials, requested data type and the full integration record. When a
+         * handler only accepts three parameters it will receive the first three arguments,
+         * preserving backward compatibility with the core implementations.
+         *
+         * @param array $sync_methods   Map of integration slugs to callable handlers.
+         * @param array $integration    Database row describing the integration being synced.
+         * @param string $data_type     Specific data type requested for the sync.
+         */
+        $sync_methods = apply_filters( 'tts_integration_hub_sync_methods', $sync_methods, $integration, $data_type );
+
         $sync_result = array(
             'synced_records' => 0,
             'failed_records' => 0,
             'data_types' => array(),
             'last_sync' => current_time( 'mysql' )
         );
-        
+
         try {
             if ( isset( $sync_methods[ $integration_slug ] ) ) {
                 $credentials = $this->decrypt_credentials( $integration['credentials'] );
-                $sync_result = call_user_func(
+                $sync_result = $this->execute_sync_handler(
                     $sync_methods[ $integration_slug ],
-                    $integration_id,
-                    $credentials,
-                    $data_type
+                    array(
+                        $integration_id,
+                        $credentials,
+                        $data_type,
+                        $integration
+                    )
                 );
             } else {
-                // Return error for unsupported integrations
-                $sync_result = new WP_Error( 'unsupported_integration', 'Integration sync method not implemented' );
+                $sync_result = apply_filters(
+                    'tts_integration_hub_handle_sync',
+                    null,
+                    $integration_slug,
+                    $integration_id,
+                    $this->decrypt_credentials( $integration['credentials'] ),
+                    $data_type,
+                    $integration
+                );
+
+                if ( null === $sync_result ) {
+                    // Return error for unsupported integrations
+                    $sync_result = new WP_Error(
+                        'unsupported_integration',
+                        __( 'Integration sync method not implemented', 'fp-publisher' )
+                    );
+                }
             }
         } catch ( Exception $exception ) {
             $failure_context = $operation_context;
@@ -1530,8 +1562,76 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
             array( '%s', '%s' ),
             array( '%d' )
         );
-        
+
         return $sync_result;
+    }
+
+    /**
+     * Execute a sync handler ensuring compatible arguments are passed.
+     *
+     * @param callable|string $handler     Handler to execute.
+     * @param array           $arguments   Arguments available for the handler.
+     *
+     * @return mixed
+     */
+    private function execute_sync_handler( $handler, array $arguments ) {
+        if ( is_string( $handler ) && false !== strpos( $handler, '::' ) && is_callable( $handler ) ) {
+            $callable = $handler;
+        } elseif ( is_callable( $handler ) ) {
+            $callable = $handler;
+        } else {
+            return new WP_Error( 'invalid_sync_handler', __( 'Integration sync handler must be callable.', 'fp-publisher' ) );
+        }
+
+        $reflection = $this->reflect_callable( $callable );
+
+        if ( $reflection ) {
+            $arguments = array_slice( $arguments, 0, $reflection->getNumberOfParameters() );
+        }
+
+        return call_user_func_array( $callable, $arguments );
+    }
+
+    /**
+     * Create a reflection instance for a callable sync handler.
+     *
+     * @param callable|string $callable Callable handler.
+     *
+     * @return ReflectionFunctionAbstract|null
+     */
+    private function reflect_callable( $callable ) {
+        try {
+            if ( $callable instanceof Closure ) {
+                return new ReflectionFunction( $callable );
+            }
+
+            if ( is_array( $callable ) && 2 === count( $callable ) ) {
+                return new ReflectionMethod( $callable[0], $callable[1] );
+            }
+
+            if ( is_object( $callable ) && method_exists( $callable, '__invoke' ) ) {
+                return new ReflectionMethod( $callable, '__invoke' );
+            }
+
+            if ( is_string( $callable ) ) {
+                if ( function_exists( $callable ) ) {
+                    return new ReflectionFunction( $callable );
+                }
+
+                if ( false !== strpos( $callable, '::' ) ) {
+                    list( $class, $method ) = explode( '::', $callable );
+
+                    if ( method_exists( $class, $method ) ) {
+                        return new ReflectionMethod( $class, $method );
+                    }
+                }
+            }
+        } catch ( ReflectionException $exception ) {
+            unset( $exception );
+            return null;
+        }
+
+        return null;
     }
 
     /**
