@@ -1500,6 +1500,8 @@ class TTS_Admin {
      * Render advanced tools section.
      */
     private function render_advanced_tools_section() {
+        $has_syncable_sources = ! empty( TTS_Content_Source::get_syncable_sources() );
+
         echo '<div class="tts-advanced-tools-section">';
         echo '<h2>' . esc_html__( 'Advanced Tools', 'fp-publisher' ) . '</h2>';
         
@@ -4263,9 +4265,9 @@ class TTS_Admin {
      */
     private function render_content_management_tabs() {
         $sources = TTS_Content_Source::SOURCES;
-        $stats = TTS_Content_Source::get_source_stats();
-        $trello_enabled     = get_option( 'tts_trello_enabled', 1 );
-        $syncable_sources   = TTS_Content_Source::get_syncable_sources();
+        $stats                = TTS_Content_Source::get_source_stats();
+        $trello_enabled       = get_option( 'tts_trello_enabled', 1 );
+        $syncable_sources     = TTS_Content_Source::get_syncable_sources();
         $has_syncable_sources = ! empty( $syncable_sources );
         
         echo '<div class="tts-content-tabs">';
@@ -4297,7 +4299,7 @@ class TTS_Admin {
         
         // Overview tab content
         echo '<div id="overview-content" class="tab-panel active">';
-        $this->render_overview_content( $stats );
+        $this->render_overview_content( $stats, $has_syncable_sources );
         echo '</div>';
         
         // Source tab contents
@@ -4323,9 +4325,14 @@ class TTS_Admin {
      * Render overview content.
      *
      * @param array $stats Source statistics.
+     * @param bool  $has_syncable_sources Whether remote sources are available for syncing.
      */
-    private function render_overview_content( $stats ) {
+    private function render_overview_content( $stats, $has_syncable_sources = null ) {
         $trello_enabled = get_option( 'tts_trello_enabled', 1 );
+
+        if ( null === $has_syncable_sources ) {
+            $has_syncable_sources = ! empty( TTS_Content_Source::get_syncable_sources() );
+        }
         
         echo '<div class="tts-overview-grid">';
         
