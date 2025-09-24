@@ -2127,6 +2127,3 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
         $this->telemetry_channel->record_event( $event );
     }
 }
-
-// Initialize Integration Hub
-new TTS_Integration_Hub();
