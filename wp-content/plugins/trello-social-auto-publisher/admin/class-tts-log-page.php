@@ -29,6 +29,10 @@ class TTS_Log_Page {
      * Render the log page.
      */
     public function render_page() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'You are not allowed to access the FP Publisher logs.', 'fp-publisher' ) );
+        }
+
         $table = new TTS_Log_Table();
         $table->process_actions();
         $table->prepare_items();
@@ -200,6 +204,10 @@ class TTS_Log_Table extends WP_List_Table {
      * Handle row actions.
      */
     public function process_actions() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'You are not allowed to manage FP Publisher logs.', 'fp-publisher' ) );
+        }
+
         if ( isset( $_GET['action'], $_GET['log'] ) && 'delete' === $_GET['action'] ) {
             $log_id = absint( $_GET['log'] );
             check_admin_referer( 'tts_delete_log_' . $log_id );
