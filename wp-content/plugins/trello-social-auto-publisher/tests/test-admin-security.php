@@ -5,6 +5,7 @@ require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/helpers/assertions.php';
 require_once __DIR__ . '/../includes/class-tts-advanced-utils.php';
 require_once __DIR__ . '/../includes/class-tts-rest.php';
+require_once __DIR__ . '/../admin/class-tts-log-page.php';
 
 $tests = array(
     'ajax_export_rejects_invalid_nonce' => function () {
@@ -195,6 +196,43 @@ $tests = array(
 
         $result = $rest->permissions_check( $valid_request );
         tts_assert_true( true === $result, 'Proper capabilities and nonce should allow REST access.' );
+    },
+    'log_page_requires_manage_options' => function () {
+        tts_reset_test_state();
+
+        $log_page = new TTS_Log_Page();
+
+        try {
+            $log_page->render_page();
+            tts_assert_true( false, 'Rendering the log page without capabilities should trigger wp_die.' );
+        } catch ( RuntimeException $e ) {
+            tts_assert_equals(
+                'You are not allowed to access the FP Publisher logs.',
+                $e->getMessage(),
+                'The log page should block unauthorized access with a descriptive message.'
+            );
+        }
+    },
+    'log_deletion_requires_manage_options' => function () {
+        tts_reset_test_state();
+
+        $_GET = array(
+            'action' => 'delete',
+            'log'    => '15',
+        );
+
+        $table = new TTS_Log_Table();
+
+        try {
+            $table->process_actions();
+            tts_assert_true( false, 'Deleting logs without capabilities should not be allowed.' );
+        } catch ( RuntimeException $e ) {
+            tts_assert_equals(
+                'You are not allowed to manage FP Publisher logs.',
+                $e->getMessage(),
+                'Unauthorized log deletions should be blocked with a descriptive message.'
+            );
+        }
     },
 );
 
