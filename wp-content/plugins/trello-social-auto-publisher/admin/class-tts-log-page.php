@@ -37,12 +37,65 @@ class TTS_Log_Page {
         $table->process_actions();
         $table->prepare_items();
 
-        echo '<div class="wrap">';
+        $total_items   = (int) $table->get_pagination_arg( 'total_items' );
+        $current_items = count( $table->items );
+
+        $channel_filter = isset( $_GET['channel'] ) ? sanitize_text_field( wp_unslash( $_GET['channel'] ) ) : '';
+        $status_filter  = isset( $_GET['status'] ) ? sanitize_text_field( wp_unslash( $_GET['status'] ) ) : '';
+
+        $active_filters = array();
+        if ( $channel_filter ) {
+            $active_filters[] = sprintf(
+                /* translators: %s: current channel filter. */
+                esc_html__( 'Channel: %s', 'fp-publisher' ),
+                esc_html( $channel_filter )
+            );
+        }
+
+        if ( $status_filter ) {
+            $active_filters[] = sprintf(
+                /* translators: %s: current status filter. */
+                esc_html__( 'Status: %s', 'fp-publisher' ),
+                esc_html( $status_filter )
+            );
+        }
+
+        $filters_summary = $active_filters ? implode( ' · ', $active_filters ) : esc_html__( 'No filters applied', 'fp-publisher' );
+
+        echo '<div class="wrap fp-publisher-log-page">';
+        echo '<div class="tts-container">';
+        echo '<div class="tts-page-header">';
         echo '<h1>' . esc_html__( 'Log', 'fp-publisher' ) . '</h1>';
-        echo '<form method="get">';
+        echo '<p class="tts-page-subtitle">' . esc_html__( 'Monitor every publishing attempt, review API responses, and keep integrations healthy with a clear activity history.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+
+        echo '<div class="tts-grid tts-log-overview">';
+        echo '<div class="tts-card tts-log-card">';
+        echo '<div class="tts-stat">';
+        echo '<span class="tts-stat-label">' . esc_html__( 'Entries on this page', 'fp-publisher' ) . '</span>';
+        echo '<span class="tts-stat-value">' . esc_html( number_format_i18n( $current_items ) ) . '</span>';
+        echo '</div>';
+        echo '<div class="tts-stat">';
+        echo '<span class="tts-stat-label">' . esc_html__( 'Total log entries', 'fp-publisher' ) . '</span>';
+        echo '<span class="tts-stat-value">' . esc_html( number_format_i18n( $total_items ) ) . '</span>';
+        echo '</div>';
+        echo '<div class="tts-stat tts-log-active-filters">';
+        echo '<span class="tts-stat-label">' . esc_html__( 'Active filters', 'fp-publisher' ) . '</span>';
+        echo '<span class="tts-stat-value">' . $filters_summary . '</span>';
+        echo '</div>';
+        echo '</div>';
+        echo '</div>';
+
+        echo '<div class="tts-card tts-log-table-card">';
+        echo '<form method="get" class="tts-log-form">';
         echo '<input type="hidden" name="page" value="fp-publisher-log" />';
+        echo '<div class="tts-log-table-wrapper">';
         $table->display();
+        echo '</div>';
         echo '</form>';
+        echo '</div>';
+
+        echo '</div>';
         echo '</div>';
     }
 }
@@ -181,22 +234,24 @@ class TTS_Log_Table extends WP_List_Table {
         $current_channel = isset( $_GET['channel'] ) ? sanitize_text_field( wp_unslash( $_GET['channel'] ) ) : '';
         $current_status  = isset( $_GET['status'] ) ? sanitize_text_field( wp_unslash( $_GET['status'] ) ) : '';
 
-        echo '<div class="alignleft actions">';
-        echo '<select name="channel">';
+        echo '<div class="alignleft actions tts-log-filters">';
+        echo '<label class="screen-reader-text" for="tts-log-filter-channel">' . esc_html__( 'Filter by channel', 'fp-publisher' ) . '</label>';
+        echo '<select name="channel" id="tts-log-filter-channel" class="tts-select">';
         echo '<option value="">' . esc_html__( 'All Channels', 'fp-publisher' ) . '</option>';
         foreach ( $channels as $ch ) {
             printf( '<option value="%1$s" %2$s>%1$s</option>', esc_attr( $ch ), selected( $ch, $current_channel, false ) );
         }
         echo '</select>';
 
-        echo '<select name="status">';
+        echo '<label class="screen-reader-text" for="tts-log-filter-status">' . esc_html__( 'Filter by status', 'fp-publisher' ) . '</label>';
+        echo '<select name="status" id="tts-log-filter-status" class="tts-select">';
         echo '<option value="">' . esc_html__( 'All Statuses', 'fp-publisher' ) . '</option>';
         foreach ( $statuses as $st ) {
             printf( '<option value="%1$s" %2$s>%1$s</option>', esc_attr( $st ), selected( $st, $current_status, false ) );
         }
         echo '</select>';
 
-        submit_button( __( 'Filter', 'fp-publisher' ), '', 'filter_action', false );
+        submit_button( __( 'Filter', 'fp-publisher' ), 'primary tts-btn tts-btn-primary', 'filter_action', false );
         echo '</div>';
     }
 

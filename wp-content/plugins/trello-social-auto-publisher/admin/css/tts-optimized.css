@@ -259,6 +259,208 @@
     background: color-mix(in srgb, var(--tts-error) 10%, white);
 }
 
+/* Log page refresh */
+body[class*="fp-publisher-log"] .tts-page-header {
+    margin-bottom: var(--tts-spacing-lg);
+}
+
+body[class*="fp-publisher-log"] .tts-page-subtitle {
+    margin: 0;
+    color: color-mix(in srgb, var(--tts-dark) 65%, white);
+    max-width: 720px;
+}
+
+.tts-log-overview {
+    margin-bottom: var(--tts-spacing-lg);
+}
+
+.tts-log-card {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--tts-spacing-lg);
+}
+
+.tts-log-card .tts-stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tts-spacing-xs);
+}
+
+.tts-log-card .tts-stat-label {
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: color-mix(in srgb, var(--tts-dark) 60%, white);
+}
+
+.tts-log-card .tts-stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--tts-dark);
+}
+
+.tts-log-card .tts-log-active-filters .tts-stat-value {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.6;
+    color: color-mix(in srgb, var(--tts-primary) 70%, white);
+}
+
+.tts-log-table-card {
+    padding: var(--tts-spacing-lg);
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(19, 41, 75, 0.08);
+    box-shadow: 0 28px 52px rgba(31, 111, 235, 0.08);
+}
+
+.tts-log-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tts-spacing-md);
+}
+
+.tts-log-table-wrapper {
+    overflow: hidden;
+    border-radius: 16px;
+    border: 1px solid rgba(19, 41, 75, 0.08);
+    background: rgba(255, 255, 255, 0.92);
+}
+
+.tts-log-form .tablenav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--tts-spacing-sm);
+    padding: var(--tts-spacing-md) var(--tts-spacing-lg);
+    background: linear-gradient(135deg, rgba(31, 111, 235, 0.05), rgba(255, 255, 255, 0.75));
+    border-bottom: 1px solid rgba(19, 41, 75, 0.08);
+}
+
+.tts-log-form .tablenav.bottom {
+    border-top: 1px solid rgba(19, 41, 75, 0.08);
+    border-bottom: none;
+    justify-content: space-between;
+}
+
+.tts-log-form .actions.tts-log-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tts-spacing-sm);
+    align-items: center;
+    margin: 0;
+}
+
+.tts-log-form .tablenav .tts-select {
+    min-width: 180px;
+    max-width: 220px;
+    border-radius: 10px;
+    border-color: rgba(19, 41, 75, 0.18);
+    box-shadow: 0 8px 18px rgba(31, 111, 235, 0.12);
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--tts-dark);
+}
+
+.tts-log-form .tablenav .tts-btn {
+    margin-left: auto;
+}
+
+.tts-log-form .tablenav-pages {
+    margin: 0 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--tts-spacing-sm);
+}
+
+.tts-log-form .tablenav .displaying-num,
+.tts-log-form .tablenav .pagination-links a,
+.tts-log-form .tablenav .pagination-links span.current {
+    color: color-mix(in srgb, var(--tts-dark) 70%, white);
+    font-weight: 500;
+}
+
+.tts-log-form table.wp-list-table {
+    border: none;
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    background: transparent;
+}
+
+.tts-log-form table.wp-list-table thead th {
+    background: rgba(31, 111, 235, 0.08);
+    color: var(--tts-dark);
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(19, 41, 75, 0.1);
+}
+
+.tts-log-form table.wp-list-table tbody tr {
+    transition: var(--tts-transition);
+}
+
+.tts-log-form table.wp-list-table tbody tr:nth-child(odd) {
+    background: rgba(31, 111, 235, 0.03);
+}
+
+.tts-log-form table.wp-list-table tbody tr:hover {
+    background: rgba(31, 111, 235, 0.08);
+}
+
+.tts-log-form table.wp-list-table td,
+.tts-log-form table.wp-list-table th {
+    padding: 16px 18px;
+}
+
+.tts-log-form table.wp-list-table td {
+    color: color-mix(in srgb, var(--tts-dark) 80%, white);
+    font-size: 14px;
+    vertical-align: top;
+}
+
+.tts-log-form table.wp-list-table td.column-message a {
+    color: var(--tts-primary);
+}
+
+.tts-log-form table.wp-list-table td .row-actions {
+    color: color-mix(in srgb, var(--tts-dark) 60%, white);
+}
+
+.tts-log-form table.wp-list-table td .row-actions a {
+    color: color-mix(in srgb, var(--tts-primary) 85%, black);
+}
+
+.tts-log-form table.wp-list-table td .row-actions a:hover {
+    color: var(--tts-primary);
+}
+
+@media (max-width: 960px) {
+    .tts-log-card {
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+
+    .tts-log-form .tablenav {
+        gap: var(--tts-spacing-sm);
+    }
+
+    .tts-log-form .actions.tts-log-filters {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .tts-log-form .tablenav .tts-select,
+    .tts-log-form .tablenav .tts-btn {
+        margin-left: 0;
+    }
+
+    .tts-log-form .tablenav-pages {
+        margin-left: 0;
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
 /* Responsive design optimizations */
 @media (max-width: 768px) {
     .tts-container {
@@ -308,25 +510,44 @@
     }
 }
 
-/* Dark mode support (optional) */
+/* Light-forward experience even in dark mode */
 @media (prefers-color-scheme: dark) {
     :root {
-        --tts-light: #2d3748;
-        --tts-dark: #f7fafc;
-        --tts-border: #4a5568;
+        --tts-light: #f6f9ff;
+        --tts-dark: #1c336f;
+        --tts-border: rgba(42, 82, 152, 0.25);
     }
-    
-    .tts-card {
-        background: #1a202c;
+
+    body[class*="fp-publisher"] #wpbody-content {
+        background: linear-gradient(135deg, #f6f9ff 0%, #eef4ff 45%, #e6f0ff 100%);
+    }
+
+    .tts-card,
+    .tts-log-table-card {
+        background: rgba(255, 255, 255, 0.97);
         color: var(--tts-dark);
+        box-shadow: 0 20px 40px rgba(28, 51, 111, 0.18);
     }
-    
+
     .tts-input,
     .tts-select,
     .tts-textarea {
-        background: #2d3748;
+        background: rgba(255, 255, 255, 0.98);
         color: var(--tts-dark);
         border-color: var(--tts-border);
+    }
+
+    .tts-log-form .tablenav {
+        background: linear-gradient(135deg, rgba(246, 249, 255, 0.85), rgba(230, 240, 255, 0.95));
+        border-color: rgba(42, 82, 152, 0.18);
+    }
+
+    .tts-log-form table.wp-list-table tbody tr:nth-child(odd) {
+        background: rgba(42, 82, 152, 0.1);
+    }
+
+    .tts-log-form table.wp-list-table tbody tr:hover {
+        background: rgba(42, 82, 152, 0.16);
     }
 }
 
