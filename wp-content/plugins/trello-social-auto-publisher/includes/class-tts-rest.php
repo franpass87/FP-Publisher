@@ -25,23 +25,32 @@ class TTS_REST {
      * Register REST API routes.
      */
     public function register_routes() {
+        $args = array(
+            'args'                 => $this->get_post_id_route_args(),
+            'permission_callback'  => array( $this, 'permissions_check' ),
+        );
+
         register_rest_route(
             'tts/v1',
             '/post/(?P<id>\d+)/publish',
-            array(
-                'methods'             => 'POST',
-                'callback'            => array( $this, 'publish' ),
-                'permission_callback' => array( $this, 'permissions_check' ),
+            array_merge(
+                $args,
+                array(
+                    'methods'  => 'POST',
+                    'callback' => array( $this, 'publish' ),
+                )
             )
         );
 
         register_rest_route(
             'tts/v1',
             '/post/(?P<id>\d+)/status',
-            array(
-                'methods'             => 'GET',
-                'callback'            => array( $this, 'status' ),
-                'permission_callback' => array( $this, 'permissions_check' ),
+            array_merge(
+                $args,
+                array(
+                    'methods'  => 'GET',
+                    'callback' => array( $this, 'status' ),
+                )
             )
         );
     }
@@ -54,7 +63,11 @@ class TTS_REST {
      * @return bool
      */
     public function permissions_check( WP_REST_Request $request ) {
-        $post_id = intval( $request['id'] );
+        $post_id = $this->resolve_post_id( $request );
+
+        if ( is_wp_error( $post_id ) ) {
+            return $post_id;
+        }
 
         if ( ! $this->verify_rest_nonce( $request ) ) {
             return new WP_Error( 'rest_forbidden', __( 'Invalid REST nonce.', 'fp-publisher' ), array( 'status' => 403 ) );
@@ -102,7 +115,11 @@ class TTS_REST {
      * @return WP_REST_Response
      */
     public function publish( WP_REST_Request $request ) {
-        $id = intval( $request['id'] );
+        $id = $this->resolve_post_id( $request );
+
+        if ( is_wp_error( $id ) ) {
+            return $id;
+        }
 
         if ( $id <= 0 ) {
             return new WP_Error( 'invalid_post', __( 'Invalid post ID.', 'fp-publisher' ), array( 'status' => 404 ) );
@@ -168,7 +185,12 @@ class TTS_REST {
     public function status( WP_REST_Request $request ) {
         global $wpdb;
 
-        $id   = intval( $request['id'] );
+        $id = $this->resolve_post_id( $request );
+
+        if ( is_wp_error( $id ) ) {
+            return $id;
+        }
+
         $post = get_post( $id );
         if ( ! $post ) {
             return new WP_Error( 'invalid_post', __( 'Invalid post ID.', 'fp-publisher' ), array( 'status' => 404 ) );
@@ -347,6 +369,70 @@ class TTS_REST {
         }
 
         return sanitize_textarea_field( (string) $value );
+    }
+
+    /**
+     * Schema for REST route post ID argument.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function get_post_id_route_args() {
+        return array(
+            'id' => array(
+                'description'       => __( 'The unique identifier of the social post.', 'fp-publisher' ),
+                'type'              => 'integer',
+                'required'          => true,
+                'sanitize_callback' => 'absint',
+                'validate_callback' => array( $this, 'validate_post_id_argument' ),
+            ),
+        );
+    }
+
+    /**
+     * Validate the REST argument for a post identifier.
+     *
+     * @param mixed            $value   Raw value.
+     * @param WP_REST_Request  $request Request instance.
+     * @param string           $param   Parameter name.
+     *
+     * @return true|WP_Error
+     */
+    public function validate_post_id_argument( $value, $request, $param ) {
+        unset( $request );
+
+        $id = absint( $value );
+
+        if ( $id < 1 ) {
+            return new WP_Error(
+                'rest_invalid_param',
+                __( 'The post ID must be a positive integer.', 'fp-publisher' ),
+                array(
+                    'status' => 400,
+                    'param'  => $param,
+                )
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Resolve and sanitize the post ID from a REST request.
+     *
+     * @param WP_REST_Request $request Request instance.
+     *
+     * @return int|WP_Error
+     */
+    private function resolve_post_id( WP_REST_Request $request ) {
+        $raw = $request->get_param( 'id' );
+
+        $id = absint( is_array( $raw ) ? reset( $raw ) : $raw );
+
+        if ( $id < 1 ) {
+            return new WP_Error( 'invalid_post', __( 'Invalid post ID.', 'fp-publisher' ), array( 'status' => 404 ) );
+        }
+
+        return $id;
     }
 }
 
