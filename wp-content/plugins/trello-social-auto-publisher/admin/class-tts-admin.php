@@ -342,44 +342,43 @@ class TTS_Admin {
             );
         }
 
-        $clients_title                 = __( 'Clients', 'fp-publisher' );
-        $can_register_clients_menu     = $this->can_register_menu_callback( 'render_clients_page', 'fp-publisher-clienti', $clients_title, $available_methods );
-        $client_wizard_menu_title      = __( 'Add New Client', 'fp-publisher' );
-        $can_register_client_wizard    = $this->can_register_menu_callback( 'tts_render_client_wizard', 'fp-publisher-client-wizard', $client_wizard_menu_title, $available_methods );
-        $social_posts_menu_title       = __( 'Social Posts', 'fp-publisher' );
-        $can_register_social_posts     = $this->can_register_menu_callback( 'render_social_posts_page', 'fp-publisher-social-posts', $social_posts_menu_title, $available_methods );
+        $clients_title              = __( 'Clients', 'fp-publisher' );
+        $can_register_clients_menu  = $this->can_register_menu_callback( 'render_clients_page', 'fp-publisher-clienti', $clients_title, $available_methods );
+        $client_wizard_menu_title   = __( 'Add New Client', 'fp-publisher' );
+        $can_register_client_wizard = $this->can_register_menu_callback( 'tts_render_client_wizard', 'fp-publisher-client-wizard', $client_wizard_menu_title, $available_methods );
+        $social_posts_menu_title    = __( 'Social Posts', 'fp-publisher' );
+        $can_register_social_posts  = $this->can_register_menu_callback( 'render_social_posts_page', 'fp-publisher-social-posts', $social_posts_menu_title, $available_methods );
 
-        if ( $can_register_clients_menu ) {
-            add_menu_page(
-                $clients_title,
-                $clients_title,
-                'manage_options',
-                'fp-publisher-clienti',
-                array( $this, 'render_clients_page' ),
-                'dashicons-admin-post',
-                26
-            );
-        }
-
-        if ( $can_register_clients_menu && $can_register_client_wizard ) {
+        if ( $can_register_social_posts ) {
             add_submenu_page(
-                'fp-publisher-clienti',
-                $client_wizard_menu_title,
-                $client_wizard_menu_title,
-                'manage_options',
-                'fp-publisher-client-wizard',
-                array( $this, 'tts_render_client_wizard' )
-            );
-        }
-
-        if ( $can_register_clients_menu && $can_register_social_posts ) {
-            add_submenu_page(
-                'fp-publisher-clienti',
+                'fp-publisher-main',
                 $social_posts_menu_title,
                 $social_posts_menu_title,
                 'manage_options',
                 'fp-publisher-social-posts',
                 array( $this, 'render_social_posts_page' )
+            );
+        }
+
+        if ( $can_register_clients_menu ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $clients_title,
+                $clients_title,
+                'manage_options',
+                'fp-publisher-clienti',
+                array( $this, 'render_clients_page' )
+            );
+        }
+
+        if ( $can_register_client_wizard ) {
+            add_submenu_page(
+                'fp-publisher-main',
+                $client_wizard_menu_title,
+                $client_wizard_menu_title,
+                'manage_options',
+                'fp-publisher-client-wizard',
+                array( $this, 'tts_render_client_wizard' )
             );
         }
 
@@ -1160,14 +1159,16 @@ class TTS_Admin {
 
                 $edit_link = '';
                 if ( current_user_can( 'edit_post', $post->ID ) ) {
-                    $edit_link = esc_url_raw(
-                        self::get_social_post_editor_url(
-                            $post->ID,
-                            array(
-                                'tts_open_editor' => 1,
-                            )
-                        )
+                    $edit_link = add_query_arg(
+                        array(
+                            'post'            => absint( $post->ID ),
+                            'action'          => 'edit',
+                            'tts_open_editor' => 1,
+                        ),
+                        'admin.php?page=fp-publisher-social-posts'
                     );
+
+                    $edit_link = esc_url_raw( $edit_link );
                 }
 
                 $formatted_posts[] = array(
@@ -3473,15 +3474,35 @@ class TTS_Admin {
             }
         }
 
+        if ( $editor_values['manual_media'] <= 0 && ! empty( $editor_values['attachment_ids'] ) ) {
+            $editor_values['manual_media'] = absint( $editor_values['attachment_ids'][0] );
+        }
+
+        $primary_media_id = absint( $editor_values['manual_media'] );
         $attachment_items = '';
         foreach ( $editor_values['attachment_ids'] as $attachment_id ) {
             $attachment_id = absint( $attachment_id );
             if ( $attachment_id <= 0 ) {
                 continue;
             }
-            $thumb = wp_get_attachment_image( $attachment_id, array( 80, 80 ) );
+
+            $thumb      = wp_get_attachment_image( $attachment_id, array( 120, 120 ) );
+            $title      = get_the_title( $attachment_id );
+            $title      = $title ? $title : sprintf( __( 'Media #%d', 'fp-publisher' ), $attachment_id );
+            $is_primary = ( $attachment_id === $primary_media_id );
+
             if ( $thumb ) {
-                $attachment_items .= '<li class="tts-attachment-item"><label><input type="checkbox" class="tts-attachment-select" value="' . esc_attr( $attachment_id ) . '" checked />' . $thumb . '</label></li>';
+                $attachment_items .= '<li class="tts-attachment-item' . ( $is_primary ? ' is-primary' : '' ) . '" data-id="' . esc_attr( $attachment_id ) . '">';
+                $attachment_items .= '<div class="tts-attachment-thumb">' . $thumb . '</div>';
+                $attachment_items .= '<div class="tts-attachment-meta">';
+                $attachment_items .= '<span class="tts-attachment-title">' . esc_html( $title ) . '</span>';
+                $attachment_items .= '<div class="tts-attachment-actions">';
+                $attachment_items .= '<button type="button" class="button-link tts-attachment-make-primary" data-id="' . esc_attr( $attachment_id ) . '">' . esc_html__( 'Imposta come principale', 'fp-publisher' ) . '</button>';
+                $attachment_items .= '<button type="button" class="button-link-delete tts-attachment-remove" data-id="' . esc_attr( $attachment_id ) . '">' . esc_html__( 'Rimuovi', 'fp-publisher' ) . '</button>';
+                $attachment_items .= '</div>';
+                $attachment_items .= '</div>';
+                $attachment_items .= '<span class="tts-primary-indicator" aria-hidden="true">' . esc_html__( 'Primario', 'fp-publisher' ) . '</span>';
+                $attachment_items .= '</li>';
             }
         }
 
@@ -3570,120 +3591,192 @@ class TTS_Admin {
             echo '<p class="description">' . esc_html__( 'Compila i campi per programmare il contenuto sui canali selezionati.', 'fp-publisher' ) . '</p>';
         }
 
-        echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="tts-social-post-form">';
-        if ( $is_editing ) {
-            wp_nonce_field( 'tts_update_social_post', 'tts_update_social_post_nonce' );
-            echo '<input type="hidden" name="action" value="tts_update_social_post" />';
-            echo '<input type="hidden" name="tts_post_id" value="' . esc_attr( $editor_values['post_id'] ) . '" />';
-        } else {
-            wp_nonce_field( 'tts_create_social_post', 'tts_create_social_post_nonce' );
-            echo '<input type="hidden" name="action" value="tts_create_social_post" />';
-        }
-
-        echo '<div class="tts-field-group">';
-        echo '<label for="tts_post_title">' . esc_html__( 'Titolo del post', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="tts_post_title" name="tts_post_title" class="regular-text" value="' . esc_attr( $editor_values['title'] ) . '" required />';
-        echo '<p class="description">' . esc_html__( 'Usa un titolo descrittivo per riconoscere rapidamente il contenuto.', 'fp-publisher' ) . '</p>';
-        echo '</div>';
-
-        echo '<div class="tts-field-group">';
-        echo '<label for="tts_client_id">' . esc_html__( 'Cliente associato', 'fp-publisher' ) . '</label>';
-        echo '<select id="tts_client_id" name="tts_client_id" class="widefat">';
-        echo '<option value="0"' . selected( 0, $selected_client, false ) . '>' . esc_html__( 'Seleziona cliente (opzionale)', 'fp-publisher' ) . '</option>';
-        foreach ( $clients as $client ) {
-            $option_label = get_the_title( $client );
-            echo '<option value="' . esc_attr( $client->ID ) . '" ' . selected( $selected_client, $client->ID, false ) . '>' . esc_html( $option_label ) . '</option>';
-        }
-        echo '</select>';
-        echo '<p class="description">' . esc_html__( 'Collega il post a un cliente per applicare regole e credenziali dedicate.', 'fp-publisher' ) . '</p>';
-        echo '</div>';
-
-        echo '<div class="tts-field-group">';
-        echo '<label for="_tts_publish_at">' . esc_html__( 'Data e ora di pubblicazione', 'fp-publisher' ) . '</label>';
-        echo '<input type="datetime-local" id="_tts_publish_at" name="_tts_publish_at" class="regular-text" value="' . esc_attr( $editor_values['publish_at'] ) . '" />';
-        echo '</div>';
-
-        echo '<fieldset class="tts-field-group tts-channel-selector">';
-        echo '<legend>' . esc_html__( 'Canali di pubblicazione', 'fp-publisher' ) . '</legend>';
-        foreach ( $channel_labels as $key => $label ) {
-            echo '<label class="tts-channel-option"><input type="checkbox" class="tts-channel-checkbox" name="_tts_social_channel[]" value="' . esc_attr( $key ) . '" ' . checked( in_array( $key, $editor_values['channels'], true ), true, false ) . ' /> ' . esc_html( $label ) . '</label>';
-        }
-        echo '<p class="description">' . esc_html__( 'Seleziona uno o più canali: i campi messaggio si attiveranno automaticamente.', 'fp-publisher' ) . '</p>';
-        echo '</fieldset>';
-
-        echo '<div class="tts-field-group">';
-        echo '<h3>' . esc_html__( 'Messaggi personalizzati', 'fp-publisher' ) . '</h3>';
-        echo '<div class="tts-channel-messages">';
-        foreach ( $channel_labels as $key => $label ) {
-            $message_id    = 'tts_message_' . $key;
-            $message_label = sprintf( esc_html__( 'Messaggio per %s', 'fp-publisher' ), $label );
-            echo '<div class="tts-channel-message" data-channel="' . esc_attr( $key ) . '">';
-            echo '<label for="' . esc_attr( $message_id ) . '">' . esc_html( $message_label ) . '</label>';
-            echo '<textarea id="' . esc_attr( $message_id ) . '" name="_tts_message_' . esc_attr( $key ) . '" rows="4" class="widefat">' . esc_textarea( $editor_values['messages'][ $key ] ) . '</textarea>';
-            if ( 'instagram' === $key ) {
-                echo '<label for="tts_instagram_first_comment" class="tts-field-sub-label">' . esc_html__( 'Commento iniziale Instagram', 'fp-publisher' ) . '</label>';
-                echo '<textarea id="tts_instagram_first_comment" name="_tts_instagram_first_comment" rows="3" class="widefat">' . esc_textarea( $editor_values['instagram_comment'] ) . '</textarea>';
+        ob_start();
+        ?>
+        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="tts-social-post-form">
+            <?php
+            if ( $is_editing ) {
+                wp_nonce_field( 'tts_update_social_post', 'tts_update_social_post_nonce' );
+                ?>
+                <input type="hidden" name="action" value="tts_update_social_post" />
+                <input type="hidden" name="tts_post_id" value="<?php echo esc_attr( $editor_values['post_id'] ); ?>" />
+                <?php
+            } else {
+                wp_nonce_field( 'tts_create_social_post', 'tts_create_social_post_nonce' );
+                ?>
+                <input type="hidden" name="action" value="tts_create_social_post" />
+                <?php
             }
-            echo '</div>';
-        }
-        echo '</div>';
-        echo '</div>';
+            ?>
 
-        echo '<div class="tts-field-group">';
-        echo '<label>' . esc_html__( 'Media allegati', 'fp-publisher' ) . '</label>';
-        echo '<ul id="tts_attachments_list" class="tts-attachments-list">' . $attachment_items . '</ul>';
-        echo '<input type="hidden" id="tts_attachment_ids" name="_tts_attachment_ids" value="' . esc_attr( implode( ',', $editor_values['attachment_ids'] ) ) . '" />';
-        echo '<input type="hidden" id="tts_manual_media" name="_tts_manual_media" value="' . esc_attr( $editor_values['manual_media'] ) . '" />';
-        echo '<button type="button" class="button tts-select-media">' . esc_html__( 'Seleziona/Carica file', 'fp-publisher' ) . '</button>';
-        echo '</div>';
+            <div class="tts-editor-grid">
+                <div class="tts-editor-column tts-editor-column--primary">
+                    <div class="tts-editor-card tts-editor-card--details">
+                        <div class="tts-editor-card__header">
+                            <h3><?php esc_html_e( 'Dettagli del contenuto', 'fp-publisher' ); ?></h3>
+                            <p><?php esc_html_e( 'Imposta le informazioni chiave per programmare correttamente il post.', 'fp-publisher' ); ?></p>
+                        </div>
 
-        echo '<div class="tts-field-group">';
-        echo '<label class="tts-checkbox-inline"><input type="checkbox" id="tts_publish_story" name="_tts_publish_story" value="1" ' . checked( $editor_values['publish_story'], true, false ) . ' /> ' . esc_html__( 'Pubblica anche come Story', 'fp-publisher' ) . '</label>';
-        echo '<div id="tts_story_media_wrapper" class="tts-story-media"' . $story_wrapper_style . '>';
-        echo '<div id="tts_story_media_preview" class="tts-story-media-preview">' . $story_media_preview . '</div>';
-        echo '<input type="hidden" id="tts_story_media" name="_tts_story_media" value="' . esc_attr( $editor_values['story_media'] ) . '" />';
-        echo '<button type="button" class="button tts-select-story-media">' . esc_html__( 'Seleziona media Story', 'fp-publisher' ) . '</button>';
-        echo '</div>';
-        echo '</div>';
+                        <div class="tts-field-group">
+                            <label for="tts_post_title"><?php esc_html_e( 'Titolo del post', 'fp-publisher' ); ?></label>
+                            <input type="text" id="tts_post_title" name="tts_post_title" class="regular-text" value="<?php echo esc_attr( $editor_values['title'] ); ?>" required />
+                            <p class="description"><?php esc_html_e( 'Usa un titolo descrittivo per riconoscere rapidamente il contenuto.', 'fp-publisher' ); ?></p>
+                        </div>
 
-        echo '<div class="tts-field-group tts-location-fields">';
-        echo '<div class="tts-location-input">';
-        echo '<label for="_tts_lat">' . esc_html__( 'Latitudine', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="_tts_lat" name="_tts_lat" class="regular-text" value="' . esc_attr( $editor_values['lat'] ) . '" />';
-        echo '</div>';
-        echo '<div class="tts-location-input">';
-        echo '<label for="_tts_lng">' . esc_html__( 'Longitudine', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="_tts_lng" name="_tts_lng" class="regular-text" value="' . esc_attr( $editor_values['lng'] ) . '" />';
-        echo '</div>';
-        echo '</div>';
+                        <div class="tts-field-group">
+                            <label for="tts_client_id"><?php esc_html_e( 'Cliente associato', 'fp-publisher' ); ?></label>
+                            <select id="tts_client_id" name="tts_client_id" class="widefat">
+                                <option value="0" <?php selected( 0, $selected_client ); ?>><?php esc_html_e( 'Seleziona cliente (opzionale)', 'fp-publisher' ); ?></option>
+                                <?php foreach ( $clients as $client ) : ?>
+                                    <option value="<?php echo esc_attr( $client->ID ); ?>" <?php selected( $selected_client, $client->ID ); ?>><?php echo esc_html( get_the_title( $client ) ); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description"><?php esc_html_e( 'Collega il post a un cliente per applicare regole e credenziali dedicate.', 'fp-publisher' ); ?></p>
+                        </div>
 
-        echo '<div class="tts-field-group">';
-        echo '<label for="tts_content_source">' . esc_html__( 'Origine contenuto', 'fp-publisher' ) . '</label>';
-        echo '<select id="tts_content_source" name="tts_content_source" class="widefat">';
-        echo '<option value="">' . esc_html__( 'Seleziona origine', 'fp-publisher' ) . '</option>';
-        foreach ( $content_sources as $key => $label ) {
-            if ( 'trello' === $key && ! $trello_enabled ) {
-                continue;
-            }
-            echo '<option value="' . esc_attr( $key ) . '" ' . selected( $selected_source, $key, false ) . '>' . esc_html( $label ) . '</option>';
-        }
-        echo '</select>';
-        if ( isset( $content_sources['trello'] ) && ! $trello_enabled ) {
-            echo '<p class="description tts-content-source-warning">' . esc_html__( 'L’integrazione Trello è disabilitata: scegli un’altra origine o riattiva la connessione.', 'fp-publisher' ) . '</p>';
-        }
-        if ( $trello_converted_notice ) {
-            echo '<p class="description">' . esc_html__( 'Questo post è stato convertito in modalità manuale perché la connessione Trello non è attiva.', 'fp-publisher' ) . '</p>';
-        }
-        echo '<label for="tts_source_reference" class="tts-field-sub-label">' . esc_html__( 'Riferimento esterno (opzionale)', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="tts_source_reference" name="tts_source_reference" class="regular-text" value="' . esc_attr( $editor_values['source_reference'] ) . '" />';
-        echo '</div>';
+                        <div class="tts-field-group tts-field-group--inline">
+                            <div class="tts-field">
+                                <label for="_tts_publish_at"><?php esc_html_e( 'Data e ora di pubblicazione', 'fp-publisher' ); ?></label>
+                                <input type="datetime-local" id="_tts_publish_at" name="_tts_publish_at" class="regular-text" value="<?php echo esc_attr( $editor_values['publish_at'] ); ?>" />
+                            </div>
+                            <div class="tts-field">
+                                <label for="tts_content_source"><?php esc_html_e( 'Origine contenuto', 'fp-publisher' ); ?></label>
+                                <select id="tts_content_source" name="tts_content_source" class="widefat">
+                                    <option value=""><?php esc_html_e( 'Seleziona origine', 'fp-publisher' ); ?></option>
+                                    <?php foreach ( $content_sources as $key => $label ) :
+                                        if ( 'trello' === $key && ! $trello_enabled ) {
+                                            continue;
+                                        }
+                                        ?>
+                                        <option value="<?php echo esc_attr( $key ); ?>" <?php selected( $selected_source, $key ); ?>><?php echo esc_html( $label ); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
 
-        echo '<div class="tts-editor-actions">';
-        echo '<button type="submit" class="button button-primary tts-form-save">' . esc_html( $submit_label ) . '</button>';
-        echo '<button ' . $cancel_attributes . '>' . esc_html__( 'Annulla', 'fp-publisher' ) . '</button>';
-        echo '</div>';
+                        <?php if ( isset( $content_sources['trello'] ) && ! $trello_enabled ) : ?>
+                            <p class="description tts-content-source-warning"><?php esc_html_e( 'L’integrazione Trello è disabilitata: scegli un’altra origine o riattiva la connessione.', 'fp-publisher' ); ?></p>
+                        <?php endif; ?>
+                        <?php if ( $trello_converted_notice ) : ?>
+                            <p class="description"><?php esc_html_e( 'Questo post è stato convertito in modalità manuale perché la connessione Trello non è attiva.', 'fp-publisher' ); ?></p>
+                        <?php endif; ?>
 
-        echo '</form>';
+                        <div class="tts-field-group">
+                            <label for="tts_source_reference" class="tts-field-sub-label"><?php esc_html_e( 'Riferimento esterno (opzionale)', 'fp-publisher' ); ?></label>
+                            <input type="text" id="tts_source_reference" name="tts_source_reference" class="regular-text" value="<?php echo esc_attr( $editor_values['source_reference'] ); ?>" />
+                        </div>
+
+                        <div class="tts-field-group tts-location-fields">
+                            <div class="tts-location-input">
+                                <label for="_tts_lat"><?php esc_html_e( 'Latitudine', 'fp-publisher' ); ?></label>
+                                <input type="text" id="_tts_lat" name="_tts_lat" class="regular-text" value="<?php echo esc_attr( $editor_values['lat'] ); ?>" />
+                            </div>
+                            <div class="tts-location-input">
+                                <label for="_tts_lng"><?php esc_html_e( 'Longitudine', 'fp-publisher' ); ?></label>
+                                <input type="text" id="_tts_lng" name="_tts_lng" class="regular-text" value="<?php echo esc_attr( $editor_values['lng'] ); ?>" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tts-editor-card tts-editor-card--media">
+                        <div class="tts-editor-card__header">
+                            <h3><?php esc_html_e( 'Media allegati', 'fp-publisher' ); ?></h3>
+                            <p><?php esc_html_e( 'Aggiungi immagini o video, imposta l’elemento principale e gestisci l’ordine.', 'fp-publisher' ); ?></p>
+                        </div>
+
+                        <div
+                            class="tts-attachments"
+                            data-empty="<?php echo esc_attr( empty( $editor_values['attachment_ids'] ) ? '1' : '0' ); ?>"
+                            data-make-primary-label="<?php echo esc_attr__( 'Imposta come principale', 'fp-publisher' ); ?>"
+                            data-remove-label="<?php echo esc_attr__( 'Rimuovi', 'fp-publisher' ); ?>"
+                            data-primary-label="<?php echo esc_attr__( 'Primario', 'fp-publisher' ); ?>"
+                        >
+                            <p id="tts_attachments_empty" class="tts-attachments-empty" <?php if ( ! empty( $editor_values['attachment_ids'] ) ) : ?>style="display:none"<?php endif; ?>><?php esc_html_e( 'Nessun media selezionato. Aggiungi elementi con il pulsante qui sotto.', 'fp-publisher' ); ?></p>
+                            <ul id="tts_attachments_list" class="tts-attachments-list"><?php echo $attachment_items; ?></ul>
+                            <input type="hidden" id="tts_attachment_ids" name="_tts_attachment_ids" value="<?php echo esc_attr( implode( ',', $editor_values['attachment_ids'] ) ); ?>" />
+                            <input type="hidden" id="tts_manual_media" name="_tts_manual_media" value="<?php echo esc_attr( $editor_values['manual_media'] ); ?>" />
+                            <div class="tts-attachments-actions">
+                                <button type="button" class="button button-secondary tts-select-media"><?php esc_html_e( 'Seleziona/Carica file', 'fp-publisher' ); ?></button>
+                                <button type="button" class="button-link tts-clear-attachments" <?php if ( empty( $editor_values['attachment_ids'] ) ) : ?>style="display:none"<?php endif; ?>><?php esc_html_e( 'Rimuovi tutti', 'fp-publisher' ); ?></button>
+                            </div>
+                        </div>
+
+                        <div class="tts-field-group tts-story-toggle">
+                            <label class="tts-checkbox-inline">
+                                <input type="checkbox" id="tts_publish_story" name="_tts_publish_story" value="1" <?php checked( $editor_values['publish_story'], true ); ?> />
+                                <?php esc_html_e( 'Pubblica anche come Story', 'fp-publisher' ); ?>
+                            </label>
+                            <div id="tts_story_media_wrapper" class="tts-story-media" <?php echo $story_wrapper_style; ?>>
+                                <div id="tts_story_media_preview" class="tts-story-media-preview"><?php echo $story_media_preview; ?></div>
+                                <input type="hidden" id="tts_story_media" name="_tts_story_media" value="<?php echo esc_attr( $editor_values['story_media'] ); ?>" />
+                                <button type="button" class="button tts-select-story-media"><?php esc_html_e( 'Seleziona media Story', 'fp-publisher' ); ?></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tts-editor-column tts-editor-column--secondary">
+                    <div class="tts-editor-card tts-editor-card--channels">
+                        <div class="tts-editor-card__header">
+                            <h3><?php esc_html_e( 'Canali e messaggi', 'fp-publisher' ); ?></h3>
+                            <p><?php esc_html_e( 'Attiva i canali da coinvolgere e personalizza i messaggi per ciascuna piattaforma.', 'fp-publisher' ); ?></p>
+                        </div>
+
+                        <fieldset class="tts-channel-selector">
+                            <legend class="screen-reader-text"><?php esc_html_e( 'Canali di pubblicazione', 'fp-publisher' ); ?></legend>
+                            <div class="tts-channel-options">
+                                <?php foreach ( $channel_labels as $key => $label ) : ?>
+                                    <label class="tts-channel-option">
+                                        <input type="checkbox" class="tts-channel-checkbox" name="_tts_social_channel[]" value="<?php echo esc_attr( $key ); ?>" <?php checked( in_array( $key, $editor_values['channels'], true ) ); ?> />
+                                        <span><?php echo esc_html( $label ); ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <p class="description"><?php esc_html_e( 'Seleziona uno o più canali: i campi messaggio si attiveranno automaticamente.', 'fp-publisher' ); ?></p>
+                        </fieldset>
+
+                        <div class="tts-channel-messages">
+                            <?php foreach ( $channel_labels as $key => $label ) :
+                                $message_id    = 'tts_message_' . $key;
+                                $message_label = sprintf( esc_html__( 'Messaggio per %s', 'fp-publisher' ), $label );
+                                ?>
+                                <div class="tts-channel-message" data-channel="<?php echo esc_attr( $key ); ?>">
+                                    <div class="tts-channel-message__header">
+                                        <label for="<?php echo esc_attr( $message_id ); ?>"><?php echo esc_html( $message_label ); ?></label>
+                                        <span class="tts-message-counter" data-counter-for="<?php echo esc_attr( $message_id ); ?>">0</span>
+                                    </div>
+                                    <textarea id="<?php echo esc_attr( $message_id ); ?>" name="_tts_message_<?php echo esc_attr( $key ); ?>" rows="4" class="widefat"><?php echo esc_textarea( $editor_values['messages'][ $key ] ); ?></textarea>
+                                    <?php if ( 'instagram' === $key ) : ?>
+                                        <label for="tts_instagram_first_comment" class="tts-field-sub-label"><?php esc_html_e( 'Commento iniziale Instagram', 'fp-publisher' ); ?></label>
+                                        <textarea id="tts_instagram_first_comment" name="_tts_instagram_first_comment" rows="3" class="widefat"><?php echo esc_textarea( $editor_values['instagram_comment'] ); ?></textarea>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <div class="tts-editor-card tts-editor-card--summary" id="tts-editor-summary">
+                        <div class="tts-editor-card__header">
+                            <h3><?php esc_html_e( 'Riepilogo configurazione', 'fp-publisher' ); ?></h3>
+                            <p><?php esc_html_e( 'Controlla a colpo d’occhio le impostazioni principali del post.', 'fp-publisher' ); ?></p>
+                        </div>
+                        <ul class="tts-summary-list">
+                            <li><strong><?php esc_html_e( 'Titolo:', 'fp-publisher' ); ?></strong> <span data-summary="title">—</span></li>
+                            <li><strong><?php esc_html_e( 'Programmazione:', 'fp-publisher' ); ?></strong> <span data-summary="schedule" data-default-label="<?php echo esc_attr__( 'Immediata', 'fp-publisher' ); ?>"><?php esc_html_e( 'Immediata', 'fp-publisher' ); ?></span></li>
+                            <li><strong><?php esc_html_e( 'Canali attivi:', 'fp-publisher' ); ?></strong> <span data-summary="channels">0</span></li>
+                            <li><strong><?php esc_html_e( 'Media allegati:', 'fp-publisher' ); ?></strong> <span data-summary="attachments">0</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tts-editor-actions">
+                <button type="submit" class="button button-primary tts-form-save"><?php echo esc_html( $submit_label ); ?></button>
+                <button <?php echo $cancel_attributes; ?>><?php esc_html_e( 'Annulla', 'fp-publisher' ); ?></button>
+            </div>
+        </form>
+        <?php
+        echo ob_get_clean();
         echo '</div>';
         echo '</div>';
         echo '</div>';

@@ -10,6 +10,10 @@
         const $openButton = $('#tts-open-social-post-editor');
         const $cancelButton = $('#tts-cancel-social-post-editor');
         const $titleField = $('#tts_post_title');
+        const $scheduleField = $('#_tts_publish_at');
+        const $attachmentsInput = $('#tts_attachment_ids');
+        const $summaryPanel = $('#tts-editor-summary');
+        const defaultScheduleLabel = $summaryPanel.length ? String($summaryPanel.find('[data-summary="schedule"]').data('default-label') || '') : '';
 
         const resolveOpenLabel = function() {
             if ( !$openButton.length ) {
@@ -80,6 +84,68 @@
             }
         });
 
+        const updateMessageCounter = function($textarea) {
+            const id = $textarea.attr('id');
+            if (!id) {
+                return;
+            }
+
+            const $counter = $editor.find('[data-counter-for="' + id + '"]');
+            if (!$counter.length) {
+                return;
+            }
+
+            const length = $textarea.val().length;
+            $counter.text(length);
+        };
+
+        $editor.on('input', '.tts-channel-message textarea', function() {
+            updateMessageCounter($(this));
+        });
+
+        $editor.find('.tts-channel-message textarea').each(function() {
+            updateMessageCounter($(this));
+        });
+
+        const formatScheduleValue = function(value) {
+            if (!value) {
+                return defaultScheduleLabel || '—';
+            }
+
+            // Replace "T" with space for better readability.
+            return value.replace('T', ' ');
+        };
+
+        const refreshSummary = function() {
+            if (!$summaryPanel.length) {
+                return;
+            }
+
+            const titleValue = $titleField.length ? $.trim($titleField.val()) : '';
+            const scheduleValue = $scheduleField.length ? $.trim($scheduleField.val()) : '';
+            const attachmentsValue = $attachmentsInput.length ? $.trim($attachmentsInput.val()) : '';
+
+            const activeChannels = $editor.find('.tts-channel-checkbox:checked').length;
+            const attachmentCount = attachmentsValue ? attachmentsValue.split(',').filter(Boolean).length : 0;
+
+            $summaryPanel.find('[data-summary="title"]').text(titleValue || '—');
+            $summaryPanel.find('[data-summary="schedule"]').text(formatScheduleValue(scheduleValue));
+            $summaryPanel.find('[data-summary="channels"]').text(activeChannels);
+            $summaryPanel.find('[data-summary="attachments"]').text(attachmentCount);
+        };
+
+        if ($titleField.length) {
+            $titleField.on('input', refreshSummary);
+        }
+
+        if ($scheduleField.length) {
+            $scheduleField.on('change', refreshSummary);
+        }
+
+        if ($attachmentsInput.length) {
+            $attachmentsInput.on('change', refreshSummary);
+        }
+
         const updateChannelMessages = function() {
             const activeChannels = {};
             $editor.find('.tts-channel-checkbox').each(function() {
@@ -93,6 +159,8 @@
                 const isActive = !!activeChannels[channel];
                 $message.toggleClass('is-active', isActive);
             });
+
+            refreshSummary();
         };
 
         $editor.on('change', '.tts-channel-checkbox', updateChannelMessages);
@@ -102,5 +170,7 @@
         if ($storyToggle.length) {
             $storyToggle.trigger('change');
         }
+
+        refreshSummary();
     });
 })(jQuery);
