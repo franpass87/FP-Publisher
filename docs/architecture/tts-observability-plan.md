@@ -1,5 +1,10 @@
 # FP Publisher SLA Discovery & Observability Plan
 
+*Author: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
+
+Applies to plugin version: **1.0.0** and above  
+Documentation refresh: **1.0.1**
+
 ## 1. Stakeholder Workshops & Interviews
 | Session | Participants | Format & When | Objectives | Key Questions (capture in shared notes) | Deliverables | Session Owner |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -77,4 +82,10 @@
 - Assign note-takers for each session to update sections within 24 hours post-meeting.
 - Engineering Manager to create observability Jira tickets referencing metric/event requirements above.
 - Compliance Officer to validate logging retention strategy once requirements are confirmed in Session 3.
+
+## References
+- [README.md](../../README.md)
+- [SECURITY_IMPROVEMENTS.md](../../SECURITY_IMPROVEMENTS.md)
+- [OPTIMIZATION_SUMMARY.md](../../OPTIMIZATION_SUMMARY.md)
+- [CHANGELOG.md](../../CHANGELOG.md)
 

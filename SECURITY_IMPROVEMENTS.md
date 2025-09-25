@@ -1,5 +1,12 @@
 # Security and Quality Improvements - COMPREHENSIVE AUDIT RESULTS
 
+*Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
+
+Versioni interessate: **0.9.0 → 1.0.0**  
+Ultimo aggiornamento documentazione: **1.0.1**
+
+Questa guida riassume l'audit di sicurezza che ha permesso di consolidare il rilascio 1.0.0. I riferimenti incrociati con il [CHANGELOG](CHANGELOG.md) e con il [README](README.md) permettono di contestualizzare gli interventi rispetto all'evoluzione del plugin.
+
 ## Overview
 This document outlines the comprehensive security audit and quality improvements implemented for the Trello Social Auto Publisher plugin. **ALL CRITICAL ISSUES HAVE BEEN RESOLVED**.
 
@@ -195,3 +202,9 @@ This document outlines the comprehensive security audit and quality improvements
 - **Keyboard navigation**: Comprehensive keyboard testing
 
 This comprehensive improvement package addresses critical security vulnerabilities, enhances performance, improves accessibility, and ensures high code quality standards throughout the plugin.
+
+## Riferimenti
+- [CHANGELOG.md](CHANGELOG.md)
+- [OPTIMIZATION_SUMMARY.md](OPTIMIZATION_SUMMARY.md)
+- [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md)
+- [README.md](README.md)

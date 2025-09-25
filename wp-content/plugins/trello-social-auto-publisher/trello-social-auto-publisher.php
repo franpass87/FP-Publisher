@@ -3,9 +3,9 @@
  * Plugin Name: FP Publisher
  * Plugin URI:  https://github.com/franpass87/FP-Social-Auto-Publisher
  * Description: Comprehensive multi-source content management system for automated social media publishing. Supports Trello, Google Drive, Dropbox, local uploads, and manual content creation with advanced scheduling and OAuth integration.
- * Version:     1.0.0
- * Author:      FP-Social-Auto-Publisher
- * Author URI:  https://github.com/franpass87/FP-Social-Auto-Publisher
+ * Version:     1.0.1
+ * Author:      Francesco Passeri
+ * Author URI:  https://francescopasseri.com
  * Text Domain: fp-publisher
  *
  * @package FPPublisher

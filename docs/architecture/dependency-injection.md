@@ -1,5 +1,10 @@
 # Linee guida per l'iniezione delle dipendenze
 
+*Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
+
+Versione minima: **1.0.0**  
+Ultimo aggiornamento documentazione: **1.0.1**
+
 Il plugin utilizza un contenitore compatibile con PSR-11 per gestire le dipendenze condivise e ridurre l'uso di variabili globali. Il contenitore vive in `includes/class-tts-service-container.php` ed è accessibile tramite l'helper `tsap_service_container()` definito nel file principale del plugin.
 
 ## Accesso al contenitore
@@ -50,3 +55,8 @@ Le classi dovrebbero ricevere le dipendenze tramite costruttore (o metodi dedica
 - Usare il contenitore anche nei test: è possibile istanziare un nuovo `TTS_Service_Container` e registrare manualmente le dipendenze necessarie.
 
 Seguire queste indicazioni consente di mantenere il codice modulare, favorire il riuso delle componenti e facilitare l'estensione del plugin da parte di terzi.
+
+## Riferimenti
+- [docs/architecture/target-operating-model.md](target-operating-model.md)
+- [README.md](../../README.md)
+- [CHANGELOG.md](../../CHANGELOG.md)

@@ -1,5 +1,10 @@
 # Admin Asset Pipeline
 
+*Author: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
+
+Minimum plugin version: **1.0.0**  
+Documentation refresh: **1.0.1**
+
 This plugin now ships with a reproducible build pipeline for the files under `admin/js/` and `admin/css/`. The goal of the tooling is to ensure that
 optimized bundles (with cache-busting fingerprints) are produced in `admin/dist/` and that PHP only ever enqueues the compiled assets.
 
@@ -58,3 +63,8 @@ Key points:
 * **esbuild warnings/errors** – the CLI outputs readable diagnostics. Most issues are due to syntax errors in the source files. Fix the source and rerun the build.
 * **Assets not updating in the browser** – confirm that `admin/dist/manifest.json` was regenerated (hash should change) and that the PHP enqueues reference the
   correct handles. Clearing the WordPress object cache may also help if persistent caching layers are enabled.
+
+## References
+- [OPTIMIZATION_GUIDE.md](../../OPTIMIZATION_GUIDE.md)
+- [CHANGELOG.md](../../CHANGELOG.md)
+- [README.md](../../README.md)

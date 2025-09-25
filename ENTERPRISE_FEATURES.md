@@ -1,5 +1,10 @@
 # Enterprise-Level Advanced Features Documentation
 
+*Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
+
+Versione minima: **1.0.0**  
+Ultimo aggiornamento documentazione: **1.0.1**
+
 ## 🚀 Latest Enterprise Enhancements
 
 This document outlines the comprehensive **enterprise-level** features added to the Trello Social Auto Publisher plugin.
@@ -237,3 +242,9 @@ This plugin now provides **enterprise-grade** functionality suitable for:
 - **Performance-critical applications** demanding sub-second response times
 
 The comprehensive feature set ensures **professional-grade reliability**, **security**, and **performance** suitable for enterprise WordPress environments and high-stakes social media publishing operations.
+
+## Riferimenti
+- [SECURITY_IMPROVEMENTS.md](SECURITY_IMPROVEMENTS.md)
+- [OPTIMIZATION_SUMMARY.md](OPTIMIZATION_SUMMARY.md)
+- [README.md](README.md)
+- [CHANGELOG.md](CHANGELOG.md)

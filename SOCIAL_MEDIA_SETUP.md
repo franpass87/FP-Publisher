@@ -1,5 +1,10 @@
 # Social Media Setup Guide
 
+*Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
+
+Versione minima: **1.0.0**  
+Ultimo aggiornamento documentazione: **1.0.1**
+
 ## Overview
 
 This guide explains how to set up social media connections for the Social Auto Publisher plugin. You need to create applications on each social media platform's developer console and configure OAuth credentials.
@@ -166,3 +171,8 @@ Access tokens may expire and need refresh:
 - TikTok: Tokens last according to platform policy
 
 The plugin includes automatic token refresh functionality where supported by the platform.
+
+## Riferimenti
+- [README.md](README.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [ENTERPRISE_FEATURES.md](ENTERPRISE_FEATURES.md)

@@ -1,5 +1,14 @@
 # FP Publisher - Menu Duplication Fix Summary
 
+*Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@fra
+ncescopasseri.com)*
+
+Versione interessata: **0.9.0 → 1.0.0**  
+Ultimo aggiornamento documentazione: **1.0.1**
+
+Questa nota descrive il refactoring che ha portato al menu unificato del plugin, anticipando il rilascio 1.0.0 documentato nel [
+CHANGELOG](CHANGELOG.md).
+
 ## Issue Fixed
 The FP Publisher WordPress plugin was showing duplicate menu items and empty backend pages due to multiple admin classes independently registering the same menu items.
 
@@ -61,3 +70,8 @@ FP Publisher (main menu)
 ```
 
 All changes were made with minimal impact - no functionality was removed, only the menu registration was consolidated to eliminate duplicates and empty pages.
+
+## Riferimenti
+- [MENU_STRUCTURE.md](MENU_STRUCTURE.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [README.md](README.md)
