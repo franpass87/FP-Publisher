@@ -95,9 +95,24 @@ if ( ! function_exists( 'tsap_register_default_services' ) ) {
             } );
         }
 
+        if ( ! $container->has( 'telemetry_channel' ) && class_exists( 'TTS_Logger_Observability_Channel' ) ) {
+            $container->set( 'telemetry_channel', function () {
+                return new TTS_Logger_Observability_Channel();
+            } );
+        }
+
+        if ( ! $container->has( 'credential_provisioner' ) && class_exists( 'TTS_Option_Credential_Provisioner' ) ) {
+            $container->set( 'credential_provisioner', function () {
+                return new TTS_Option_Credential_Provisioner();
+            } );
+        }
+
         if ( ! $container->has( 'integration_hub' ) && class_exists( 'TTS_Integration_Hub' ) ) {
-            $container->set( 'integration_hub', function () {
-                return new TTS_Integration_Hub();
+            $container->set( 'integration_hub', function ( TTS_Service_Container $c ) {
+                $provisioner = $c->has( 'credential_provisioner' ) ? $c->get( 'credential_provisioner' ) : null;
+                $telemetry   = $c->has( 'telemetry_channel' ) ? $c->get( 'telemetry_channel' ) : null;
+
+                return new TTS_Integration_Hub( $provisioner, $telemetry );
             } );
         }
 
@@ -128,12 +143,13 @@ if ( ! function_exists( 'tsap_register_default_services' ) ) {
         if ( ! $container->has( 'scheduler' ) && class_exists( 'TTS_Scheduler' ) ) {
             $container->set( 'scheduler', function ( TTS_Service_Container $c ) {
                 $integration = $c->get( 'integration_hub' );
+                $telemetry   = $c->has( 'telemetry_channel' ) ? $c->get( 'telemetry_channel' ) : null;
                 $queue       = $c->has( 'channel_queue' ) ? $c->get( 'channel_queue' ) : null;
                 $limiter     = $c->has( 'rate_limiter' ) ? $c->get( 'rate_limiter' ) : null;
                 $recovery    = $c->has( 'error_recovery' ) ? $c->get( 'error_recovery' ) : null;
                 $guard       = $c->has( 'publisher_guard' ) ? $c->get( 'publisher_guard' ) : null;
 
-                return new TTS_Scheduler( $integration, null, $queue, $limiter, $recovery, $guard );
+                return new TTS_Scheduler( $integration, $telemetry, $queue, $limiter, $recovery, $guard );
             } );
         }
 
