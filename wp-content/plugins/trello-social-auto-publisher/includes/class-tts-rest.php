@@ -174,19 +174,179 @@ class TTS_REST {
             return new WP_Error( 'invalid_post', __( 'Invalid post ID.', 'fp-publisher' ), array( 'status' => 404 ) );
         }
 
-        $post_status      = get_post_status( $id );
-        $published_status = get_post_meta( $id, '_published_status', true );
+        $post_status_raw      = get_post_status( $id );
+        $published_status_raw = get_post_meta( $id, '_published_status', true );
+
+        $post_status = '';
+        if ( false !== $post_status_raw && null !== $post_status_raw ) {
+            $post_status = sanitize_text_field( (string) $post_status_raw );
+        }
+
+        $published_status = '';
+        if ( ! empty( $published_status_raw ) ) {
+            $published_status = sanitize_text_field( (string) $published_status_raw );
+        }
 
         $table = $wpdb->prefix . 'tts_logs';
         $logs  = $wpdb->get_results( $wpdb->prepare( "SELECT channel, status, message, response, created_at FROM {$table} WHERE post_id = %d ORDER BY id DESC", $id ), ARRAY_A );
+
+        $sanitized_logs = array();
+
+        if ( is_array( $logs ) ) {
+            foreach ( $logs as $log_entry ) {
+                if ( is_object( $log_entry ) ) {
+                    $log_entry = (array) $log_entry;
+                }
+
+                if ( ! is_array( $log_entry ) ) {
+                    continue;
+                }
+
+                $sanitized_logs[] = $this->sanitize_log_entry( $log_entry );
+            }
+        }
 
         return rest_ensure_response(
             array(
                 'post_status'       => $post_status,
                 '_published_status' => $published_status,
-                'logs'              => $logs,
+                'logs'              => $sanitized_logs,
             )
         );
+    }
+
+    /**
+     * Sanitize a single log entry retrieved from the database.
+     *
+     * @param array<string, mixed> $log_entry Raw log entry array.
+     *
+     * @return array<string, mixed> Sanitized log data.
+     */
+    private function sanitize_log_entry( array $log_entry ) {
+        $channel    = isset( $log_entry['channel'] ) ? $this->sanitize_channel_value( $log_entry['channel'] ) : '';
+        $status     = isset( $log_entry['status'] ) ? sanitize_key( sanitize_text_field( (string) $log_entry['status'] ) ) : '';
+        $message    = isset( $log_entry['message'] ) ? sanitize_textarea_field( (string) $log_entry['message'] ) : '';
+        $response   = isset( $log_entry['response'] ) ? $this->sanitize_log_response_field( $log_entry['response'] ) : '';
+        $created_at = isset( $log_entry['created_at'] ) ? sanitize_text_field( (string) $log_entry['created_at'] ) : '';
+
+        return array(
+            'channel'    => $channel,
+            'status'     => $status,
+            'message'    => $message,
+            'response'   => $response,
+            'created_at' => $created_at,
+        );
+    }
+
+    /**
+     * Normalize and sanitize channel values for REST output.
+     *
+     * @param mixed $channel Raw channel value.
+     *
+     * @return string
+     */
+    private function sanitize_channel_value( $channel ) {
+        if ( empty( $channel ) ) {
+            return '';
+        }
+
+        $channel_value = strtolower( sanitize_text_field( (string) $channel ) );
+
+        if ( '' === $channel_value ) {
+            return '';
+        }
+
+        $channel_value = preg_replace( '/[^a-z0-9_\-]+/', '', $channel_value );
+
+        $known_channels = array( 'facebook', 'instagram', 'youtube', 'tiktok', 'linkedin', 'twitter', 'blog' );
+
+        foreach ( $known_channels as $known_channel ) {
+            if ( false !== strpos( $channel_value, $known_channel ) ) {
+                return $known_channel;
+            }
+        }
+
+        return sanitize_key( $channel_value );
+    }
+
+    /**
+     * Sanitize the response field of a log entry.
+     *
+     * @param mixed $response Raw response data.
+     *
+     * @return mixed
+     */
+    private function sanitize_log_response_field( $response ) {
+        if ( is_string( $response ) ) {
+            $decoded = json_decode( $response, true );
+
+            if ( JSON_ERROR_NONE === json_last_error() && is_array( $decoded ) ) {
+                $sanitized = $this->sanitize_nested_log_value( $decoded );
+                $encoded   = wp_json_encode( $sanitized );
+
+                if ( false !== $encoded ) {
+                    return $encoded;
+                }
+            }
+
+            return sanitize_textarea_field( $response );
+        }
+
+        if ( is_array( $response ) || is_object( $response ) ) {
+            return $this->sanitize_nested_log_value( $response );
+        }
+
+        if ( null === $response ) {
+            return '';
+        }
+
+        if ( is_bool( $response ) ) {
+            return $response;
+        }
+
+        if ( is_int( $response ) || is_float( $response ) ) {
+            return $response;
+        }
+
+        return sanitize_textarea_field( (string) $response );
+    }
+
+    /**
+     * Recursively sanitize nested log data structures.
+     *
+     * @param mixed $value Raw value.
+     *
+     * @return mixed
+     */
+    private function sanitize_nested_log_value( $value ) {
+        if ( is_array( $value ) ) {
+            $sanitized = array();
+
+            foreach ( $value as $key => $nested_value ) {
+                $sanitized_key = is_string( $key ) ? sanitize_key( $key ) : $key;
+                $sanitized[ $sanitized_key ] = $this->sanitize_nested_log_value( $nested_value );
+            }
+
+            return $sanitized;
+        }
+
+        if ( is_object( $value ) ) {
+            return $this->sanitize_nested_log_value( (array) $value );
+        }
+
+        if ( null === $value ) {
+            return '';
+        }
+
+        if ( is_bool( $value ) ) {
+            return $value;
+        }
+
+        if ( is_int( $value ) || is_float( $value ) ) {
+            return $value;
+        }
+
+        return sanitize_textarea_field( (string) $value );
     }
 }
 
