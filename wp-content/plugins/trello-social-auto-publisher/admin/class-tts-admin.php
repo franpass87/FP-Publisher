@@ -2060,18 +2060,70 @@ class TTS_Admin {
                 'posts_per_page' => -1,
             )
         );
-        echo '<div class="wrap">';
+        $client_wizard_url = admin_url( 'admin.php?page=fp-publisher-client-wizard' );
+        $new_client_url    = admin_url( 'post-new.php?post_type=tts_client' );
+
+        echo '<div class="wrap tts-clients-page">';
         echo '<h1>' . esc_html__( 'Clienti', 'fp-publisher' ) . '</h1>';
+        echo '<p class="description">' . esc_html__( 'Raccogli qui tutti i brand o progetti che gestisci: ogni cliente ha credenziali, flussi e canali social dedicati.', 'fp-publisher' ) . '</p>';
+
+        echo '<div class="notice notice-info tts-client-instructions">';
+        echo '<h2>' . esc_html__( 'Come creare un nuovo cliente', 'fp-publisher' ) . '</h2>';
+        echo '<ol>';
+        echo '<li>' . sprintf(
+            /* translators: %s is a link to the Client Wizard page. */
+            esc_html__( 'Apri il Client Wizard dal menu oppure %s.', 'fp-publisher' ),
+            '<a href="' . esc_url( $client_wizard_url ) . '" class="button-link">' . esc_html__( 'clicca qui per iniziare', 'fp-publisher' ) . '</a>'
+        ) . '</li>';
+        echo '<li>' . esc_html__( 'Completa i passaggi con le informazioni dell’azienda e scegli quali canali social collegare.', 'fp-publisher' ) . '</li>';
+        echo '<li>' . esc_html__( 'Inserisci API key, token e credenziali richieste per ogni piattaforma selezionata.', 'fp-publisher' ) . '</li>';
+        echo '<li>' . esc_html__( 'Definisci mappature Trello, frequenze di pubblicazione e approvatori del contenuto.', 'fp-publisher' ) . '</li>';
+        echo '<li>' . esc_html__( 'Conferma il riepilogo finale: il cliente sarà pronto e i post verranno importati automaticamente.', 'fp-publisher' ) . '</li>';
+        echo '</ol>';
+        echo '<p>' . esc_html__( 'Se preferisci, puoi creare un cliente manualmente e completare i metadati in un secondo momento.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+
+        echo '<div class="tts-client-actions">';
+        echo '<a href="' . esc_url( $client_wizard_url ) . '" class="button button-primary">' . esc_html__( 'Avvia Client Wizard', 'fp-publisher' ) . '</a> ';
+        echo '<a href="' . esc_url( $new_client_url ) . '" class="button">' . esc_html__( 'Crea cliente manualmente', 'fp-publisher' ) . '</a>';
+        echo '</div>';
+
         if ( ! empty( $clients ) ) {
-            echo '<ul>';
+            $client_count = count( $clients );
+            echo '<h2>' . esc_html__( 'Clienti configurati', 'fp-publisher' ) . '</h2>';
+            echo '<p>' . sprintf(
+                /* translators: %d is the number of configured clients. */
+                esc_html__( 'Hai %d cliente/i pronti alla pubblicazione. Seleziona un cliente per vedere i suoi contenuti pianificati.', 'fp-publisher' ),
+                (int) $client_count
+            ) . '</p>';
+
+            echo '<ul class="tts-client-list">';
             foreach ( $clients as $client ) {
-                $url = admin_url( 'edit.php?post_type=tts_social_post&tts_client=' . $client->ID );
-                echo '<li><a href="' . esc_url( $url ) . '">' . esc_html( $client->post_title ) . '</a></li>';
+                $url          = admin_url( 'edit.php?post_type=tts_social_post&tts_client=' . $client->ID );
+                $last_updated = get_the_modified_date( get_option( 'date_format' ), $client );
+
+                echo '<li class="tts-client-list-item">';
+                echo '<strong><a href="' . esc_url( $url ) . '">' . esc_html( $client->post_title ) . '</a></strong>';
+                if ( $last_updated ) {
+                    echo '<span class="tts-client-updated">' . sprintf(
+                        /* translators: %s is the last updated date. */
+                        esc_html__( 'Ultimo aggiornamento: %s', 'fp-publisher' ),
+                        esc_html( $last_updated )
+                    ) . '</span>';
+                }
+                echo '<div class="tts-client-shortcuts">';
+                echo '<a href="' . esc_url( get_edit_post_link( $client->ID ) ) . '" class="button-link">' . esc_html__( 'Modifica cliente', 'fp-publisher' ) . '</a> | ';
+                echo '<a href="' . esc_url( admin_url( 'post-new.php?post_type=tts_social_post&tts_client=' . $client->ID ) ) . '" class="button-link">' . esc_html__( 'Nuovo post social', 'fp-publisher' ) . '</a>';
+                echo '</div>';
+                echo '</li>';
             }
             echo '</ul>';
         } else {
-            echo '<p>' . esc_html__( 'Nessun cliente trovato.', 'fp-publisher' ) . '</p>';
+            echo '<div class="notice notice-warning">';
+            echo '<p>' . esc_html__( 'Non hai ancora creato clienti. Usa il wizard per configurare il primo e collegare i canali social.', 'fp-publisher' ) . '</p>';
+            echo '</div>';
         }
+
         echo '</div>';
     }
 
@@ -4925,30 +4977,26 @@ class TTS_Admin {
         }
         
         try {
-            global $tts_calendar_page;
-            if ( isset( $tts_calendar_page ) && $tts_calendar_page instanceof TTS_Calendar_Page ) {
-                $tts_calendar_page->render_page();
-            } else {
-                // Fallback content when calendar page class is not available
-                echo '<div class="wrap">';
-                echo '<h1>' . esc_html__( 'Calendar', 'fp-publisher' ) . '</h1>';
-                echo '<div class="notice notice-warning">';
-                echo '<p>' . esc_html__( 'Calendar functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
-                echo '</div>';
-                echo '<p>' . esc_html__( 'This page will display your scheduled social media posts in a calendar view.', 'fp-publisher' ) . '</p>';
-                echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
-                echo '</div>';
+            $calendar_page = $this->resolve_admin_page( 'admin.calendar_page', 'TTS_Calendar_Page' );
+            if ( $calendar_page ) {
+                $calendar_page->render_page();
+                return;
             }
         } catch ( Exception $e ) {
             error_log( 'TTS_Admin render_calendar_page error: ' . $e->getMessage() );
-            echo '<div class="wrap">';
-            echo '<h1>' . esc_html__( 'Calendar', 'fp-publisher' ) . '</h1>';
-            echo '<div class="notice notice-error">';
-            echo '<p>' . esc_html__( 'An error occurred while loading the calendar page. Please refresh the page or contact support.', 'fp-publisher' ) . '</p>';
-            echo '</div>';
-            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
-            echo '</div>';
+        } catch ( \Throwable $throwable ) {
+            error_log( 'TTS_Admin render_calendar_page error: ' . $throwable->getMessage() );
         }
+
+        // Fallback content when calendar page class is not available
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'Calendar', 'fp-publisher' ) . '</h1>';
+        echo '<div class="notice notice-warning">';
+        echo '<p>' . esc_html__( 'Calendar functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+        echo '<p>' . esc_html__( 'This page will display your scheduled social media posts in a calendar view.', 'fp-publisher' ) . '</p>';
+        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
+        echo '</div>';
     }
 
     /**
@@ -4961,60 +5009,83 @@ class TTS_Admin {
         }
         
         try {
-            global $tts_analytics_page;
-            if ( isset( $tts_analytics_page ) && $tts_analytics_page instanceof TTS_Analytics_Page ) {
-                $tts_analytics_page->render_page();
-            } else {
-                // Fallback content when analytics page class is not available
-                echo '<div class="wrap">';
-                echo '<h1>' . esc_html__( 'Analytics', 'fp-publisher' ) . '</h1>';
-                echo '<div class="notice notice-warning">';
-                echo '<p>' . esc_html__( 'Analytics functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
-                echo '</div>';
-                echo '<p>' . esc_html__( 'This page will display analytics and insights for your social media publishing activities.', 'fp-publisher' ) . '</p>';
-                echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
-                echo '</div>';
+            $analytics_page = $this->resolve_admin_page( 'admin.analytics_page', 'TTS_Analytics_Page' );
+            if ( $analytics_page ) {
+                $analytics_page->render_page();
+                return;
             }
         } catch ( Exception $e ) {
             error_log( 'TTS_Admin render_analytics_page error: ' . $e->getMessage() );
-            echo '<div class="wrap">';
-            echo '<h1>' . esc_html__( 'Analytics', 'fp-publisher' ) . '</h1>';
-            echo '<div class="notice notice-error">';
-            echo '<p>' . esc_html__( 'An error occurred while loading the analytics page. Please refresh the page or contact support.', 'fp-publisher' ) . '</p>';
-            echo '</div>';
-            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
-            echo '</div>';
+        } catch ( \Throwable $throwable ) {
+            error_log( 'TTS_Admin render_analytics_page error: ' . $throwable->getMessage() );
         }
+
+        // Fallback content when analytics page class is not available
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'Analytics', 'fp-publisher' ) . '</h1>';
+        echo '<div class="notice notice-warning">';
+        echo '<p>' . esc_html__( 'Analytics functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+        echo '<p>' . esc_html__( 'This page will display analytics and insights for your social media publishing activities.', 'fp-publisher' ) . '</p>';
+        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
+        echo '</div>';
     }
 
     /**
      * Delegate to health page render method.
      */
     public function render_health_page() {
-        global $tts_health_page;
-        if ( isset( $tts_health_page ) && $tts_health_page instanceof TTS_Health_Page ) {
-            $tts_health_page->render_page();
+        $health_page = $this->resolve_admin_page( 'admin.health_page', 'TTS_Health_Page' );
+        if ( $health_page ) {
+            $health_page->render_page();
+            return;
         }
+
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'Stato', 'fp-publisher' ) . '</h1>';
+        echo '<div class="notice notice-warning">';
+        echo '<p>' . esc_html__( 'Il monitoraggio dello stato non è temporaneamente disponibile. Aggiorna la pagina o verifica che il plugin sia aggiornato.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+        echo '<p>' . esc_html__( 'Se il problema persiste contatta il supporto o controlla i log di sistema.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
     }
 
     /**
      * Delegate to log page render method.
      */
     public function render_log_page() {
-        global $tts_log_page;
-        if ( isset( $tts_log_page ) && $tts_log_page instanceof TTS_Log_Page ) {
-            $tts_log_page->render_page();
+        $log_page = $this->resolve_admin_page( 'admin.log_page', 'TTS_Log_Page' );
+        if ( $log_page ) {
+            $log_page->render_page();
+            return;
         }
+
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'Log', 'fp-publisher' ) . '</h1>';
+        echo '<div class="notice notice-warning">';
+        echo '<p>' . esc_html__( 'Non è stato possibile caricare il registro eventi. Riprova più tardi o verifica i permessi del plugin.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+        echo '<p>' . esc_html__( 'I log recenti saranno mostrati qui per aiutarti a diagnosticare eventuali problemi di pubblicazione.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
     }
 
     /**
      * Delegate to AI features page render method.
      */
     public function render_ai_features_page() {
-        global $tts_ai_features_page;
-        if ( isset( $tts_ai_features_page ) && $tts_ai_features_page instanceof TTS_AI_Features_Page ) {
-            $tts_ai_features_page->render_page();
+        $ai_page = $this->resolve_admin_page( 'admin.ai_features_page', 'TTS_AI_Features_Page' );
+        if ( $ai_page ) {
+            $ai_page->render_page();
+            return;
         }
+
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'AI & Advanced Features', 'fp-publisher' ) . '</h1>';
+        echo '<div class="notice notice-warning">';
+        echo '<p>' . esc_html__( 'Le funzionalità avanzate non sono disponibili in questo momento. Controlla che tutte le dipendenze siano attive e riprova.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+        echo '<p>' . esc_html__( 'Quando attive, qui troverai suggerimenti AI, automazioni e strumenti di ottimizzazione.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
     }
 
     /**
@@ -5659,10 +5730,58 @@ class TTS_Admin {
      * Delegate to frequency status page render method.
      */
     public function render_frequency_status_page() {
-        global $tts_frequency_status_page;
-        if ( isset( $tts_frequency_status_page ) && $tts_frequency_status_page instanceof TTS_Frequency_Status_Page ) {
-            $tts_frequency_status_page->render_page();
+        $frequency_page = $this->resolve_admin_page( 'admin.frequency_status_page', 'TTS_Frequency_Status_Page' );
+        if ( $frequency_page ) {
+            $frequency_page->render_page();
+            return;
         }
+
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'Publishing Status', 'fp-publisher' ) . '</h1>';
+        echo '<div class="notice notice-warning">';
+        echo '<p>' . esc_html__( 'Impossibile mostrare il monitor delle frequenze. Assicurati che il plugin sia aggiornato e riprova.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+        echo '<p>' . esc_html__( 'Quando disponibile, questa pagina indica se ogni cliente sta rispettando gli obiettivi di pubblicazione.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+    }
+
+    /**
+     * Resolve an admin page instance from the service container.
+     *
+     * @param string $service_id     Service identifier registered in the container.
+     * @param string $expected_class Expected class name for validation.
+     *
+     * @return object|null
+     */
+    private function resolve_admin_page( $service_id, $expected_class ) {
+        if ( ! function_exists( 'tsap_service_container' ) ) {
+            return null;
+        }
+
+        if ( ! class_exists( $expected_class ) ) {
+            return null;
+        }
+
+        try {
+            $container = tsap_service_container();
+
+            if ( ! $container || ! method_exists( $container, 'has' ) ) {
+                return null;
+            }
+
+            if ( $container->has( $service_id ) ) {
+                $instance = $container->get( $service_id );
+                if ( $instance instanceof $expected_class ) {
+                    return $instance;
+                }
+            }
+        } catch ( Exception $e ) {
+            error_log( sprintf( 'TTS_Admin resolve_admin_page error for %1$s: %2$s', $service_id, $e->getMessage() ) );
+        } catch ( \Throwable $throwable ) {
+            error_log( sprintf( 'TTS_Admin resolve_admin_page error for %1$s: %2$s', $service_id, $throwable->getMessage() ) );
+        }
+
+        return null;
     }
 
 
