@@ -6,6 +6,47 @@ require __DIR__ . '/helpers/assertions.php';
 require_once __DIR__ . '/../includes/class-tts-rest.php';
 
 $tests = array(
+    'register_routes_define_argument_schema' => function () {
+        tts_reset_test_state();
+
+        $rest = new TTS_REST();
+        $rest->register_routes();
+
+        $routes = $GLOBALS['tts_registered_rest_routes'];
+        tts_assert_true( ! empty( $routes ), 'Registering routes should populate the global registry.' );
+
+        $publish_route = null;
+        $status_route  = null;
+
+        foreach ( $routes as $route ) {
+            if ( '/post/(?P<id>\d+)/publish' === $route['route'] ) {
+                $publish_route = $route;
+            }
+
+            if ( '/post/(?P<id>\d+)/status' === $route['route'] ) {
+                $status_route = $route;
+            }
+        }
+
+        tts_assert_true( is_array( $publish_route ), 'The publish endpoint must be registered.' );
+        tts_assert_true( is_array( $status_route ), 'The status endpoint must be registered.' );
+
+        $publish_args = $publish_route['args']['args'] ?? array();
+        $status_args  = $status_route['args']['args'] ?? array();
+
+        foreach ( array( $publish_args, $status_args ) as $arg_schema ) {
+            tts_assert_true( isset( $arg_schema['id'] ), 'Routes must expose an id argument schema.' );
+
+            $id_args = $arg_schema['id'];
+
+            tts_assert_equals( 'integer', $id_args['type'], 'The id argument should declare an integer type.' );
+            tts_assert_equals( 'absint', $id_args['sanitize_callback'], 'The id argument should sanitize using absint.' );
+            tts_assert_true(
+                is_array( $id_args['validate_callback'] ) && count( $id_args['validate_callback'] ) === 2,
+                'The id argument should expose a callable validate callback.'
+            );
+        }
+    },
     'publish_returns_error_for_invalid_post' => function () {
         tts_reset_test_state();
 
@@ -138,6 +179,16 @@ $tests = array(
         tts_assert_true( is_wp_error( $response ), 'Trashed posts cannot be published.' );
         tts_assert_equals( 'invalid_post_status', $response->get_error_code(), 'Trashed posts should trigger invalid_post_status.' );
     },
+    'publish_rejects_non_numeric_ids' => function () {
+        tts_reset_test_state();
+
+        $rest     = new TTS_REST();
+        $request  = new WP_REST_Request( 'POST', array( 'id' => 'not-a-number' ) );
+        $response = $rest->publish( $request );
+
+        tts_assert_true( is_wp_error( $response ), 'Non numeric identifiers should be rejected.' );
+        tts_assert_equals( 'invalid_post', $response->get_error_code(), 'Non numeric identifiers should return invalid_post.' );
+    },
     'status_sanitizes_log_entries' => function () {
         tts_reset_test_state();
 
@@ -179,6 +230,16 @@ $tests = array(
         tts_assert_equals( 'Published!', $log['message'], 'Log messages should be stripped of HTML.' );
         tts_assert_equals( '{"detail":"ok","code":200}', $log['response'], 'JSON responses should be sanitized and re-encoded.' );
         tts_assert_equals( '2024-01-01 12:00:00', $log['created_at'], 'Timestamps should not include unsafe characters.' );
+    },
+    'status_rejects_invalid_post_ids' => function () {
+        tts_reset_test_state();
+
+        $rest     = new TTS_REST();
+        $request  = new WP_REST_Request( 'GET', array( 'id' => 0 ) );
+        $response = $rest->status( $request );
+
+        tts_assert_true( is_wp_error( $response ), 'Invalid identifiers should not reach the status handler.' );
+        tts_assert_equals( 'invalid_post', $response->get_error_code(), 'Invalid identifiers should return invalid_post.' );
     },
 );
 
