@@ -28,6 +28,10 @@ if ( ! defined( 'WEEK_IN_SECONDS' ) ) {
     define( 'WEEK_IN_SECONDS', 7 * DAY_IN_SECONDS );
 }
 
+if ( ! defined( 'ARRAY_A' ) ) {
+    define( 'ARRAY_A', 'ARRAY_A' );
+}
+
 // Provide deterministic encryption material for tests.
 putenv( 'TTS_ENCRYPTION_KEY=YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=' );
 
@@ -1026,7 +1030,14 @@ if ( ! function_exists( 'sanitize_email' ) ) {
 
 if ( ! function_exists( 'sanitize_textarea_field' ) ) {
     function sanitize_textarea_field( $text ) {
-        return is_string( $text ) ? trim( preg_replace( "/[\r\0\x0B\f]/", '', $text ) ) : $text;
+        if ( ! is_string( $text ) ) {
+            return $text;
+        }
+
+        $filtered = sanitize_text_field( $text );
+        $filtered = preg_replace( "/[\r\0\x0B\f]/", '', $filtered );
+
+        return trim( $filtered );
     }
 }
 
@@ -1193,6 +1204,18 @@ if ( ! function_exists( 'delete_post_meta' ) ) {
 if ( ! function_exists( 'get_post' ) ) {
     function get_post( $post_id ) {
         return $GLOBALS['tts_test_posts'][ $post_id ] ?? null;
+    }
+}
+
+if ( ! function_exists( 'get_post_status' ) ) {
+    function get_post_status( $post_id ) {
+        $post = get_post( $post_id );
+
+        if ( is_object( $post ) && isset( $post->post_status ) ) {
+            return $post->post_status;
+        }
+
+        return false;
     }
 }
 

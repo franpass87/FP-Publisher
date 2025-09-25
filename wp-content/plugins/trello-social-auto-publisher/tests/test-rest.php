@@ -138,6 +138,48 @@ $tests = array(
         tts_assert_true( is_wp_error( $response ), 'Trashed posts cannot be published.' );
         tts_assert_equals( 'invalid_post_status', $response->get_error_code(), 'Trashed posts should trigger invalid_post_status.' );
     },
+    'status_sanitizes_log_entries' => function () {
+        tts_reset_test_state();
+
+        $post_id = 505;
+        $GLOBALS['tts_test_posts'][ $post_id ] = (object) array(
+            'ID'         => $post_id,
+            'post_type'  => 'tts_social_post',
+            'post_status'=> 'publish',
+        );
+
+        update_post_meta( $post_id, '_published_status', '<strong>sent</strong>' );
+
+        $GLOBALS['tts_test_wpdb_results'] = array(
+            array(
+                'channel'    => '<script>facebook</script>',
+                'status'     => '<b>success</b>',
+                'message'    => '<em>Published!</em>',
+                'response'   => '{"detail":"<span>ok</span>","code":200}',
+                'created_at' => '2024-01-01 12:00:00<script>',
+            ),
+        );
+
+        $rest     = new TTS_REST();
+        $request  = new WP_REST_Request( 'GET', array( 'id' => $post_id ) );
+        $response = $rest->status( $request );
+
+        tts_assert_true( $response instanceof WP_REST_Response, 'Status endpoint should return a WP_REST_Response.' );
+
+        $data = $response->get_data();
+
+        tts_assert_equals( 'publish', $data['post_status'], 'Post status should be preserved after sanitization.' );
+        tts_assert_equals( 'sent', $data['_published_status'], 'Published status should strip markup.' );
+        tts_assert_equals( 1, count( $data['logs'] ), 'Exactly one log entry should be returned.' );
+
+        $log = $data['logs'][0];
+
+        tts_assert_equals( 'facebook', $log['channel'], 'Channel names should be normalized and sanitized.' );
+        tts_assert_equals( 'success', $log['status'], 'Status values should be sanitized.' );
+        tts_assert_equals( 'Published!', $log['message'], 'Log messages should be stripped of HTML.' );
+        tts_assert_equals( '{"detail":"ok","code":200}', $log['response'], 'JSON responses should be sanitized and re-encoded.' );
+        tts_assert_equals( '2024-01-01 12:00:00', $log['created_at'], 'Timestamps should not include unsafe characters.' );
+    },
 );
 
 $failures = 0;
