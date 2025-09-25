@@ -122,7 +122,12 @@ class TTS_Calendar_Page {
                 echo '<div class="tts-day-posts">';
                 foreach ( $posts_by_day[ $date_key ] as $post ) {
                     $channels  = get_post_meta( $post->ID, '_tts_social_channel', true );
-                    $edit_link = get_edit_post_link( $post->ID );
+                    $edit_link = TTS_Admin::get_social_post_editor_url(
+                        $post->ID,
+                        array(
+                            'tts_open_editor' => 1,
+                        )
+                    );
                     $publish_time = get_post_meta( $post->ID, '_tts_publish_at', true );
                     $time_display = $publish_time ? date('H:i', strtotime($publish_time)) : '';
                     
