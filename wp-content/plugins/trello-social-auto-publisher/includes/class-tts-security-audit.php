@@ -19,6 +19,13 @@ class TTS_Security_Audit {
     private $api_abuse_threshold = 300;
 
     /**
+     * Duration (in seconds) for temporary REST API blocks triggered by abuse detection.
+     *
+     * @var int
+     */
+    private $api_block_duration = 1800;
+
+    /**
      * Secure storage utility for encryption and masking.
      *
      * @var TTS_Secure_Storage|null
@@ -441,7 +448,7 @@ class TTS_Security_Audit {
      * @param mixed $handler  Route handler details.
      * @param mixed $request  The REST request object.
      *
-     * @return mixed Unmodified REST response.
+     * @return mixed|WP_Error Unmodified REST response or an error when the caller is blocked.
      */
     public function monitor_api_requests( $response, $handler, $request ) {
         if ( ! is_object( $request ) || ! method_exists( $request, 'get_route' ) ) {
@@ -464,6 +471,16 @@ class TTS_Security_Audit {
         }
 
         $ip_address  = $this->get_client_ip();
+        $blocked_ips = $this->get_active_blocked_ips();
+
+        if ( isset( $blocked_ips[ $ip_address ] ) ) {
+            $blocked_until = isset( $blocked_ips[ $ip_address ]['blocked_until'] )
+                ? (int) $blocked_ips[ $ip_address ]['blocked_until']
+                : 0;
+
+            return $this->build_blocked_error( $blocked_until );
+        }
+
         $counter_key = 'tts_api_calls_' . md5( $ip_address . '|' . $route );
         $api_calls   = (int) get_transient( $counter_key );
         $api_calls++;
@@ -471,16 +488,28 @@ class TTS_Security_Audit {
         set_transient( $counter_key, $api_calls, HOUR_IN_SECONDS );
 
         if ( $api_calls === $this->api_abuse_threshold + 1 ) {
+            $blocked_until = $this->block_ip_temporarily( $ip_address, $route );
+
+            $event_details = array(
+                'api_calls_per_hour' => $api_calls,
+                'endpoint'           => $route,
+                'ip_address'         => $ip_address,
+            );
+
+            if ( $blocked_until > 0 ) {
+                $event_details['blocked_until'] = gmdate( 'c', $blocked_until );
+            } elseif ( 0 === $blocked_until ) {
+                $event_details['blocked_until'] = 'permanent';
+            }
+
             $this->log_security_event(
                 self::EVENT_API_ABUSE,
                 sprintf( 'Potential API abuse detected for %s', $route ),
                 self::RISK_HIGH,
-                array(
-                    'api_calls_per_hour' => $api_calls,
-                    'endpoint'           => $route,
-                    'ip_address'         => $ip_address,
-                )
+                $event_details
             );
+
+            return $this->build_blocked_error( $blocked_until );
         }
 
         return $response;
@@ -801,23 +830,178 @@ class TTS_Security_Audit {
      * Auto-block IP for critical events
      */
     private function auto_block_ip( $ip, $event_type ) {
-        $blocked_ips = get_option( 'tts_blocked_ips', array() );
-        
-        if ( ! in_array( $ip, $blocked_ips ) ) {
-            $blocked_ips[] = $ip;
-            update_option( 'tts_blocked_ips', $blocked_ips );
-            
-            $this->log_security_event(
-                self::EVENT_SUSPICIOUS_ACTIVITY,
-                sprintf( 'IP %s automatically blocked due to %s', $ip, $event_type ),
-                self::RISK_CRITICAL,
-                array(
-                    'blocked_ip' => $ip,
-                    'trigger_event' => $event_type,
-                    'auto_blocked' => true
-                )
-            );
+        if ( empty( $ip ) || 'unknown' === $ip ) {
+            return;
         }
+
+        $blocked_ips = $this->get_active_blocked_ips();
+
+        if ( isset( $blocked_ips[ $ip ] ) && 0 === (int) ( $blocked_ips[ $ip ]['blocked_until'] ?? 0 ) ) {
+            return;
+        }
+
+        $blocked_ips[ $ip ] = array(
+            'blocked_until' => 0,
+            'reason'        => sanitize_key( (string) $event_type ),
+            'route'         => '',
+        );
+
+        update_option( 'tts_blocked_ips', $blocked_ips );
+
+        $this->log_security_event(
+            self::EVENT_SUSPICIOUS_ACTIVITY,
+            sprintf( 'IP %s automatically blocked due to %s', $ip, $event_type ),
+            self::RISK_CRITICAL,
+            array(
+                'blocked_ip'    => $ip,
+                'trigger_event' => $event_type,
+                'auto_blocked'  => true,
+            )
+        );
+    }
+
+    /**
+     * Retrieve the list of active blocked IP entries.
+     *
+     * @return array<string, array{blocked_until:int, reason:string, route:string}>
+     */
+    private function get_active_blocked_ips() {
+        $stored = get_option( 'tts_blocked_ips', array() );
+
+        if ( ! is_array( $stored ) ) {
+            return array();
+        }
+
+        $now        = time();
+        $normalized = array();
+        $dirty      = false;
+
+        foreach ( $stored as $key => $value ) {
+            if ( is_string( $value ) ) {
+                $ip = trim( $value );
+
+                if ( '' === $ip ) {
+                    $dirty = true;
+                    continue;
+                }
+
+                $normalized[ $ip ] = array(
+                    'blocked_until' => 0,
+                    'reason'        => '',
+                    'route'         => '',
+                );
+
+                if ( ! is_string( $key ) ) {
+                    $dirty = true;
+                }
+
+                continue;
+            }
+
+            if ( is_string( $key ) && is_array( $value ) ) {
+                $ip            = trim( $key );
+                $blocked_until = isset( $value['blocked_until'] ) ? (int) $value['blocked_until'] : 0;
+
+                if ( '' === $ip ) {
+                    $dirty = true;
+                    continue;
+                }
+
+                if ( $blocked_until > 0 && $blocked_until <= $now ) {
+                    $dirty = true;
+                    continue;
+                }
+
+                $normalized[ $ip ] = array(
+                    'blocked_until' => $blocked_until,
+                    'reason'        => isset( $value['reason'] ) ? sanitize_text_field( (string) $value['reason'] ) : '',
+                    'route'         => isset( $value['route'] ) ? sanitize_text_field( (string) $value['route'] ) : '',
+                );
+
+                if (
+                    $blocked_until !== ( $value['blocked_until'] ?? null )
+                    || $normalized[ $ip ]['reason'] !== ( $value['reason'] ?? '' )
+                    || $normalized[ $ip ]['route'] !== ( $value['route'] ?? '' )
+                ) {
+                    $dirty = true;
+                }
+
+                continue;
+            }
+
+            $dirty = true;
+        }
+
+        if ( $dirty ) {
+            update_option( 'tts_blocked_ips', $normalized );
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Persist a temporary IP block following abuse detection.
+     *
+     * @param string $ip    Client IP address.
+     * @param string $route REST route that triggered the block.
+     *
+     * @return int Timestamp when the block expires. Zero indicates an indefinite block.
+     */
+    private function block_ip_temporarily( $ip, $route ) {
+        if ( empty( $ip ) || 'unknown' === $ip ) {
+            return 0;
+        }
+
+        $blocked_ips    = $this->get_active_blocked_ips();
+        $existing_block = $blocked_ips[ $ip ] ?? null;
+
+        if ( is_array( $existing_block ) ) {
+            $existing_until = isset( $existing_block['blocked_until'] ) ? (int) $existing_block['blocked_until'] : 0;
+
+            if ( 0 === $existing_until ) {
+                return 0;
+            }
+
+            if ( $existing_until > time() ) {
+                return $existing_until;
+            }
+        }
+
+        $blocked_until = time() + (int) $this->api_block_duration;
+
+        $blocked_ips[ $ip ] = array(
+            'blocked_until' => $blocked_until,
+            'reason'        => 'api_abuse',
+            'route'         => sanitize_text_field( (string) $route ),
+        );
+
+        update_option( 'tts_blocked_ips', $blocked_ips );
+
+        return $blocked_until;
+    }
+
+    /**
+     * Build a REST API error describing a temporary block.
+     *
+     * @param int $blocked_until Unix timestamp when the block expires. Zero for indefinite blocks.
+     *
+     * @return WP_Error
+     */
+    private function build_blocked_error( $blocked_until ) {
+        $retry_after = 0;
+
+        if ( $blocked_until > 0 ) {
+            $retry_after = max( 0, $blocked_until - time() );
+        }
+
+        return new WP_Error(
+            'rest_ip_blocked',
+            __( 'Requests from your network are temporarily blocked due to suspicious activity.', 'fp-publisher' ),
+            array(
+                'status'      => 429,
+                'retry_after' => $retry_after,
+            )
+        );
     }
 
     /**

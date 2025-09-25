@@ -195,9 +195,35 @@ $tests = array(
         $property->setAccessible( true );
         $threshold = (int) $property->getValue( $audit );
 
+        $result = null;
+
         for ( $i = 0; $i <= $threshold; $i++ ) {
-            $audit->monitor_api_requests( null, array(), $request );
+            $result = $audit->monitor_api_requests( null, array(), $request );
         }
+
+        tts_assert_true(
+            $result instanceof WP_Error,
+            'Requests beyond the abuse threshold should be rejected with a WP_Error.'
+        );
+
+        tts_assert_equals(
+            'rest_ip_blocked',
+            $result->get_error_code(),
+            'Abusive clients should receive the rest_ip_blocked error code.'
+        );
+
+        $error_data = $result->get_error_data();
+
+        tts_assert_equals(
+            429,
+            $error_data['status'],
+            'Blocked responses should use the 429 Too Many Requests status.'
+        );
+
+        tts_assert_true(
+            $error_data['retry_after'] > 0,
+            'Temporary blocks should provide a retry_after hint.'
+        );
 
         tts_assert_equals(
             1,
@@ -225,12 +251,62 @@ $tests = array(
             'The stored request count should reflect the threshold breach.'
         );
 
+        tts_assert_true(
+            ! empty( $event['data']['blocked_until'] ),
+            'API abuse events should document when the temporary block expires.'
+        );
+
         $expected_key = 'tts_api_calls_' . md5( '198.51.100.30' . '|/tts/v1/overuse' );
 
         tts_assert_equals(
             $threshold + 1,
             get_transient( $expected_key ),
             'The per-route counter should be tracked in a transient.'
+        );
+
+        $blocked_ips = get_option( 'tts_blocked_ips', array() );
+
+        tts_assert_true(
+            isset( $blocked_ips['198.51.100.30'] ),
+            'Blocked IPs should be persisted in the tts_blocked_ips option.'
+        );
+
+        $block_entry = $blocked_ips['198.51.100.30'];
+
+        tts_assert_true(
+            is_array( $block_entry ),
+            'Blocked IP entries should store contextual metadata.'
+        );
+
+        tts_assert_true(
+            $block_entry['blocked_until'] > time(),
+            'Temporary blocks should record a future expiration timestamp.'
+        );
+    },
+    'blocked_ip_requests_are_short_circuited' => function () {
+        tts_reset_test_state();
+
+        $_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+
+        $audit   = new TTS_Security_Audit_Test_Double();
+        $request = new TTS_Test_REST_Request( '/tts/v1/example' );
+
+        $reflection = new ReflectionClass( TTS_Security_Audit::class );
+        $method     = $reflection->getMethod( 'block_ip_temporarily' );
+        $method->setAccessible( true );
+        $method->invoke( $audit, '203.0.113.5', '/tts/v1/example' );
+
+        $result = $audit->monitor_api_requests( null, array(), $request );
+
+        tts_assert_true(
+            $result instanceof WP_Error,
+            'Requests originating from a blocked IP should be denied immediately.'
+        );
+
+        tts_assert_equals(
+            'rest_ip_blocked',
+            $result->get_error_code(),
+            'Blocked IP responses should use the expected error code.'
         );
     },
     'subscriber_profile_access_is_ignored_but_restricted_menu_is_logged' => function () {
