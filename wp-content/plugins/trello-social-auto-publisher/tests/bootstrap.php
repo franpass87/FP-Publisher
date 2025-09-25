@@ -819,6 +819,24 @@ if ( ! function_exists( 'wp_remote_get' ) ) {
     }
 }
 
+if ( ! function_exists( 'wp_remote_post' ) ) {
+    function wp_remote_post( $url, $args = array() ) {
+        $GLOBALS['tts_recorded_http_posts'][] = array(
+            'url'  => $url,
+            'args' => is_array( $args ) ? $args : array(),
+        );
+
+        if ( isset( $GLOBALS['tts_http_responses'][ $url ] ) ) {
+            return $GLOBALS['tts_http_responses'][ $url ];
+        }
+
+        return array(
+            'response' => array( 'code' => 200 ),
+            'body'     => '',
+        );
+    }
+}
+
 if ( ! function_exists( 'wp_remote_retrieve_response_code' ) ) {
     function wp_remote_retrieve_response_code( $response ) {
         if ( is_array( $response ) && isset( $response['response']['code'] ) ) {
@@ -836,6 +854,26 @@ if ( ! function_exists( 'wp_remote_retrieve_body' ) ) {
         }
 
         return '';
+    }
+}
+
+if ( ! function_exists( 'wp_mail' ) ) {
+    function wp_mail( $to, $subject, $message ) {
+        $GLOBALS['tts_sent_emails'][] = array(
+            'to'      => $to,
+            'subject' => $subject,
+            'message' => $message,
+        );
+
+        if ( isset( $GLOBALS['tts_mail_overrides'][ $to ] ) ) {
+            return (bool) $GLOBALS['tts_mail_overrides'][ $to ];
+        }
+
+        if ( isset( $GLOBALS['tts_mail_overrides']['*'] ) ) {
+            return (bool) $GLOBALS['tts_mail_overrides']['*'];
+        }
+
+        return true;
     }
 }
 
@@ -971,6 +1009,18 @@ if ( ! function_exists( 'sanitize_text_field' ) ) {
         $filtered = preg_replace( '/[\r\n\t ]+/', ' ', $filtered );
 
         return trim( (string) $filtered );
+    }
+}
+
+if ( ! function_exists( 'sanitize_email' ) ) {
+    function sanitize_email( $email ) {
+        $email = trim( (string) $email );
+
+        if ( '' === $email ) {
+            return '';
+        }
+
+        return filter_var( $email, FILTER_VALIDATE_EMAIL ) ? $email : '';
     }
 }
 
@@ -1436,6 +1486,9 @@ function tts_reset_test_state() {
     $GLOBALS['tts_loaded_textdomains']    = array();
     $GLOBALS['tts_loaded_plugin_textdomains'] = array();
     $GLOBALS['tts_unloaded_textdomains']  = array();
+    $GLOBALS['tts_sent_emails']           = array();
+    $GLOBALS['tts_mail_overrides']        = array();
+    $GLOBALS['tts_recorded_http_posts']   = array();
 
     if ( class_exists( 'TTS_Secure_Storage' ) && method_exists( 'TTS_Secure_Storage', 'reset_instance' ) ) {
         TTS_Secure_Storage::reset_instance();
