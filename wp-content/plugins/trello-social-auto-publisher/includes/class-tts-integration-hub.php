@@ -9,9 +9,35 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+$contracts_file = __DIR__ . '/class-tts-operating-contracts.php';
+
+if ( file_exists( $contracts_file ) && ! interface_exists( 'TTS_Integration_Gateway_Interface' ) ) {
+    require_once $contracts_file;
+} elseif ( ! file_exists( $contracts_file ) && function_exists( 'error_log' ) ) {
+    error_log( 'FP Publisher: missing integration contracts file. Expected at ' . $contracts_file );
+}
+
+if ( ! interface_exists( 'TTS_Integration_Gateway_Interface' ) ) {
+    if ( function_exists( 'add_action' ) ) {
+        add_action( 'admin_notices', function () {
+            echo '<div class="error"><p>' .
+                esc_html__( 'FP Publisher could not load its integration contracts. Please reinstall the plugin to restore missing files.', 'fp-publisher' ) .
+                '</p></div>';
+        } );
+    }
+
+    if ( function_exists( 'error_log' ) ) {
+        error_log( 'FP Publisher: missing TTS_Integration_Gateway_Interface; Integration Hub not initialized.' );
+    }
+
+    return;
+}
+
 /**
  * Handles third-party integrations and API connections.
  */
+if ( interface_exists( 'TTS_Integration_Gateway_Interface' ) && ! class_exists( 'TTS_Integration_Hub' ) ) :
+
 class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
 
     /**
@@ -3001,3 +3027,5 @@ class TTS_Integration_Hub implements TTS_Integration_Gateway_Interface {
         $this->telemetry_channel->record_event( $event );
     }
 }
+
+endif;
