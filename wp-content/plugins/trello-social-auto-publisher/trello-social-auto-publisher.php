@@ -35,9 +35,9 @@ if ( ! function_exists( 'tsap_get_environment_issues' ) ) {
     function tsap_get_environment_issues() {
         $issues = array();
 
-        if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
+        if ( version_compare( PHP_VERSION, '8.1', '<' ) ) {
             /* translators: %s: current PHP version */
-            $issues[] = sprintf( __( 'FP Publisher requires PHP 7.4 or higher. Current version: %s.', 'fp-publisher' ), PHP_VERSION );
+            $issues[] = sprintf( __( 'FP Publisher requires PHP 8.1 or higher. Current version: %s.', 'fp-publisher' ), PHP_VERSION );
         }
 
         $wp_version = null;
@@ -53,8 +53,36 @@ if ( ! function_exists( 'tsap_get_environment_issues' ) ) {
             $issues[] = sprintf( __( 'FP Publisher requires WordPress 6.1 or higher. Current version: %s.', 'fp-publisher' ), $wp_version );
         }
 
-        if ( ! extension_loaded( 'openssl' ) || ! function_exists( 'openssl_cipher_iv_length' ) ) {
-            $issues[] = __( 'The OpenSSL PHP extension must be enabled to secure stored credentials.', 'fp-publisher' );
+        $required_extensions = array(
+            'curl'     => __( 'The cURL PHP extension must be enabled to communicate with external services.', 'fp-publisher' ),
+            'json'     => __( 'The JSON PHP extension must be enabled to encode and decode API responses.', 'fp-publisher' ),
+            'mbstring' => __( 'The Mbstring PHP extension must be enabled to handle multibyte content safely.', 'fp-publisher' ),
+            'openssl'  => __( 'The OpenSSL PHP extension must be enabled to secure stored credentials.', 'fp-publisher' ),
+        );
+
+        foreach ( $required_extensions as $extension => $message ) {
+            $supported = extension_loaded( $extension );
+
+            if ( 'openssl' === $extension ) {
+                $supported = $supported && function_exists( 'openssl_cipher_iv_length' );
+            }
+
+            if ( function_exists( 'apply_filters' ) ) {
+                /**
+                 * Allow overriding extension availability checks.
+                 *
+                 * This is primarily used for integration tests where PHP extensions
+                 * cannot be toggled dynamically.
+                 *
+                 * @param bool   $supported Whether the extension is considered available.
+                 * @param string $extension Extension name being evaluated.
+                 */
+                $supported = apply_filters( 'tsap_extension_supported', $supported, $extension );
+            }
+
+            if ( ! $supported ) {
+                $issues[] = $message;
+            }
         }
 
         if ( ! function_exists( 'as_schedule_single_action' ) ) {
