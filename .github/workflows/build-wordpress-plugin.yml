@@ -68,18 +68,17 @@ jobs:
     - name: Clean distribution directory
       run: |
         set -euo pipefail
-        mapfile -t patterns < <(cat <<'EOF'
-*.log
-*.tmp
-*.temp
-.DS_Store
-Thumbs.db
-*.bak
-*.swp
-*.swo
-*~
-EOF
-)
+        patterns=(
+          "*.log"
+          "*.tmp"
+          "*.temp"
+          ".DS_Store"
+          "Thumbs.db"
+          "*.bak"
+          "*.swp"
+          "*.swo"
+          "*~"
+        )
         for pattern in "${patterns[@]}"; do
           find "$DIST_DIR" -name "$pattern" -delete
         done
