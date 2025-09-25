@@ -197,6 +197,87 @@ $tests = array(
         $result = $rest->permissions_check( $valid_request );
         tts_assert_true( true === $result, 'Proper capabilities and nonce should allow REST access.' );
     },
+    'save_social_app_settings_sanitizes_nested_payload' => function () {
+        tts_reset_test_state();
+
+        $GLOBALS['tts_current_user_caps'] = array(
+            'manage_options' => true,
+        );
+
+        $admin = new TTS_Admin();
+
+        $_POST = array(
+            'social_apps' => array(
+                ' facebook ' => array(
+                    'app_id'      => "  ABC\\'123  ",
+                    'app_secret'  => '<strong>secret</strong>',
+                    'webhooks'    => array(
+                        'callback_url ' => ' https://example.com/callback ',
+                        'events'        => array( ' mentions ', 'comments ' ),
+                    ),
+                    'invalid key!' => array( 'should_drop' => '<b>value</b>' ),
+                ),
+                'invalid platform!' => array(
+                    'app_id' => 'ignored',
+                ),
+            ),
+        );
+
+        $method = new ReflectionMethod( TTS_Admin::class, 'save_social_app_settings' );
+        $method->setAccessible( true );
+        $method->invoke( $admin );
+
+        $stored = get_option( 'tts_social_apps', array() );
+
+        tts_assert_true(
+            isset( $stored['facebook'] ),
+            'Sanitized settings should retain the Facebook platform.'
+        );
+
+        tts_assert_false(
+            isset( $stored['invalid_platform'] ),
+            'Platforms with invalid keys should be discarded.'
+        );
+
+        $facebook = $stored['facebook'];
+
+        tts_assert_equals(
+            "ABC'123",
+            $facebook['app_id'],
+            'App IDs should be unslashed and sanitized.'
+        );
+
+        tts_assert_equals(
+            'secret',
+            $facebook['app_secret'],
+            'Secrets should be stripped of HTML markup.'
+        );
+
+        tts_assert_true(
+            isset( $facebook['webhooks']['callback_url'] ),
+            'Nested webhook configuration should be preserved.'
+        );
+
+        tts_assert_equals(
+            'https://example.com/callback',
+            $facebook['webhooks']['callback_url'],
+            'Callback URLs should be trimmed and sanitized.'
+        );
+
+        tts_assert_equals(
+            array( 'mentions', 'comments' ),
+            array_values( $facebook['webhooks']['events'] ),
+            'Event lists should remain arrays of sanitized strings.'
+        );
+
+        $serialized = wp_json_encode( $stored );
+        tts_assert_false(
+            false !== strpos( $serialized, 'Array' ),
+            'Nested values must not collapse into the literal string "Array".'
+        );
+
+        unset( $_POST );
+    },
     'log_page_requires_manage_options' => function () {
         tts_reset_test_state();
 
