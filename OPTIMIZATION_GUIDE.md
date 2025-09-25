@@ -1,5 +1,10 @@
 # FP Social Auto Publisher - Optimization Guide
 
+*Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
+
+Versioni interessate: **0.9.0 → 1.0.0**  
+Ultimo aggiornamento documentazione: **1.0.1**
+
 ## Overview
 
 This document outlines the performance optimizations and improvements made to the FP Social Auto Publisher plugin.
@@ -268,6 +273,11 @@ add_action('tts_cache_hit', function($key) {
 - Basic caching implementation
 - Standard WordPress asset loading
 - Individual file loading approach
+
+## Riferimenti aggiuntivi
+- [OPTIMIZATION_SUMMARY.md](OPTIMIZATION_SUMMARY.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [README.md](README.md)
 
 ## 🤝 Contributing
 

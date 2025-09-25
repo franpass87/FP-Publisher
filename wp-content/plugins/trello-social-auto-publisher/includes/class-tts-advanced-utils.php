@@ -36,7 +36,7 @@ class TTS_Advanced_Utils {
         
         $options = wp_parse_args( $options, $defaults );
         $export_data = array(
-            'version' => '1.0.0',
+            'version' => '1.0.1',
             'timestamp' => current_time( 'mysql' ),
             'site_url' => get_site_url(),
             'data' => array()
@@ -889,7 +889,7 @@ class TTS_Advanced_Utils {
     public static function generate_system_report() {
         return array(
             'plugin_info' => array(
-                'version' => '1.0.0',
+                'version' => '1.0.1',
                 'active_since' => get_option( 'tts_first_activation', 'Unknown' ),
                 'last_updated' => current_time( 'mysql' )
             ),

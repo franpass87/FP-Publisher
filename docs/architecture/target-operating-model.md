@@ -1,5 +1,10 @@
 # Target Operating Model
 
+*Author: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
+
+Applies to plugin version: **1.0.0** and above  
+Documentation refresh: **1.0.1**
+
 The FP Publisher plugin is organized into four modular capabilities that cooperate through explicit contracts.
 Each capability is driven by a dedicated PHP interface and exchanges typed value objects so the modules remain
 loosely coupled and testable outside of WordPress.
@@ -49,3 +54,8 @@ loosely coupled and testable outside of WordPress.
 
 Questa struttura consente di introdurre nuovi servizi (es. ulteriori canali social o nuove suite CRM) implementando semplicemente
 un adattatore che soddisfi l'interfaccia del modulo destinatario, mantenendo invariati i contratti di comunicazione tra componenti.
+
+## Riferimenti
+- [docs/architecture/dependency-injection.md](dependency-injection.md)
+- [README.md](../../README.md)
+- [CHANGELOG.md](../../CHANGELOG.md)

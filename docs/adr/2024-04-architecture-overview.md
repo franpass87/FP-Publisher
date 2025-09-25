@@ -1,5 +1,10 @@
 # ADR 2024-04: Architecture Overview
 
+*Author: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
+
+Applies to plugin version: **0.9.0** and above  
+Documentation refresh: **1.0.1**
+
 ## Status
 Accepted
 
@@ -106,3 +111,9 @@ Each step corresponds to hooks and helpers in `TTS_Backup`, including the daily 
 - Extract common Trello mapping logic into a shared utility to keep webhook ingestion and scheduler fallback consistent.【F:wp-content/plugins/trello-social-auto-publisher/includes/class-tts-scheduler.php†L161-L205】【F:wp-content/plugins/trello-social-auto-publisher/includes/class-tts-webhook.php†L200-L276】
 - Expand automated tests with a WordPress integration harness (or Action Scheduler mocks) to validate cron execution paths and REST permissions end-to-end.【F:wp-content/plugins/trello-social-auto-publisher/tests/bootstrap.php†L24-L654】
 - Centralize cron observability (e.g., admin dashboard summary or health endpoint) spanning publishing, integration sync, and backup queues to reduce operational blind spots.【F:wp-content/plugins/trello-social-auto-publisher/includes/class-tts-scheduler.php†L421-L602】【F:wp-content/plugins/trello-social-auto-publisher/includes/class-tts-integration-hub.php†L153-L2032】【F:wp-content/plugins/trello-social-auto-publisher/includes/class-tts-backup.php†L20-L196】
+
+## References
+- [docs/architecture/target-operating-model.md](../architecture/target-operating-model.md)
+- [docs/architecture/dependency-injection.md](../architecture/dependency-injection.md)
+- [README.md](../../README.md)
+- [CHANGELOG.md](../../CHANGELOG.md)

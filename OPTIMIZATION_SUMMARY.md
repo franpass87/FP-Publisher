@@ -1,5 +1,14 @@
 # Performance Optimization Summary
 
+*Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@fran
+cescopasseri.com)*
+
+Versioni interessate: **0.9.0 → 1.0.0**  
+Ultimo aggiornamento documentazione: **1.0.1**
+
+Questa sintesi accompagna le note tecniche contenute in [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md) e nel [CHANGELOG](CHANGELOG
+.md), descrivendo gli impatti misurati delle ottimizzazioni.
+
 ## ✅ Completed Improvements
 
 ### 🚀 Performance Enhancements
@@ -59,3 +68,8 @@
 - Code comments - Enhanced inline documentation
 
 All changes maintain backward compatibility and include comprehensive error handling.
+
+## Riferimenti
+- [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md)
+- [SECURITY_IMPROVEMENTS.md](SECURITY_IMPROVEMENTS.md)
+- [CHANGELOG.md](CHANGELOG.md)

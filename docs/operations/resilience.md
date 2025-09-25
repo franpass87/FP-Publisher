@@ -1,5 +1,10 @@
 # Resilienza della pubblicazione
 
+*Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
+
+Versione minima: **1.0.0**  
+Ultimo aggiornamento documentazione: **1.0.1**
+
 Questo documento descrive i controlli di resilienza del publisher TTS e come operare in caso di limiti o guasti dei canali.
 
 ## Coda asincrona per canale
@@ -87,3 +92,8 @@ update_option( 'tts_channel_limits', array(
 
 **Come modifico temporaneamente i limiti?**
 : Applicare un filtro `tts_rate_limiter_limits` o aggiornare `tts_channel_limits` tramite WP-CLI; i nuovi valori vengono applicati al volo a rate limiter e coda.
+
+## Riferimenti
+- [CHANGELOG.md](../../CHANGELOG.md)
+- [README.md](../../README.md)
+- [SECURITY_IMPROVEMENTS.md](../../SECURITY_IMPROVEMENTS.md)

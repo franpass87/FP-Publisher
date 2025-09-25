@@ -1,8 +1,15 @@
 # Menu Structure Documentation
 
-## New WordPress Admin Menu Organization
+*Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
 
-The Social Auto Publisher plugin now uses a consolidated menu structure to improve navigation and user experience.
+## Overview
+
+Versione introdotta: **1.0.0**  
+Ultimo aggiornamento documentazione: **1.0.1**
+
+Il plugin Social Auto Publisher utilizza una struttura di menu consolidata per migliorare navigazione, performance e accessibilità. Questa pagina integra le note di rilascio presenti nel [CHANGELOG](CHANGELOG.md) e descrive in dettaglio ogni voce del menu amministratore.
+
+## New WordPress Admin Menu Organization
 
 ### Main Menu: "Social Auto Publisher"
 
@@ -92,3 +99,7 @@ The plugin now includes dedicated CSS files for enhanced visual presentation:
 - `tts-analytics.css`: Analytics page styling
 
 All styles are responsive and follow WordPress admin design patterns for consistency.
+
+## Riferimenti
+- [CHANGELOG.md](CHANGELOG.md) – panoramica delle release.
+- [README.md](README.md) – overview funzionale del plugin.

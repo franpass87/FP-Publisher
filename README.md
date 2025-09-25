@@ -1,165 +1,111 @@
-# FP-Social-Auto-Publisher
+# FP Publisher
 
-[![Build WordPress Plugin](https://github.com/franpass87/FP-Publisher/actions/workflows/build-wordpress-plugin.yml/badge.svg)](https://github.com/franpass87/FP-Publisher/actions/workflows/build-wordpress-plugin.yml)
+Plugin WordPress per l'automazione della pubblicazione sui social e sui blog a partire dai workflow Trello.
 
-Questo progetto pubblica automaticamente contenuti sui social a partire da Trello.
+- **Autore:** Francesco Passeri  
+- **Sito web:** [francescopasseri.com](https://francescopasseri.com)  
+- **Contatti:** [info@francescopasseri.com](mailto:info@francescopasseri.com)
 
-## 📦 Download WordPress Plugin
+## Sommario
+- [Panoramica](#panoramica)
+- [Download e installazione](#download-e-installazione)
+- [Funzionalità principali](#funzionalità-principali)
+- [Configurazione dei canali](#configurazione-dei-canali)
+- [Automazioni e workflow](#automazioni-e-workflow)
+- [Sicurezza, qualità e compliance](#sicurezza-qualità-e-compliance)
+- [Performance e monitoraggio](#performance-e-monitoraggio)
+- [Documentazione di riferimento](#documentazione-di-riferimento)
+- [Storico versioni](#storico-versioni)
+- [Supporto](#supporto)
 
-Il plugin è disponibile come ZIP pronto per l'installazione su WordPress tramite [GitHub Actions Artifacts](https://github.com/franpass87/FP-Publisher/actions). 
+## Panoramica
+FP Publisher centralizza la gestione dei contenuti provenienti da Trello e da sorgenti esterne (Google Drive, Dropbox, upload locali) e automatizza la pubblicazione su Facebook, Instagram, YouTube, TikTok e siti WordPress. Include dashboard operative, code di pubblicazione, monitoraggio degli stati e strumenti di diagnosi.
 
-Per scaricare l'ultima versione:
-1. Vai alle [GitHub Actions](https://github.com/franpass87/FP-Publisher/actions/workflows/build-wordpress-plugin.yml)
-2. Clicca sull'ultimo workflow run completato con successo
-3. Scarica l'artifact `fp-publisher-wordpress-plugin-latest`
-4. Carica il file ZIP in WordPress Admin > Plugin > Aggiungi nuovo > Carica plugin
+## Download e installazione
+1. Accedi alle [GitHub Actions](https://github.com/franpass87/FP-Publisher/actions/workflows/build-wordpress-plugin.yml).
+2. Apri l'ultima esecuzione completata del workflow **Build WordPress Plugin**.
+3. Scarica l'artifact `fp-publisher-wordpress-plugin-latest`.
+4. Carica il file ZIP in **WordPress Admin → Plugin → Aggiungi nuovo → Carica plugin**.
 
-## ✨ Aggiornamenti Recenti
+### Requisiti
+- WordPress 6.0 o superiore.
+- PHP 8.1 con estensioni `curl`, `json`, `mbstring`, `openssl`.
+- Account Trello con permessi webhook.
+- Credenziali per le API dei canali social (Meta, YouTube, TikTok) e per eventuali blog collegati.
 
-### Menu WordPress Riorganizzato
-Il plugin ora utilizza una struttura di menu consolidata per migliorare la navigazione:
-- **Menu principale**: "Social Auto Publisher" con tutte le funzioni organizzate come sottomenu
-- **Dashboard migliorata**: Statistiche, post recenti, e azioni rapide
-- **Design responsivo**: Interfaccia moderna e mobile-friendly
-- **Pagine migliorate**: Calendar, Analytics, Health Status con styling avanzato
+## Funzionalità principali
+- **Dashboard operativa:** statistiche aggregate, attività recenti e scorciatoie verso le sezioni chiave.
+- **Clienti e credenziali:** gestione multi-cliente con metabox dedicati per secret, token e mappature Trello → canali social.
+- **Client Wizard:** onboarding guidato con verifica webhook, configurazione API e mappatura delle liste.
+- **Calendario editoriale:** vista mensile con stati di pubblicazione, canale, orario e conteggio dei contenuti.
+- **Gestione post social:** filtri per cliente/stato, approvazioni massime, pubblicazione immediata e dettagli dei log.
+- **Analytics:** aggregazione delle metriche dei canali, grafico interattivo (Chart.js) ed esportazione CSV.
+- **Health Status:** controllo quotidiano di token, hook Trello, Action Scheduler, requisiti WordPress e retention log configurabile.
+- **Blog WordPress:** pubblicazione automatica di articoli con gestione featured image, SEO, WPML, link dinamici e hashtag di default per ogni canale.
 
-Vedi [MENU_STRUCTURE.md](MENU_STRUCTURE.md) per la documentazione completa della nuova struttura.
+## Configurazione dei canali
+### Trello
+1. Recupera **API Key** e **Secret** da [https://trello.com/app-key](https://trello.com/app-key).
+2. Genera un **Token** con il link fornito nella stessa pagina.
+3. Inserisci Key, Token e Secret nel metabox *Client Credentials* del post type `tts_client`.
+4. Mappa le liste Trello ai canali social tramite il campo `_tts_trello_map` (JSON serializzato).
 
-## ✅ Manual QA
+### Facebook & Instagram
+1. Crea un'app su [Meta for Developers](https://developers.facebook.com/apps/).
+2. Abilita i permessi `pages_manage_posts`, `pages_read_engagement`, `pages_show_list`, `instagram_basic`, `instagram_content_publish`.
+3. Genera un token di lunga durata e recupera l'`ig_user_id` chiamando:  
+   `https://graph.facebook.com/v17.0/{page-id}?fields=instagram_business_account&access_token={page-access-token}`
+4. Inserisci l'access token nel formato `{page_id}|{access-token}` per Facebook e `{ig_user_id}|{access-token}` per Instagram.
 
-1. Commenta temporaneamente il metodo `render_content_management_page()` in `admin/class-tts-admin.php`.
-2. Accedi alla dashboard di WordPress e visita la voce di menu **FP Publisher**.
-3. Verifica che venga mostrato un avviso amministratore chiudibile che segnala l'impossibilità di caricare la pagina "Content Management" e che non vengano generati errori fatali PHP.
+### YouTube
+- Configura un client OAuth con scope `youtube.upload` e salva client ID/secret e refresh token nel metabox del cliente.
 
-## 🔄 Esportazione e Importazione
+### TikTok Business
+- Registra un'app su [TikTok for Developers](https://developers.tiktok.com/), abilita lo scope `video.upload` e inserisci l'access token ottenuto.
 
-- I segreti (app/client secrets, access token, refresh token) vengono esclusi automaticamente e nell'export risultano come `[REDACTED]`.
-- Se devi clonare l'installazione in un ambiente fidato puoi abilitare l'opzione **Include secrets** dal modale di export per includerli in chiaro.
-- In fase di import eventuali placeholder `[REDACTED]` non sovrascrivono i segreti esistenti e, se mancanti, viene segnalato che vanno inseriti manualmente.
-
-## API richieste
-
-- **Trello**: API Key e Token.
-- **Meta (Facebook/Instagram)**: App ID e secret con permessi `pages_manage_posts`, `instagram_basic`, `pages_show_list`, `pages_read_engagement`.
-- **YouTube**: OAuth client con scope `youtube.upload`.
-- **TikTok**: App con scope `video.upload`.
-
-## Generazione e configurazione di token e secret
-
-1. Visita la pagina [https://trello.com/app-key](https://trello.com/app-key) e copia la tua **API Key**.
-2. Dalla stessa pagina ottieni il **Secret** (client secret) e genera un **Token** cliccando sul link dedicato.
-3. All'interno dell'editor del post type `tts_client` inserisci Key, Token e Secret nei campi dedicati del metabox *Client Credentials*.
-4. Il Secret viene usato per validare le chiamate webhook. Trello invierà l'header `X-Trello-Webhook` firmato; in alternativa è possibile inviare un parametro `hmac` calcolato con `hash_hmac('sha256', $payload, $secret)`.
-
-## Token Facebook e permessi
-
-Per pubblicare contenuti su Facebook è necessario un **Page Access Token** dotato dei permessi `pages_manage_posts` e `pages_read_engagement`.
-
-Inserisci nel campo *Facebook Access Token* del client il valore nel formato `{ID-pagina}|{access-token}` dove `{ID-pagina}` è l'identificativo della pagina su cui pubblicare.
-
-## Token Instagram e ig_user_id
-
-Per pubblicare contenuti su Instagram è necessario un account **Business** o **Creator** collegato a una pagina Facebook.
-
-1. Crea un'app su [Meta for Developers](https://developers.facebook.com/apps/) e abilita l'**Instagram Graph API**.
-2. Genera un **Access Token** con i permessi `instagram_basic`, `pages_show_list`, `instagram_content_publish` e `pages_read_engagement`. Puoi utilizzare il [Graph API Explorer](https://developers.facebook.com/tools/explorer/) per ottenere un token di prova e poi convertirlo in un token di lunga durata.
-3. Recupera l'`ig_user_id` dell'account chiamando:
-
-   ```
-   https://graph.facebook.com/v17.0/{page-id}?fields=instagram_business_account&access_token={page-access-token}
-   ```
-
-   Il valore `instagram_business_account.id` è l'`ig_user_id`.
-4. Inserisci nel campo *Instagram Access Token* del client il valore nel formato `{ig_user_id}|{access-token}`.
-
-## Token TikTok Business
-
-Per pubblicare contenuti su TikTok è necessario un account **Business** abilitato alle TikTok Marketing/Open API.
-
-1. Crea un'app su [TikTok for Developers](https://developers.tiktok.com/).
-2. Genera un **Access Token** con i permessi necessari per l'upload e la pubblicazione dei video.
-3. Inserisci il token nel campo *TikTok Access Token* del client.
-
-## Requisiti per la pubblicazione delle Stories
-
-Per pubblicare Stories su Facebook e Instagram il file deve avere orientamento verticale:
-
-- **Immagini**: 1080×1920 pixel (rapporto 9:16).
-- **Video**: durata massima 60 secondi con risoluzione 1080×1920 pixel.
-
-Quando è selezionato il flag *Pubblica come Story* il campo `_tts_story_media` deve contenere un file che rispetti questi requisiti.
-
-## Mappatura Trello → Canali Social
-
-Nel metabox del custom post type `tts_client` è possibile definire una mappatura tra l'`idList` di Trello e il relativo `canale_social`.
-La mappatura viene salvata nel meta `_tts_trello_map` come array serializzato da WordPress con la seguente struttura:
-
-```json
-[
-  {
-    "idList": "<ID della lista Trello>",
-    "canale_social": "<canale social>"
-  },
-  {
-    "idList": "<ID di un'altra lista>",
-    "canale_social": "<altro canale social>"
-  }
-]
-```
-
-Ogni elemento dell'array associa una lista Trello al canale social su cui pubblicare.
-
-Canali supportati: `facebook`, `instagram`, `youtube`, `tiktok`, `blog`.
-
-## Pubblicazione su Blog WordPress
-
-Il plugin supporta la pubblicazione automatica di articoli su blog WordPress con le seguenti funzionalità:
-
-### Configurazione Blog
-Nel metabox *Client Credentials* è possibile configurare le impostazioni per la pubblicazione su blog tramite il campo **Blog Settings** nel formato:
+### Blog WordPress
+Configura il campo **Blog Settings** nel formato:
 ```
 post_type:post|post_status:draft|author_id:1|category_id:1|language:it|keywords:keyword1:url1|keyword2:url2
 ```
+Parametri supportati: `post_type`, `post_status`, `author_id`, `category_id`, `language`, `keywords`, `meta_description`, `focus_keyword`, `canonical_url`, `seo_title`.
 
-### Funzionalità Supportate
-- **Supporto WPML**: Gestione automatica dei contenuti in italiano e inglese
-- **Featured Image**: Collegamento automatico delle immagini allegate alle Trello card come immagini in evidenza
-- **SEO WordPress**: Supporto per meta description, focus keyword, canonical URL e SEO title
-- **Link Juicer**: Inserimento automatico di link per parole chiave specificate
-- **Rilevamento Lingua**: Rilevamento automatico della lingua del contenuto (italiano/inglese)
+### Stories verticali
+- Immagini: 1080×1920 px.
+- Video: max 60 secondi, risoluzione 1080×1920 px.
+- Carica il file nel campo `_tts_story_media` e abilita il flag *Pubblica come Story*.
 
-### Parametri Configurabili
-- `post_type`: Tipo di post WordPress (default: `post`)
-- `post_status`: Stato del post (`draft`, `publish`, `private`)
-- `author_id`: ID dell'autore del post
-- `category_id`: ID della categoria del post
-- `language`: Lingua del contenuto (`it`, `en`) per WPML
-- `keywords`: Coppie parola chiave:URL per il link juicer (formato: `keyword1:url1|keyword2:url2`)
-- `meta_description`: Meta description personalizzata per SEO
-- `focus_keyword`: Parola chiave focus per SEO
-- `canonical_url`: URL canonico personalizzato
-- `seo_title`: Titolo SEO personalizzato
+## Automazioni e workflow
+- **Esportazione/Importazione:** i secret sono mascherati come `[REDACTED]`; è possibile includerli manualmente tramite l'opzione *Include secrets*.
+- **Code e scheduler:** il sistema `TTS_Scheduler` controlla rate limit, error recovery e code per canale.
+- **Pulizia log:** routine giornaliera che elimina le righe più vecchie rispetto alla retention configurata (default 30 giorni).
+- **Hashtag di default:** definibili per ogni canale nel metabox *Client Credentials*.
 
-## Hashtag di default
+## Sicurezza, qualità e compliance
+- Validazione e sanificazione degli input con controlli di capability e nonce su tutte le azioni critiche.
+- Ruoli personalizzati con privilegi granulari e protezione dei metadati tramite `auth_callback`.
+- Registro eventi e audit trail centralizzato per diagnosi rapide (`tts_log_event`).
+- Rispetto delle linee guida WCAG 2.1 AA (ARIA, focus management, high contrast) e compatibilità cross browser documentata in [SECURITY_IMPROVEMENTS.md](SECURITY_IMPROVEMENTS.md).
 
-Nel metabox *Client Credentials* del post type `tts_client` è possibile definire hashtag di default per Facebook, Instagram, YouTube e TikTok.
-Gli hashtag indicati vengono automaticamente concatenati ai messaggi generati per il relativo canale.
+## Performance e monitoraggio
+- Cache multilivello (transient, object cache, browser) e query ottimizzate descritte in [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md).
+- Script `./optimize-assets.sh` per generare asset minificati ready-for-production.
+- Dashboard con metriche in tempo reale, performance monitor e controlli di stato dei servizi esterni.
 
-## Pulizia dei log
+## Documentazione di riferimento
+- [MENU_STRUCTURE.md](MENU_STRUCTURE.md): struttura aggiornata del menu WordPress e benefici UX.
+- [MENU_FIX_SUMMARY.md](MENU_FIX_SUMMARY.md): dettagli sul consolidamento del menu amministratore.
+- [OPTIMIZATION_SUMMARY.md](OPTIMIZATION_SUMMARY.md) & [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md): panoramica e guida tecnica agli interventi di performance.
+- [SECURITY_IMPROVEMENTS.md](SECURITY_IMPROVEMENTS.md): audit di sicurezza e miglioramenti qualitativi.
+- [SOCIAL_MEDIA_SETUP.md](SOCIAL_MEDIA_SETUP.md): checklist operative per i singoli canali.
+- [ENTERPRISE_FEATURES.md](ENTERPRISE_FEATURES.md): funzionalità avanzate per team e scenari enterprise.
 
-Il plugin registra gli eventi nella tabella personalizzata `tts_logs`.
-Ogni giorno viene eseguita automaticamente un'operazione di pulizia che elimina i
-record più vecchi di un numero di giorni configurabile (30 giorni per impostazione predefinita).
+## Storico versioni
+Consulta il [CHANGELOG.md](CHANGELOG.md) per il dettaglio completo delle release. In sintesi:
+- **1.0.1** – Aggiornamento completa della documentazione, accredito autore e contatti ufficiali.
+- **1.0.0** – Rilascio iniziale con menu unificato, integrazione multi-canale, analytics avanzati e ottimizzazioni di performance/sicurezza.
 
-Il periodo di conservazione è modificabile dalla pagina delle impostazioni del plugin tramite
-il campo **Log Retention (days)**.
-
-## Analytics
-
-Una schermata dedicata mostra le metriche raccolte dai social per i post pubblicati.
-Dal menu **Analytics** è possibile:
-
-- filtrare i dati per canale e intervallo temporale;
-- visualizzare i risultati in un grafico generato con Chart.js;
-- esportare le metriche correnti in formato CSV.
-
+## Supporto
+Per richieste di supporto, proposte di partnership o segnalazioni di bug:
+- Email: [info@francescopasseri.com](mailto:info@francescopasseri.com)
+- Sito: [francescopasseri.com](https://francescopasseri.com)
