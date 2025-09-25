@@ -3057,19 +3057,91 @@ class TTS_Admin {
         }
 
         $social_apps = isset( $_POST['social_apps'] ) ? $_POST['social_apps'] : array();
-        $sanitized_apps = array();
 
-        foreach ( $social_apps as $platform => $settings ) {
-            $platform = sanitize_key( $platform );
-            $sanitized_apps[$platform] = array();
-
-            foreach ( $settings as $key => $value ) {
-                $key = sanitize_key( $key );
-                $sanitized_apps[$platform][$key] = sanitize_text_field( $value );
-            }
+        if ( ! is_array( $social_apps ) ) {
+            update_option( 'tts_social_apps', array() );
+            return;
         }
 
+        $social_apps    = wp_unslash( $social_apps );
+        $sanitized_apps = $this->sanitize_social_app_settings_array( $social_apps );
+
         update_option( 'tts_social_apps', $sanitized_apps );
+    }
+
+    /**
+     * Sanitize the submitted social app credentials payload.
+     *
+     * @param array $social_apps Raw social app settings keyed by platform.
+     * @return array Sanitized settings.
+     */
+    private function sanitize_social_app_settings_array( array $social_apps ) {
+        $sanitized = array();
+
+        foreach ( $social_apps as $platform => $settings ) {
+            if ( ! is_string( $platform ) ) {
+                continue;
+            }
+
+            $platform_key = sanitize_key( $platform );
+
+            if ( '' === $platform_key ) {
+                continue;
+            }
+
+            if ( is_object( $settings ) ) {
+                $settings = (array) $settings;
+            }
+
+            if ( ! is_array( $settings ) ) {
+                $sanitized[ $platform_key ] = array();
+                continue;
+            }
+
+            $sanitized[ $platform_key ] = $this->sanitize_social_app_fields( $settings );
+        }
+
+        return $sanitized;
+    }
+
+    /**
+     * Recursively sanitize a set of social app credential fields.
+     *
+     * @param array $fields Raw credential fields.
+     * @return array Sanitized credential fields.
+     */
+    private function sanitize_social_app_fields( $fields ) {
+        if ( is_object( $fields ) ) {
+            $fields = (array) $fields;
+        }
+
+        if ( ! is_array( $fields ) ) {
+            return array();
+        }
+
+        $sanitized = array();
+
+        foreach ( $fields as $key => $value ) {
+            if ( is_string( $key ) ) {
+                $clean_key = sanitize_key( $key );
+
+                if ( '' === $clean_key ) {
+                    continue;
+                }
+            } else {
+                $clean_key = $key;
+            }
+
+            if ( is_array( $value ) || is_object( $value ) ) {
+                $clean_value = $this->sanitize_social_app_fields( $value );
+            } else {
+                $clean_value = sanitize_text_field( stripslashes( wp_unslash( (string) $value ) ) );
+            }
+
+            $sanitized[ $clean_key ] = $clean_value;
+        }
+
+        return $sanitized;
     }
 
     /**
