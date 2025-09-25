@@ -162,9 +162,42 @@ $tests = array(
         }
 
         tts_assert_equals( 'published', $post_payload['status'], 'Status values must be sanitized.' );
+
+        $edit_link = $post_payload['edit_link'];
         tts_assert_true(
-            0 === strpos( $post_payload['edit_link'], 'post.php?post=' ),
-            'Edit links should be safe URLs.'
+            0 === strpos( $edit_link, 'admin.php?page=fp-publisher-social-posts' ),
+            'Edit links should route through the custom FP Publisher editor.'
+        );
+
+        $query_args = array();
+        $query_url  = 'http://example.com/' . ltrim( $edit_link, '/' );
+        if ( function_exists( 'wp_parse_url' ) ) {
+            $query_string = (string) wp_parse_url( $query_url, PHP_URL_QUERY );
+        } else {
+            $query_string = (string) parse_url( $query_url, PHP_URL_QUERY );
+        }
+
+        parse_str( $query_string, $query_args );
+
+        tts_assert_equals(
+            'fp-publisher-social-posts',
+            isset( $query_args['page'] ) ? $query_args['page'] : '',
+            'Edit links must stay scoped to the FP Publisher editor page.'
+        );
+        tts_assert_equals(
+            'edit',
+            isset( $query_args['action'] ) ? $query_args['action'] : '',
+            'Edit links should use the edit action.'
+        );
+        tts_assert_equals(
+            '1',
+            isset( $query_args['tts_open_editor'] ) ? $query_args['tts_open_editor'] : '',
+            'Edit links should open the editor by default.'
+        );
+        tts_assert_equals(
+            '101',
+            isset( $query_args['post'] ) ? $query_args['post'] : '',
+            'Edit links must reference the social post ID.'
         );
     },
     'rest_permissions_enforce_nonce_and_caps' => function () {

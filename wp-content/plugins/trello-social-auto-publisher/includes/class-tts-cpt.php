@@ -616,16 +616,45 @@ class TTS_CPT {
         wp_enqueue_script( 'jquery-ui-sortable' );
         $attachments = get_post_meta( $post->ID, '_tts_attachment_ids', true );
         $attachments = is_array( $attachments ) ? $attachments : array();
-        echo '<ul id="tts_attachments_list">';
-        foreach ( $attachments as $id ) {
-            $thumb = wp_get_attachment_image( $id, array( 80, 80 ) );
-            echo '<li class="tts-attachment-item"><label><input type="checkbox" class="tts-attachment-select" value="' . esc_attr( $id ) . '" checked />' . $thumb . '</label></li>';
+        $manual_media = (int) get_post_meta( $post->ID, '_tts_manual_media', true );
+
+        if ( $manual_media <= 0 && ! empty( $attachments ) ) {
+            $manual_media = (int) $attachments[0];
         }
-        echo '</ul>';
+
+        $attachment_items = '';
+        foreach ( $attachments as $id ) {
+            $id        = (int) $id;
+            $thumb     = wp_get_attachment_image( $id, array( 120, 120 ) );
+            $title     = get_the_title( $id );
+            $title     = $title ? $title : sprintf( __( 'Media #%d', 'fp-publisher' ), $id );
+            $is_primary = ( $id === $manual_media );
+
+            if ( $thumb ) {
+                $attachment_items .= '<li class="tts-attachment-item' . ( $is_primary ? ' is-primary' : '' ) . '" data-id="' . esc_attr( $id ) . '">';
+                $attachment_items .= '<div class="tts-attachment-thumb">' . $thumb . '</div>';
+                $attachment_items .= '<div class="tts-attachment-meta">';
+                $attachment_items .= '<span class="tts-attachment-title">' . esc_html( $title ) . '</span>';
+                $attachment_items .= '<div class="tts-attachment-actions">';
+                $attachment_items .= '<button type="button" class="button-link tts-attachment-make-primary" data-id="' . esc_attr( $id ) . '">' . esc_html__( 'Imposta come principale', 'fp-publisher' ) . '</button>';
+                $attachment_items .= '<button type="button" class="button-link-delete tts-attachment-remove" data-id="' . esc_attr( $id ) . '">' . esc_html__( 'Rimuovi', 'fp-publisher' ) . '</button>';
+                $attachment_items .= '</div>';
+                $attachment_items .= '</div>';
+                $attachment_items .= '<span class="tts-primary-indicator" aria-hidden="true">' . esc_html__( 'Primario', 'fp-publisher' ) . '</span>';
+                $attachment_items .= '</li>';
+            }
+        }
+
+        echo '<div class="tts-attachments" data-empty="' . esc_attr( empty( $attachments ) ? '1' : '0' ) . '" data-make-primary-label="' . esc_attr__( 'Imposta come principale', 'fp-publisher' ) . '" data-remove-label="' . esc_attr__( 'Rimuovi', 'fp-publisher' ) . '" data-primary-label="' . esc_attr__( 'Primario', 'fp-publisher' ) . '">';
+        echo '<p id="tts_attachments_empty" class="tts-attachments-empty"' . ( empty( $attachments ) ? '' : ' style="display:none"' ) . '>' . esc_html__( 'Nessun media selezionato. Aggiungi elementi con il pulsante qui sotto.', 'fp-publisher' ) . '</p>';
+        echo '<ul id="tts_attachments_list" class="tts-attachments-list">' . $attachment_items . '</ul>';
         echo '<input type="hidden" id="tts_attachment_ids" name="_tts_attachment_ids" value="' . esc_attr( implode( ',', $attachments ) ) . '" />';
-        $value = get_post_meta( $post->ID, '_tts_manual_media', true );
-        echo '<input type="hidden" id="tts_manual_media" name="_tts_manual_media" value="' . esc_attr( $value ) . '" />';
-        echo '<button type="button" class="button tts-select-media">' . esc_html__( 'Seleziona/Carica file', 'fp-publisher' ) . '</button>';
+        echo '<input type="hidden" id="tts_manual_media" name="_tts_manual_media" value="' . esc_attr( $manual_media ) . '" />';
+        echo '<div class="tts-attachments-actions">';
+        echo '<button type="button" class="button button-secondary tts-select-media">' . esc_html__( 'Seleziona/Carica file', 'fp-publisher' ) . '</button>';
+        echo '<button type="button" class="button-link tts-clear-attachments"' . ( empty( $attachments ) ? ' style="display:none"' : '' ) . '>' . esc_html__( 'Rimuovi tutti', 'fp-publisher' ) . '</button>';
+        echo '</div>';
+        echo '</div>';
 
         $story_enabled = (bool) get_post_meta( $post->ID, '_tts_publish_story', true );
         $story_media   = (int) get_post_meta( $post->ID, '_tts_story_media', true );
