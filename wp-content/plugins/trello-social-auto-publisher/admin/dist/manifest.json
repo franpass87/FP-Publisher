@@ -13,6 +13,7 @@
   "admin/js/tts-notifications.js": "admin/dist/js/tts-notifications-B6RB54SS.js",
   "admin/js/tts-optimized-core.js": "admin/dist/js/tts-optimized-core-ONNNZ465.js",
   "admin/js/tts-social-connections.js": "admin/dist/js/tts-social-connections-X2HLXIL4.js",
+  "admin/js/tts-social-post-editor.js": "admin/dist/js/tts-social-post-editor-ZWVB2HFQ.js",
   "admin/js/tts-wizard.js": "admin/dist/js/tts-wizard-JTE5P3N7.js",
   "admin/css/tts-accessibility.css": "admin/dist/css/tts-accessibility-FI65ILLB.css",
   "admin/css/tts-ai-features.css": "admin/dist/css/tts-ai-features-LE3WX47H.css",
@@ -23,5 +24,6 @@
   "admin/css/tts-frequency-status.css": "admin/dist/css/tts-frequency-status-IOLCH4ER.css",
   "admin/css/tts-health.css": "admin/dist/css/tts-health-36ASOIDL.css",
   "admin/css/tts-optimized.css": "admin/dist/css/tts-optimized-OZBVJ5DQ.css",
-  "admin/css/tts-social-connections.css": "admin/dist/css/tts-social-connections-SDH6QMGV.css"
+  "admin/css/tts-social-connections.css": "admin/dist/css/tts-social-connections-SDH6QMGV.css",
+  "admin/css/tts-social-post-editor.css": "admin/dist/css/tts-social-post-editor-MICKFQQG.css"
 }

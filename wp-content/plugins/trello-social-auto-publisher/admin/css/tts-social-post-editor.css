@@ -149,6 +149,40 @@
     color: #d63638;
 }
 
+.tts-social-posts-editor.is-editing {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px rgba(34, 113, 177, 0.25);
+}
+
+.tts-editor-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.tts-editor-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    background: #2271b1;
+    color: #fff;
+}
+
+.tts-editor-current-title {
+    font-weight: 600;
+    color: #1d2327;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 @media (max-width: 960px) {
     .tts-social-posts-layout {
         flex-direction: column;

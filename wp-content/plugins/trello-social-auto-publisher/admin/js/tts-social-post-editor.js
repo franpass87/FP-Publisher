@@ -11,6 +11,30 @@
         const $cancelButton = $('#tts-cancel-social-post-editor');
         const $titleField = $('#tts_post_title');
 
+        const resolveOpenLabel = function() {
+            if ( !$openButton.length ) {
+                return '';
+            }
+
+            const label = $openButton.data('open-label');
+            return label ? String(label) : $.trim($openButton.text());
+        };
+
+        const defaultOpenLabel = resolveOpenLabel();
+        const closeLabel = $openButton.length ? String($openButton.data('close-label') || '') : '';
+
+        const updateOpenButtonLabel = function(open) {
+            if ( !$openButton.length ) {
+                return;
+            }
+
+            if ( open && closeLabel ) {
+                $openButton.text(closeLabel);
+            } else {
+                $openButton.text(defaultOpenLabel);
+            }
+        };
+
         const setEditorState = function(open) {
             if (open) {
                 $editor.addClass('is-open');
@@ -24,9 +48,11 @@
                 $editor.removeClass('is-open');
                 $openButton.attr('aria-expanded', 'false');
             }
+            updateOpenButtonLabel(open);
         };
 
         if ($openButton.length) {
+            updateOpenButtonLabel($editor.hasClass('is-open'));
             $openButton.on('click', function(e) {
                 e.preventDefault();
                 setEditorState(!$editor.hasClass('is-open'));
@@ -36,6 +62,11 @@
         if ($cancelButton.length) {
             $cancelButton.on('click', function(e) {
                 e.preventDefault();
+                const cancelUrl = $cancelButton.data('cancel-url');
+                if (cancelUrl) {
+                    window.location.href = cancelUrl;
+                    return;
+                }
                 setEditorState(false);
             });
         }
