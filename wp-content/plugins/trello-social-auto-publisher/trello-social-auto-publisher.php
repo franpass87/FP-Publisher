@@ -20,7 +20,171 @@ if ( ! defined( 'TSAP_PLUGIN_DIR' ) ) {
     define( 'TSAP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 }
 
+if ( ! defined( 'TSAP_ENVIRONMENT_ERROR_TRANSIENT' ) ) {
+    define( 'TSAP_ENVIRONMENT_ERROR_TRANSIENT', 'tsap_activation_errors' );
+}
+
 require_once TSAP_PLUGIN_DIR . 'includes/class-tts-service-container.php';
+
+if ( ! function_exists( 'tsap_get_environment_issues' ) ) {
+    /**
+     * Determine whether the hosting environment satisfies plugin prerequisites.
+     *
+     * @return array<int, string> List of human readable issues. Empty array when compliant.
+     */
+    function tsap_get_environment_issues() {
+        $issues = array();
+
+        if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
+            /* translators: %s: current PHP version */
+            $issues[] = sprintf( __( 'FP Publisher requires PHP 7.4 or higher. Current version: %s.', 'fp-publisher' ), PHP_VERSION );
+        }
+
+        $wp_version = null;
+
+        if ( function_exists( 'get_bloginfo' ) ) {
+            $wp_version = get_bloginfo( 'version' );
+        } elseif ( isset( $GLOBALS['wp_version'] ) ) {
+            $wp_version = $GLOBALS['wp_version'];
+        }
+
+        if ( $wp_version && version_compare( $wp_version, '6.1', '<' ) ) {
+            /* translators: %s: current WordPress version */
+            $issues[] = sprintf( __( 'FP Publisher requires WordPress 6.1 or higher. Current version: %s.', 'fp-publisher' ), $wp_version );
+        }
+
+        if ( ! extension_loaded( 'openssl' ) || ! function_exists( 'openssl_cipher_iv_length' ) ) {
+            $issues[] = __( 'The OpenSSL PHP extension must be enabled to secure stored credentials.', 'fp-publisher' );
+        }
+
+        if ( ! function_exists( 'as_schedule_single_action' ) ) {
+            $issues[] = __( 'The Action Scheduler library must be installed and active.', 'fp-publisher' );
+        }
+
+        if ( function_exists( 'apply_filters' ) ) {
+            /**
+             * Allow third parties to add custom environment validation rules.
+             *
+             * @param array<int, string> $issues Detected issues.
+             */
+            $issues = apply_filters( 'tsap_environment_issues', $issues );
+        }
+
+        return array_values( array_filter( array_map( 'wp_strip_all_tags', $issues ) ) );
+    }
+}
+
+if ( ! function_exists( 'tsap_abort_activation_with_issues' ) ) {
+    /**
+     * Abort plugin activation when requirements are not satisfied.
+     *
+     * @param array<int, string> $issues Requirement violations to display.
+     *
+     * @return void
+     */
+    function tsap_abort_activation_with_issues( array $issues ) {
+        if ( empty( $issues ) ) {
+            return;
+        }
+
+        if ( function_exists( 'set_transient' ) ) {
+            set_transient( TSAP_ENVIRONMENT_ERROR_TRANSIENT, $issues, 10 * MINUTE_IN_SECONDS );
+        }
+
+        if ( ! function_exists( 'deactivate_plugins' ) && defined( 'ABSPATH' ) ) {
+            $plugin_file = ABSPATH . 'wp-admin/includes/plugin.php';
+
+            if ( file_exists( $plugin_file ) ) {
+                require_once $plugin_file;
+            }
+        }
+
+        if ( function_exists( 'deactivate_plugins' ) ) {
+            deactivate_plugins( plugin_basename( __FILE__ ) );
+        }
+
+        $list_items = '';
+
+        foreach ( $issues as $issue ) {
+            $list_items .= '<li>' . esc_html( $issue ) . '</li>';
+        }
+
+        $message  = '<p>' . esc_html__( 'FP Publisher cannot be activated because your environment does not meet the minimum requirements.', 'fp-publisher' ) . '</p>';
+        $message .= '<ul>' . $list_items . '</ul>';
+
+        wp_die(
+            wp_kses_post( $message ),
+            esc_html__( 'Plugin activation error', 'fp-publisher' ),
+            array( 'back_link' => true )
+        );
+    }
+}
+
+if ( ! function_exists( 'tsap_display_environment_notices' ) ) {
+    /**
+     * Display stored environment notices after a failed activation attempt.
+     *
+     * @return void
+     */
+    function tsap_display_environment_notices() {
+        if ( ! function_exists( 'get_transient' ) ) {
+            return;
+        }
+
+        $issues = get_transient( TSAP_ENVIRONMENT_ERROR_TRANSIENT );
+
+        if ( empty( $issues ) || ! is_array( $issues ) ) {
+            return;
+        }
+
+        if ( function_exists( 'delete_transient' ) ) {
+            delete_transient( TSAP_ENVIRONMENT_ERROR_TRANSIENT );
+        }
+
+        echo '<div class="notice notice-error"><p>' . esc_html__( 'FP Publisher cannot run because the environment does not satisfy its requirements:', 'fp-publisher' ) . '</p><ul>';
+
+        foreach ( $issues as $issue ) {
+            echo '<li>' . esc_html( $issue ) . '</li>';
+        }
+
+        echo '</ul></div>';
+    }
+
+    if ( function_exists( 'add_action' ) ) {
+        add_action( 'admin_notices', 'tsap_display_environment_notices' );
+    }
+}
+
+if ( ! function_exists( 'tsap_flag_environment_issues' ) ) {
+    /**
+     * Persist detected environment issues so administrators are alerted.
+     *
+     * @return void
+     */
+    function tsap_flag_environment_issues() {
+        if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'activate_plugins' ) ) {
+            return;
+        }
+
+        $issues = tsap_get_environment_issues();
+
+        if ( empty( $issues ) ) {
+            return;
+        }
+
+        if ( function_exists( 'set_transient' ) ) {
+            $existing = get_transient( TSAP_ENVIRONMENT_ERROR_TRANSIENT );
+
+            if ( empty( $existing ) ) {
+                set_transient( TSAP_ENVIRONMENT_ERROR_TRANSIENT, $issues, 10 * MINUTE_IN_SECONDS );
+            }
+        }
+    }
+
+    if ( function_exists( 'add_action' ) ) {
+        add_action( 'admin_init', 'tsap_flag_environment_issues' );
+    }
+}
 
 if ( ! function_exists( 'tsap_load_textdomain' ) ) {
     /**
@@ -172,6 +336,13 @@ register_deactivation_hook( __FILE__, 'tsap_plugin_deactivate' );
  * Handle plugin activation tasks.
  */
 function tsap_plugin_activate() {
+    $issues = tsap_get_environment_issues();
+
+    if ( ! empty( $issues ) ) {
+        tsap_abort_activation_with_issues( $issues );
+        return;
+    }
+
     require_once TSAP_PLUGIN_DIR . 'includes/tts-logger.php';
 
     if ( function_exists( 'tts_create_logs_table' ) ) {
