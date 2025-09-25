@@ -201,6 +201,8 @@ class TTS_Admin {
         add_action( 'wp_ajax_tts_bulk_action', array( $this, 'ajax_bulk_action' ) );
         add_action( 'wp_ajax_tts_test_connection', array( $this, 'ajax_test_connection' ) );
         add_action( 'wp_ajax_tts_check_rate_limits', array( $this, 'ajax_check_rate_limits' ) );
+        add_action( 'admin_post_tts_create_social_post', array( $this, 'handle_create_social_post' ) );
+        add_action( 'admin_init', array( $this, 'redirect_social_post_creation' ) );
         add_action( 'wp_ajax_tts_export_data', array( $this, 'ajax_export_data' ) );
         add_action( 'wp_ajax_tts_import_data', array( $this, 'ajax_import_data' ) );
         add_action( 'wp_ajax_tts_system_maintenance', array( $this, 'ajax_system_maintenance' ) );
@@ -614,6 +616,9 @@ class TTS_Admin {
                 $this->enqueue_ai_features_assets();
                 break;
             case 'fp-publisher_page_fp-publisher-social-posts':
+                $this->enqueue_shared_admin_page_assets();
+                $this->enqueue_social_post_editor_assets();
+                break;
             case 'fp-publisher_page_fp-publisher-settings':
             case 'fp-publisher_page_fp-publisher-test-connections':
             case 'fp-publisher_page_fp-publisher-help':
@@ -633,6 +638,32 @@ class TTS_Admin {
     private function enqueue_shared_admin_page_assets() {
         TTS_Asset_Manager::enqueue_style( 'tts-optimized', 'admin/css/tts-optimized.css', array( 'tts-core' ) );
         TTS_Asset_Manager::enqueue_script( 'tts-optimized-core', 'admin/js/tts-optimized-core.js', array( 'tts-core', 'tts-admin-utils' ) );
+    }
+
+    /**
+     * Enqueue assets for the custom social post editor.
+     */
+    private function enqueue_social_post_editor_assets() {
+        TTS_Asset_Manager::enqueue_style(
+            'tts-social-post-editor',
+            'admin/css/tts-social-post-editor.css',
+            array( 'tts-optimized' )
+        );
+
+        wp_enqueue_media();
+        wp_enqueue_script( 'jquery-ui-sortable' );
+
+        TTS_Asset_Manager::enqueue_script(
+            'tts-media',
+            'admin/js/tts-media.js',
+            array( 'tts-core', 'media-editor', 'jquery-ui-sortable' )
+        );
+
+        TTS_Asset_Manager::enqueue_script(
+            'tts-social-post-editor',
+            'admin/js/tts-social-post-editor.js',
+            array( 'tts-core', 'jquery' )
+        );
     }
 
     /**
@@ -2099,7 +2130,13 @@ class TTS_Admin {
 
             echo '<ul class="tts-client-list">';
             foreach ( $clients as $client ) {
-                $url          = admin_url( 'edit.php?post_type=tts_social_post&tts_client=' . $client->ID );
+                $url          = add_query_arg(
+                    array(
+                        'page'       => 'fp-publisher-social-posts',
+                        'tts_client' => $client->ID,
+                    ),
+                    admin_url( 'admin.php' )
+                );
                 $last_updated = get_the_modified_date( get_option( 'date_format' ), $client );
 
                 echo '<li class="tts-client-list-item">';
@@ -2113,7 +2150,15 @@ class TTS_Admin {
                 }
                 echo '<div class="tts-client-shortcuts">';
                 echo '<a href="' . esc_url( get_edit_post_link( $client->ID ) ) . '" class="button-link">' . esc_html__( 'Modifica cliente', 'fp-publisher' ) . '</a> | ';
-                echo '<a href="' . esc_url( admin_url( 'post-new.php?post_type=tts_social_post&tts_client=' . $client->ID ) ) . '" class="button-link">' . esc_html__( 'Nuovo post social', 'fp-publisher' ) . '</a>';
+                $new_post_url = add_query_arg(
+                    array(
+                        'page'            => 'fp-publisher-social-posts',
+                        'tts_client'      => $client->ID,
+                        'tts_open_editor' => 1,
+                    ),
+                    admin_url( 'admin.php' )
+                );
+                echo '<a href="' . esc_url( $new_post_url ) . '" class="button-link">' . esc_html__( 'Nuovo post social', 'fp-publisher' ) . '</a>';
                 echo '</div>';
                 echo '</li>';
             }
@@ -2621,6 +2666,63 @@ class TTS_Admin {
     /**
      * Render social posts list page.
      */
+    /**
+     * Redirect default WordPress creation flow to the custom editor.
+     */
+    public function redirect_social_post_creation() {
+        if ( ! is_admin() ) {
+            return;
+        }
+
+        global $pagenow;
+
+        if ( 'post-new.php' !== $pagenow ) {
+            return;
+        }
+
+        if ( ! isset( $_GET['post_type'] ) || 'tts_social_post' !== $_GET['post_type'] ) {
+            return;
+        }
+
+        $redirect_args = array(
+            'page'            => 'fp-publisher-social-posts',
+            'tts_open_editor' => 1,
+        );
+
+        if ( isset( $_GET['tts_client'] ) ) {
+            $redirect_args['tts_client'] = absint( $_GET['tts_client'] );
+        }
+
+        if ( isset( $_GET['content_source'] ) ) {
+            $redirect_args['content_source'] = sanitize_key( wp_unslash( $_GET['content_source'] ) );
+        }
+
+        wp_safe_redirect( add_query_arg( $redirect_args, admin_url( 'admin.php' ) ) );
+        exit;
+    }
+
+    /**
+     * Retrieve human readable error messages for the social post editor.
+     *
+     * @param string $code Error code identifier.
+     *
+     * @return string
+     */
+    private function get_social_post_error_message( $code ) {
+        switch ( $code ) {
+            case 'missing-title':
+                return __( 'Inserisci un titolo per il social post.', 'fp-publisher' );
+            case 'missing-channels':
+                return __( 'Seleziona almeno un canale social prima di salvare.', 'fp-publisher' );
+            case 'insert-failed':
+                return __( 'Si è verificato un errore durante la creazione del social post.', 'fp-publisher' );
+            case 'unauthorized':
+                return __( 'Non hai i permessi necessari per creare social post.', 'fp-publisher' );
+            default:
+                return '';
+        }
+    }
+
     public function render_social_posts_page() {
         // Handle publish now action.
         if ( isset( $_GET['action'], $_GET['post'] ) && 'publish' === $_GET['action'] ) {
@@ -2657,10 +2759,381 @@ class TTS_Admin {
         $table = new TTS_Social_Posts_Table();
         $table->prepare_items();
 
-        echo '<div class="wrap">';
-        echo '<h1>' . esc_html__( 'Social Post', 'fp-publisher' ) . '</h1>';
+        $error_code    = isset( $_GET['tts_error'] ) ? sanitize_key( wp_unslash( $_GET['tts_error'] ) ) : '';
+        $error_message = $error_code ? $this->get_social_post_error_message( $error_code ) : '';
+        $success       = isset( $_GET['tts_created'] );
+
+        $selected_client = isset( $_GET['tts_client'] ) ? absint( $_GET['tts_client'] ) : 0;
+
+        $clients = get_posts(
+            array(
+                'post_type'      => 'tts_client',
+                'post_status'    => array( 'publish', 'draft', 'pending', 'future', 'private' ),
+                'posts_per_page' => -1,
+                'orderby'        => 'title',
+                'order'          => 'ASC',
+            )
+        );
+
+        $channel_labels = array(
+            'facebook'  => 'Facebook',
+            'instagram' => 'Instagram',
+            'youtube'   => 'YouTube',
+            'tiktok'    => 'TikTok',
+        );
+
+        $requested_source = isset( $_GET['content_source'] ) ? sanitize_key( wp_unslash( $_GET['content_source'] ) ) : '';
+        $should_open      = $success ? false : ( ! empty( $_GET['tts_open_editor'] ) || '' !== $error_message || '' !== $requested_source || $selected_client > 0 );
+
+        $content_sources = array( 'manual' => 'Manual Creation' );
+        if ( class_exists( 'TTS_Content_Source' ) ) {
+            $content_sources = TTS_Content_Source::SOURCES;
+        }
+
+        $trello_enabled  = (bool) get_option( 'tts_trello_enabled', 1 );
+        $selected_source = 'manual';
+        if ( isset( $content_sources[ $requested_source ] ) ) {
+            if ( 'trello' === $requested_source && ! $trello_enabled ) {
+                $selected_source = 'manual';
+            } else {
+                $selected_source = $requested_source;
+            }
+        }
+
+        echo '<div class="wrap tts-social-posts-page">';
+        echo '<h1 class="wp-heading-inline">' . esc_html__( 'Social Post', 'fp-publisher' ) . '</h1>';
+        echo '<p class="description">' . esc_html__( 'Gestisci la pianificazione dei contenuti e crea nuovi post social da un’unica interfaccia.', 'fp-publisher' ) . '</p>';
+
+        if ( $success ) {
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Il social post è stato creato con successo.', 'fp-publisher' ) . '</p></div>';
+        }
+
+        if ( '' !== $error_message ) {
+            echo '<div class="notice notice-error"><p>' . esc_html( $error_message ) . '</p></div>';
+        }
+
+        echo '<div class="tts-social-posts-header">';
+        echo '<div class="tts-social-posts-header-text">';
+        echo '<h2>' . esc_html__( 'Pianifica e pubblica', 'fp-publisher' ) . '</h2>';
+        echo '<p>' . esc_html__( 'Consulta lo storico dei contenuti e crea rapidamente nuovi post multi-canale.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+        echo '<button type="button" class="button button-primary" id="tts-open-social-post-editor" data-editor-target="tts-social-post-editor">' . esc_html__( 'Crea nuovo social post', 'fp-publisher' ) . '</button>';
+        echo '</div>';
+
+        echo '<div class="tts-social-posts-layout">';
+        echo '<div class="tts-social-posts-table">';
         $table->display();
         echo '</div>';
+
+        $editor_classes = 'tts-social-posts-editor';
+        if ( $should_open ) {
+            $editor_classes .= ' is-open';
+        }
+
+        $data_open = $should_open ? '1' : '0';
+
+        echo '<div id="tts-social-post-editor" class="' . esc_attr( $editor_classes ) . '" data-open="' . esc_attr( $data_open ) . '">';
+        echo '<h2>' . esc_html__( 'Nuovo social post', 'fp-publisher' ) . '</h2>';
+        echo '<p class="description">' . esc_html__( 'Compila i campi per programmare il contenuto sui canali selezionati.', 'fp-publisher' ) . '</p>';
+
+        echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="tts-social-post-form">';
+        wp_nonce_field( 'tts_create_social_post', 'tts_create_social_post_nonce' );
+        echo '<input type="hidden" name="action" value="tts_create_social_post" />';
+
+        echo '<div class="tts-field-group">';
+        echo '<label for="tts_post_title">' . esc_html__( 'Titolo del post', 'fp-publisher' ) . '</label>';
+        echo '<input type="text" id="tts_post_title" name="tts_post_title" class="regular-text" required />';
+        echo '<p class="description">' . esc_html__( 'Usa un titolo descrittivo per riconoscere rapidamente il contenuto.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+
+        echo '<div class="tts-field-group">';
+        echo '<label for="tts_client_id">' . esc_html__( 'Cliente associato', 'fp-publisher' ) . '</label>';
+        echo '<select id="tts_client_id" name="tts_client_id" class="widefat">';
+        echo '<option value="0">' . esc_html__( 'Seleziona cliente (opzionale)', 'fp-publisher' ) . '</option>';
+        foreach ( $clients as $client ) {
+            $option_label = get_the_title( $client );
+            echo '<option value="' . esc_attr( $client->ID ) . '" ' . selected( $selected_client, $client->ID, false ) . '>' . esc_html( $option_label ) . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">' . esc_html__( 'Collega il post a un cliente per applicare regole e credenziali dedicate.', 'fp-publisher' ) . '</p>';
+        echo '</div>';
+
+        echo '<div class="tts-field-group">';
+        echo '<label for="_tts_publish_at">' . esc_html__( 'Data e ora di pubblicazione', 'fp-publisher' ) . '</label>';
+        echo '<input type="datetime-local" id="_tts_publish_at" name="_tts_publish_at" class="regular-text" />';
+        echo '</div>';
+
+        echo '<fieldset class="tts-field-group tts-channel-selector">';
+        echo '<legend>' . esc_html__( 'Canali di pubblicazione', 'fp-publisher' ) . '</legend>';
+        foreach ( $channel_labels as $key => $label ) {
+            echo '<label class="tts-channel-option"><input type="checkbox" class="tts-channel-checkbox" name="_tts_social_channel[]" value="' . esc_attr( $key ) . '" /> ' . esc_html( $label ) . '</label>';
+        }
+        echo '<p class="description">' . esc_html__( 'Seleziona uno o più canali: i campi messaggio si attiveranno automaticamente.', 'fp-publisher' ) . '</p>';
+        echo '</fieldset>';
+
+        echo '<div class="tts-field-group">';
+        echo '<h3>' . esc_html__( 'Messaggi personalizzati', 'fp-publisher' ) . '</h3>';
+        echo '<div class="tts-channel-messages">';
+        foreach ( $channel_labels as $key => $label ) {
+            $message_id    = 'tts_message_' . $key;
+            $message_label = sprintf( esc_html__( 'Messaggio per %s', 'fp-publisher' ), $label );
+            echo '<div class="tts-channel-message" data-channel="' . esc_attr( $key ) . '">';
+            echo '<label for="' . esc_attr( $message_id ) . '">' . esc_html( $message_label ) . '</label>';
+            echo '<textarea id="' . esc_attr( $message_id ) . '" name="_tts_message_' . esc_attr( $key ) . '" rows="4" class="widefat"></textarea>';
+            if ( 'instagram' === $key ) {
+                echo '<label for="tts_instagram_first_comment" class="tts-field-sub-label">' . esc_html__( 'Commento iniziale Instagram', 'fp-publisher' ) . '</label>';
+                echo '<textarea id="tts_instagram_first_comment" name="_tts_instagram_first_comment" rows="3" class="widefat"></textarea>';
+            }
+            echo '</div>';
+        }
+        echo '</div>';
+        echo '</div>';
+
+        echo '<div class="tts-field-group">';
+        echo '<label>' . esc_html__( 'Media allegati', 'fp-publisher' ) . '</label>';
+        echo '<ul id="tts_attachments_list" class="tts-attachments-list"></ul>';
+        echo '<input type="hidden" id="tts_attachment_ids" name="_tts_attachment_ids" value="" />';
+        echo '<input type="hidden" id="tts_manual_media" name="_tts_manual_media" value="" />';
+        echo '<button type="button" class="button tts-select-media">' . esc_html__( 'Seleziona/Carica file', 'fp-publisher' ) . '</button>';
+        echo '</div>';
+
+        echo '<div class="tts-field-group">';
+        echo '<label class="tts-checkbox-inline"><input type="checkbox" id="tts_publish_story" name="_tts_publish_story" value="1" /> ' . esc_html__( 'Pubblica anche come Story', 'fp-publisher' ) . '</label>';
+        echo '<div id="tts_story_media_wrapper" class="tts-story-media" style="display:none;">';
+        echo '<div id="tts_story_media_preview" class="tts-story-media-preview"></div>';
+        echo '<input type="hidden" id="tts_story_media" name="_tts_story_media" value="" />';
+        echo '<button type="button" class="button tts-select-story-media">' . esc_html__( 'Seleziona media Story', 'fp-publisher' ) . '</button>';
+        echo '</div>';
+        echo '</div>';
+
+        echo '<div class="tts-field-group tts-location-fields">';
+        echo '<div class="tts-location-input">';
+        echo '<label for="_tts_lat">' . esc_html__( 'Latitudine', 'fp-publisher' ) . '</label>';
+        echo '<input type="text" id="_tts_lat" name="_tts_lat" class="regular-text" />';
+        echo '</div>';
+        echo '<div class="tts-location-input">';
+        echo '<label for="_tts_lng">' . esc_html__( 'Longitudine', 'fp-publisher' ) . '</label>';
+        echo '<input type="text" id="_tts_lng" name="_tts_lng" class="regular-text" />';
+        echo '</div>';
+        echo '</div>';
+
+        echo '<div class="tts-field-group">';
+        echo '<label for="tts_content_source">' . esc_html__( 'Origine contenuto', 'fp-publisher' ) . '</label>';
+        echo '<select id="tts_content_source" name="tts_content_source" class="widefat">';
+        echo '<option value="">' . esc_html__( 'Seleziona origine', 'fp-publisher' ) . '</option>';
+        foreach ( $content_sources as $key => $label ) {
+            if ( 'trello' === $key && ! $trello_enabled ) {
+                continue;
+            }
+            echo '<option value="' . esc_attr( $key ) . '" ' . selected( $selected_source, $key, false ) . '>' . esc_html( $label ) . '</option>';
+        }
+        echo '</select>';
+        if ( isset( $content_sources['trello'] ) && ! $trello_enabled ) {
+            echo '<p class="description tts-content-source-warning">' . esc_html__( 'L’integrazione Trello è disabilitata: scegli un’altra origine o riattiva la connessione.', 'fp-publisher' ) . '</p>';
+        }
+        echo '<label for="tts_source_reference" class="tts-field-sub-label">' . esc_html__( 'Riferimento esterno (opzionale)', 'fp-publisher' ) . '</label>';
+        echo '<input type="text" id="tts_source_reference" name="tts_source_reference" class="regular-text" />';
+        echo '</div>';
+
+        echo '<div class="tts-editor-actions">';
+        echo '<button type="submit" class="button button-primary tts-form-save">' . esc_html__( 'Salva social post', 'fp-publisher' ) . '</button>';
+        echo '<button type="button" class="button" id="tts-cancel-social-post-editor">' . esc_html__( 'Annulla', 'fp-publisher' ) . '</button>';
+        echo '</div>';
+
+        echo '</form>';
+        echo '</div>'; // Editor container.
+
+        echo '</div>'; // Layout.
+        echo '</div>'; // Wrap.
+    }
+
+    /**
+     * Handle custom social post creation requests.
+     */
+    public function handle_create_social_post() {
+        $redirect = add_query_arg( 'page', 'fp-publisher-social-posts', admin_url( 'admin.php' ) );
+
+        if ( ! current_user_can( 'tts_create_social_posts' ) && ! current_user_can( 'tts_edit_social_posts' ) ) {
+            wp_safe_redirect( add_query_arg( 'tts_error', 'unauthorized', $redirect ) );
+            exit;
+        }
+
+        check_admin_referer( 'tts_create_social_post', 'tts_create_social_post_nonce' );
+
+        $title = isset( $_POST['tts_post_title'] ) ? sanitize_text_field( wp_unslash( $_POST['tts_post_title'] ) ) : '';
+        if ( '' === $title ) {
+            wp_safe_redirect(
+                add_query_arg(
+                    array(
+                        'tts_error'      => 'missing-title',
+                        'tts_open_editor'=> 1,
+                    ),
+                    $redirect
+                )
+            );
+            exit;
+        }
+
+        $channel_input = isset( $_POST['_tts_social_channel'] ) ? (array) wp_unslash( $_POST['_tts_social_channel'] ) : array();
+        $channels      = array();
+        foreach ( $channel_input as $channel ) {
+            $key = sanitize_key( $channel );
+            if ( '' !== $key ) {
+                $channels[] = $key;
+            }
+        }
+        $channels = array_values( array_unique( $channels ) );
+
+        if ( empty( $channels ) ) {
+            wp_safe_redirect(
+                add_query_arg(
+                    array(
+                        'tts_error'      => 'missing-channels',
+                        'tts_open_editor'=> 1,
+                    ),
+                    $redirect
+                )
+            );
+            exit;
+        }
+
+        $post_id = wp_insert_post(
+            array(
+                'post_type'   => 'tts_social_post',
+                'post_title'  => $title,
+                'post_status' => 'draft',
+            ),
+            true
+        );
+
+        if ( is_wp_error( $post_id ) ) {
+            wp_safe_redirect(
+                add_query_arg(
+                    array(
+                        'tts_error'      => 'insert-failed',
+                        'tts_open_editor'=> 1,
+                    ),
+                    $redirect
+                )
+            );
+            exit;
+        }
+
+        update_post_meta( $post_id, '_tts_social_channel', $channels );
+
+        $publish_at = isset( $_POST['_tts_publish_at'] ) ? sanitize_text_field( wp_unslash( $_POST['_tts_publish_at'] ) ) : '';
+        if ( '' !== $publish_at ) {
+            update_post_meta( $post_id, '_tts_publish_at', $publish_at );
+        } else {
+            delete_post_meta( $post_id, '_tts_publish_at' );
+        }
+
+        $client_id = isset( $_POST['tts_client_id'] ) ? absint( $_POST['tts_client_id'] ) : 0;
+        if ( $client_id > 0 ) {
+            update_post_meta( $post_id, '_tts_client_id', $client_id );
+        } else {
+            delete_post_meta( $post_id, '_tts_client_id' );
+        }
+
+        $channel_keys = array( 'facebook', 'instagram', 'youtube', 'tiktok' );
+        foreach ( $channel_keys as $channel_key ) {
+            $meta_key = '_tts_message_' . $channel_key;
+            $message  = isset( $_POST[ $meta_key ] ) ? sanitize_textarea_field( wp_unslash( $_POST[ $meta_key ] ) ) : '';
+            if ( '' !== $message ) {
+                update_post_meta( $post_id, $meta_key, $message );
+            } else {
+                delete_post_meta( $post_id, $meta_key );
+            }
+        }
+
+        $insta_comment = isset( $_POST['_tts_instagram_first_comment'] ) ? sanitize_textarea_field( wp_unslash( $_POST['_tts_instagram_first_comment'] ) ) : '';
+        if ( '' !== $insta_comment ) {
+            update_post_meta( $post_id, '_tts_instagram_first_comment', $insta_comment );
+        } else {
+            delete_post_meta( $post_id, '_tts_instagram_first_comment' );
+        }
+
+        $attachment_ids = array();
+        if ( isset( $_POST['_tts_attachment_ids'] ) ) {
+            $raw_ids = sanitize_text_field( wp_unslash( $_POST['_tts_attachment_ids'] ) );
+            $ids     = array_filter( array_map( 'intval', explode( ',', $raw_ids ) ) );
+            if ( ! empty( $ids ) ) {
+                $attachment_ids = array_values( $ids );
+            }
+        }
+
+        if ( ! empty( $attachment_ids ) ) {
+            update_post_meta( $post_id, '_tts_attachment_ids', $attachment_ids );
+        } else {
+            delete_post_meta( $post_id, '_tts_attachment_ids' );
+        }
+
+        $manual_media = isset( $_POST['_tts_manual_media'] ) ? absint( $_POST['_tts_manual_media'] ) : 0;
+        if ( $manual_media > 0 ) {
+            update_post_meta( $post_id, '_tts_manual_media', $manual_media );
+        } else {
+            delete_post_meta( $post_id, '_tts_manual_media' );
+        }
+
+        $publish_story = isset( $_POST['_tts_publish_story'] ) && '1' === $_POST['_tts_publish_story'];
+        if ( $publish_story ) {
+            update_post_meta( $post_id, '_tts_publish_story', true );
+            $story_media = isset( $_POST['_tts_story_media'] ) ? absint( $_POST['_tts_story_media'] ) : 0;
+            if ( $story_media > 0 ) {
+                update_post_meta( $post_id, '_tts_story_media', $story_media );
+            } else {
+                delete_post_meta( $post_id, '_tts_story_media' );
+            }
+        } else {
+            delete_post_meta( $post_id, '_tts_publish_story' );
+            delete_post_meta( $post_id, '_tts_story_media' );
+        }
+
+        $lat = isset( $_POST['_tts_lat'] ) ? sanitize_text_field( wp_unslash( $_POST['_tts_lat'] ) ) : '';
+        if ( '' !== $lat ) {
+            update_post_meta( $post_id, '_tts_lat', $lat );
+        } else {
+            delete_post_meta( $post_id, '_tts_lat' );
+        }
+
+        $lng = isset( $_POST['_tts_lng'] ) ? sanitize_text_field( wp_unslash( $_POST['_tts_lng'] ) ) : '';
+        if ( '' !== $lng ) {
+            update_post_meta( $post_id, '_tts_lng', $lng );
+        } else {
+            delete_post_meta( $post_id, '_tts_lng' );
+        }
+
+        $allowed_sources = array( 'manual' );
+        if ( class_exists( 'TTS_Content_Source' ) ) {
+            $allowed_sources = array_keys( TTS_Content_Source::SOURCES );
+        }
+
+        $source = isset( $_POST['tts_content_source'] ) ? sanitize_key( wp_unslash( $_POST['tts_content_source'] ) ) : '';
+        if ( '' === $source || ! in_array( $source, $allowed_sources, true ) ) {
+            $source = 'manual';
+        }
+
+        $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
+        if ( 'trello' === $source && ! $trello_enabled ) {
+            $source = 'manual';
+            update_post_meta( $post_id, '_tts_trello_disabled_notice', 'converted' );
+        } else {
+            delete_post_meta( $post_id, '_tts_trello_disabled_notice' );
+        }
+
+        update_post_meta( $post_id, '_tts_content_source', $source );
+
+        $reference = isset( $_POST['tts_source_reference'] ) ? sanitize_text_field( wp_unslash( $_POST['tts_source_reference'] ) ) : '';
+        if ( '' !== $reference ) {
+            update_post_meta( $post_id, '_tts_source_reference', $reference );
+        } else {
+            delete_post_meta( $post_id, '_tts_source_reference' );
+        }
+
+        do_action( 'save_post_tts_social_post', $post_id, get_post( $post_id ), true );
+
+        wp_safe_redirect( add_query_arg( 'tts_created', 1, $redirect ) );
+        exit;
     }
 
     /**
@@ -4956,11 +5429,11 @@ class TTS_Admin {
             }
             
             function handleCreateManual() {
-                window.location.href = '<?php echo admin_url( "post-new.php?post_type=tts_social_post&content_source=manual" ); ?>';
+                window.location.href = "<?php echo esc_url( add_query_arg( array( 'page' => 'fp-publisher-social-posts', 'tts_open_editor' => 1, 'content_source' => 'manual' ), admin_url( 'admin.php' ) ) ); ?>";
             }
-            
+
             function handleUploadFile() {
-                window.location.href = '<?php echo admin_url( "post-new.php?post_type=tts_social_post&content_source=local_upload" ); ?>';
+                window.location.href = "<?php echo esc_url( add_query_arg( array( 'page' => 'fp-publisher-social-posts', 'tts_open_editor' => 1, 'content_source' => 'local_upload' ), admin_url( 'admin.php' ) ) ); ?>";
             }
         });
         </script>
