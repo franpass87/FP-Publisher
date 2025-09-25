@@ -16,8 +16,8 @@
         
         // Configuration
         config: {
-            ajaxUrl: tts_ajax ? tts_ajax.ajax_url : ajaxurl,
-            nonce: tts_ajax ? tts_ajax.nonce : '',
+            ajaxUrl: '',
+            nonce: '',
             loadingClass: 'loading',
             disabledClass: 'disabled'
         },
@@ -26,12 +26,29 @@
          * Initialize core functionality
          */
         init: function() {
+            this.bootstrapConfig();
             this.bindEvents();
+            this.enhanceAjaxButtons();
             this.initTooltips();
             this.initNotifications();
             this.initAjaxForms();
             this.initConfirmations();
             this.setupGlobalKeyHandlers();
+        },
+
+        /**
+         * Prepare runtime configuration derived from localized script data.
+         */
+        bootstrapConfig: function() {
+            const ajaxData = typeof window.tts_ajax !== 'undefined' ? window.tts_ajax : {};
+            const fallbackAjaxUrl = typeof window.ajaxurl !== 'undefined' ? window.ajaxurl : '';
+
+            this.config.ajaxUrl = ajaxData.ajax_url || fallbackAjaxUrl;
+            this.config.nonce = ajaxData.nonce || '';
+
+            if (!this.config.ajaxUrl) {
+                console.error('TTS.Core: ajaxUrl is not defined. AJAX interactions will be disabled until it is provided.');
+            }
         },
 
         /**
@@ -158,13 +175,23 @@
          * Perform AJAX action
          */
         performAjaxAction: function($button, action, extraData = {}) {
+            if (!this.config.ajaxUrl) {
+                this.showNotification('Unable to process the request because the AJAX endpoint is unavailable.', 'error');
+                return;
+            }
+
             const loadingText = $button.data('loading-text') || 'Processing...';
-            const originalText = $button.text();
-            
+            const originalHtml = $button.html();
+            const originalAriaBusy = $button.attr('aria-busy');
+
             // Set loading state
-            $button.addClass(this.config.loadingClass)
-                   .prop('disabled', true)
-                   .text(loadingText);
+            $button
+                .addClass(this.config.loadingClass)
+                .prop('disabled', true)
+                .attr('aria-busy', 'true')
+                .data('tts-original-html', originalHtml)
+                .data('tts-original-aria-busy', typeof originalAriaBusy === 'undefined' ? null : originalAriaBusy)
+                .html('<span class="tts-loading-spinner" aria-hidden="true"></span><span class="tts-loading-label">' + loadingText + '</span>');
 
             // Prepare data
             const data = $.extend({
@@ -176,21 +203,51 @@
             delete data.ajaxAction;
             delete data.confirm;
             delete data.loadingText;
+            delete data.ttsOriginalHtml;
+            delete data.ttsOriginalAriaBusy;
 
             // Perform AJAX request
-            $.post(this.config.ajaxUrl, data)
-                .done((response) => {
-                    this.handleAjaxResponse(response, $button);
-                })
-                .fail((xhr) => {
-                    this.handleAjaxError(xhr, $button);
-                })
-                .always(() => {
-                    // Reset button state
-                    $button.removeClass(this.config.loadingClass)
-                           .prop('disabled', false)
-                           .text(originalText);
-                });
+            $.ajax({
+                url: this.config.ajaxUrl,
+                method: 'POST',
+                data: data,
+                dataType: 'json'
+            })
+            .done((response) => {
+                this.handleAjaxResponse(response, $button);
+            })
+            .fail((xhr) => {
+                this.handleAjaxError(xhr, $button);
+            })
+            .always(() => {
+                this.resetAjaxButton($button);
+            });
+        },
+
+        /**
+         * Restore the original state of an AJAX button after a request completes.
+         */
+        resetAjaxButton: function($button) {
+            const originalHtml = $button.data('tts-original-html');
+            const originalAriaBusy = $button.data('tts-original-aria-busy');
+
+            if (typeof originalHtml !== 'undefined') {
+                $button.html(originalHtml);
+                $button.removeData('tts-original-html');
+            }
+
+            if (typeof originalAriaBusy === 'undefined') {
+                $button.removeAttr('aria-busy');
+            } else if (originalAriaBusy === null) {
+                $button.removeAttr('aria-busy');
+                $button.removeData('tts-original-aria-busy');
+            } else {
+                $button.attr('aria-busy', originalAriaBusy);
+                $button.removeData('tts-original-aria-busy');
+            }
+
+            $button.removeClass(this.config.loadingClass)
+                .prop('disabled', false);
         },
 
         /**
@@ -229,6 +286,11 @@
             formData.set('action', action);
             if (this.config.nonce) {
                 formData.set('nonce', this.config.nonce);
+            }
+
+            if (!this.config.ajaxUrl) {
+                this.showNotification('Unable to submit the form because the AJAX endpoint is unavailable.', 'error');
+                return;
             }
 
             // Set loading state
@@ -365,6 +427,30 @@
         updateBulkActions: function() {
             const hasSelected = $('.tts-bulk-select-item:checked').length > 0;
             $('.tts-bulk-actions').toggleClass('has-selection', hasSelected);
+            $('.tts-bulk-action').prop('disabled', !hasSelected);
+        },
+
+        /**
+         * Ensure AJAX-enabled buttons are consistently configured.
+         */
+        enhanceAjaxButtons: function() {
+            $('[data-ajax-action]').each(function() {
+                const $element = $(this);
+                const action = $element.data('ajax-action');
+
+                if (!action) {
+                    console.warn('TTS.Core: Element is missing a data-ajax-action attribute and will not trigger AJAX requests.', this);
+                    return;
+                }
+
+                if ($element.is('button') && !$element.attr('type')) {
+                    $element.attr('type', 'button');
+                }
+
+                if ($element.is('a') && !$element.attr('role')) {
+                    $element.attr('role', 'button');
+                }
+            });
         },
 
         /**
