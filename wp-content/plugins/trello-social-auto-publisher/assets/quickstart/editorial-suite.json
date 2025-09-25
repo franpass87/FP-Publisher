@@ -1,0 +1,38 @@
+{
+  "name": "FP Publisher - Editorial Suite",
+  "description": "Board di riferimento per il pacchetto Quickstart 'Editorial Suite'. Pensata per team editoriali multi-canale.",
+  "labels": [
+    { "name": "Facebook", "color": "blue" },
+    { "name": "Instagram", "color": "purple" },
+    { "name": "YouTube", "color": "red" },
+    { "name": "TikTok", "color": "pink" },
+    { "name": "Blog", "color": "orange" }
+  ],
+  "lists": [
+    { "name": "Briefing", "pos": 100 },
+    { "name": "Produzione", "pos": 200 },
+    { "name": "Revisione", "pos": 300 },
+    { "name": "Pronto Social", "pos": 400 },
+    { "name": "Pubblicato", "pos": 500 },
+    { "name": "Archivio", "pos": 600 }
+  ],
+  "example_cards": [
+    {
+      "name": "Campagna lancio prodotto",
+      "desc": "Card modello con checklist per asset lunghi (blog, video) e short-form.",
+      "labels": ["Facebook", "Instagram", "YouTube", "TikTok", "Blog"],
+      "checklist": [
+        "Script video approvato",
+        "Copertine e grafiche caricate",
+        "SEO e metadata verificati",
+        "Pianificazione completata in FP Publisher"
+      ],
+      "list": "Briefing"
+    }
+  ],
+  "guidelines": [
+    "Usa le checklist per coordinare copywriter, video editor e social media manager",
+    "Aggiorna la data di pubblicazione nelle custom field Trello e nel calendario di FP Publisher",
+    "Duplica la card per ogni episodio o rubrica ricorrente"
+  ]
+}

@@ -109,7 +109,24 @@ class TTS_Monitoring {
                 'message' => 'High error rate detected: ' . $error_health['error_rate'] . '%'
             );
         }
-        
+
+        // Token health check
+        $token_health = self::assess_token_health();
+        $health_data['checks']['tokens'] = $token_health;
+        if ( isset( $token_health['status'] ) && ! $token_health['status'] ) {
+            $health_data['score'] -= 15;
+
+            if ( ! empty( $token_health['alerts'] ) ) {
+                $health_data['alerts'] = array_merge( $health_data['alerts'], $token_health['alerts'] );
+            } else {
+                $health_data['alerts'][] = array(
+                    'type'     => 'tokens',
+                    'severity' => 'medium',
+                    'message'  => isset( $token_health['message'] ) ? $token_health['message'] : __( 'I token social richiedono attenzione.', 'fp-publisher' ),
+                );
+            }
+        }
+
         // Store health data
         update_option( 'tts_last_health_check', $health_data );
         
@@ -383,9 +400,9 @@ class TTS_Monitoring {
      */
     private static function check_error_rates() {
         global $wpdb;
-        
+
         $logs_table = $wpdb->prefix . 'tts_logs';
-        
+
         // Count total and error logs in last 24 hours
         $total_logs = $wpdb->get_var( "
             SELECT COUNT(*) FROM {$logs_table}
@@ -405,6 +422,657 @@ class TTS_Monitoring {
             'error_logs' => (int) $error_logs,
             'error_rate' => round( $error_rate, 2 )
         );
+    }
+
+    /**
+     * Assess the health of stored social tokens across clients.
+     *
+     * @return array<string, mixed>
+     */
+    private static function assess_token_health() {
+        $channels = array(
+            'facebook'  => array(
+                'label'       => 'Facebook',
+                'token_meta'  => '_tts_fb_token',
+                'expires_meta'=> '_tts_fb_token_expires_at',
+            ),
+            'instagram' => array(
+                'label'       => 'Instagram',
+                'token_meta'  => '_tts_ig_token',
+                'expires_meta'=> '_tts_ig_token_expires_at',
+            ),
+            'youtube'   => array(
+                'label'       => 'YouTube',
+                'token_meta'  => '_tts_yt_token',
+                'expires_meta'=> '_tts_yt_token_expires_at',
+            ),
+            'tiktok'    => array(
+                'label'       => 'TikTok',
+                'token_meta'  => '_tts_tt_token',
+                'expires_meta'=> '_tts_tt_token_expires_at',
+            ),
+        );
+
+        $clients = get_posts(
+            array(
+                'post_type'      => 'tts_client',
+                'fields'         => 'ids',
+                'posts_per_page' => -1,
+                'post_status'    => 'any',
+            )
+        );
+
+        $summary = array(
+            'status'          => true,
+            'message'         => __( 'Tutti i token social risultano validi.', 'fp-publisher' ),
+            'missing_tokens'  => array(),
+            'expiring_tokens' => array(),
+            'stale_tokens'    => array(),
+            'alerts'          => array(),
+        );
+
+        if ( empty( $clients ) ) {
+            return $summary;
+        }
+
+        $now                = time();
+        $critical_threshold = DAY_IN_SECONDS;
+        $warning_threshold  = 3 * DAY_IN_SECONDS;
+
+        foreach ( $clients as $client_id ) {
+            $client_name = get_the_title( $client_id );
+
+            foreach ( $channels as $channel => $meta ) {
+                $token_value = trim( (string) get_post_meta( $client_id, $meta['token_meta'], true ) );
+
+                if ( '' === $token_value ) {
+                    $summary['status'] = false;
+                    $summary['missing_tokens'][] = array(
+                        'client_id'     => $client_id,
+                        'client_name'   => $client_name,
+                        'channel'       => $channel,
+                        'channel_label' => $meta['label'],
+                    );
+                    $summary['alerts'][] = array(
+                        'type'     => 'tokens',
+                        'severity' => 'high',
+                        'message'  => sprintf( __( 'Token mancante per %1$s (%2$s).', 'fp-publisher' ), $client_name, $meta['label'] ),
+                    );
+                    continue;
+                }
+
+                $expires_at = isset( $meta['expires_meta'] ) ? (int) get_post_meta( $client_id, $meta['expires_meta'], true ) : 0;
+                if ( $expires_at > 0 ) {
+                    $time_remaining = $expires_at - $now;
+
+                    if ( $time_remaining <= 0 ) {
+                        $summary['status'] = false;
+                        $summary['missing_tokens'][] = array(
+                            'client_id'     => $client_id,
+                            'client_name'   => $client_name,
+                            'channel'       => $channel,
+                            'channel_label' => $meta['label'],
+                        );
+                        $summary['alerts'][] = array(
+                            'type'     => 'tokens',
+                            'severity' => 'high',
+                            'message'  => sprintf( __( 'Token scaduto per %1$s (%2$s).', 'fp-publisher' ), $client_name, $meta['label'] ),
+                        );
+                        continue;
+                    }
+
+                    if ( $time_remaining <= $critical_threshold ) {
+                        $summary['status'] = false;
+                        $summary['expiring_tokens'][] = array(
+                            'client_id'     => $client_id,
+                            'client_name'   => $client_name,
+                            'channel'       => $channel,
+                            'channel_label' => $meta['label'],
+                            'seconds'       => $time_remaining,
+                        );
+                        $summary['alerts'][] = array(
+                            'type'     => 'tokens',
+                            'severity' => 'high',
+                            'message'  => sprintf( __( 'Il token di %1$s (%2$s) scade entro 24 ore.', 'fp-publisher' ), $client_name, $meta['label'] ),
+                        );
+                    } elseif ( $time_remaining <= $warning_threshold ) {
+                        $summary['status'] = false;
+                        $summary['expiring_tokens'][] = array(
+                            'client_id'     => $client_id,
+                            'client_name'   => $client_name,
+                            'channel'       => $channel,
+                            'channel_label' => $meta['label'],
+                            'seconds'       => $time_remaining,
+                        );
+                        $summary['alerts'][] = array(
+                            'type'     => 'tokens',
+                            'severity' => 'medium',
+                            'message'  => sprintf( __( 'Il token di %1$s (%2$s) scadrà nei prossimi giorni.', 'fp-publisher' ), $client_name, $meta['label'] ),
+                        );
+                    }
+                } else {
+                    $summary['stale_tokens'][] = array(
+                        'client_id'     => $client_id,
+                        'client_name'   => $client_name,
+                        'channel'       => $channel,
+                        'channel_label' => $meta['label'],
+                    );
+                }
+            }
+        }
+
+        if ( ! empty( $summary['missing_tokens'] ) ) {
+            $summary['message'] = __( 'Sono presenti clienti senza token social configurati.', 'fp-publisher' );
+        } elseif ( ! empty( $summary['expiring_tokens'] ) ) {
+            $summary['message'] = __( 'Alcuni token stanno per scadere e richiedono rinnovo.', 'fp-publisher' );
+        } elseif ( ! empty( $summary['stale_tokens'] ) ) {
+            $summary['message'] = __( 'Alcuni token non indicano la data di scadenza: verifica le integrazioni.', 'fp-publisher' );
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Get actionable remediation suggestions based on the latest health snapshot.
+     *
+     * @param array $health_data Optional pre-fetched health data.
+     * @return array<int, array<string, string>>
+     */
+    public static function get_remediation_suggestions( $health_data = array() ) {
+        if ( empty( $health_data ) || ! is_array( $health_data ) ) {
+            $health_data = get_option( 'tts_last_health_check', array() );
+        }
+
+        if ( empty( $health_data ) || ! is_array( $health_data ) ) {
+            return array();
+        }
+
+        $suggestions = array();
+
+        $add_suggestion = static function ( $title, $description, $link = '' ) use ( &$suggestions ) {
+            $entry = array(
+                'title'       => $title,
+                'description' => $description,
+            );
+
+            if ( '' !== $link ) {
+                $entry['link'] = $link;
+            }
+
+            $suggestions[] = $entry;
+        };
+
+        $admin_url = admin_url( 'admin.php' );
+
+        $format_token_list = static function ( array $entries ) {
+            if ( empty( $entries ) ) {
+                return '';
+            }
+
+            $labels = array();
+            foreach ( $entries as $entry ) {
+                $client  = isset( $entry['client_name'] ) ? $entry['client_name'] : __( 'Cliente', 'fp-publisher' );
+                $channel = isset( $entry['channel_label'] ) ? $entry['channel_label'] : ( isset( $entry['channel'] ) ? ucfirst( $entry['channel'] ) : __( 'Canale', 'fp-publisher' ) );
+                $labels[] = $client . ' – ' . $channel;
+            }
+
+            $max = 3;
+            if ( count( $labels ) > $max ) {
+                $remaining = count( $labels ) - $max;
+                $labels    = array_slice( $labels, 0, $max );
+                $labels[]  = sprintf( _n( '+%d altro', '+%d altri', $remaining, 'fp-publisher' ), $remaining );
+            }
+
+            return implode( ', ', $labels );
+        };
+
+        if ( isset( $health_data['checks']['api_connections'] ) ) {
+            $api_health = $health_data['checks']['api_connections'];
+
+            if ( ! empty( $api_health['platform_status'] ) && is_array( $api_health['platform_status'] ) ) {
+                foreach ( $api_health['platform_status'] as $platform => $status ) {
+                    if ( empty( $status['success'] ) ) {
+                        $message = isset( $status['message'] ) ? $status['message'] : __( 'Connection requires attention.', 'fp-publisher' );
+                        $platform_name = ucfirst( $platform );
+                        $add_suggestion(
+                            sprintf( __( 'Re-authorize %s', 'fp-publisher' ), $platform_name ),
+                            sprintf( __( '%1$s reports "%2$s". Apri la pagina Connessioni Social per aggiornare token e credenziali.', 'fp-publisher' ), $platform_name, $message ),
+                            add_query_arg( array( 'page' => 'fp-publisher-social-connections' ), $admin_url )
+                        );
+                    }
+                }
+            }
+
+            if ( isset( $api_health['failed_connections'] ) && $api_health['failed_connections'] > 0 ) {
+                $add_suggestion(
+                    __( 'Controlla le quote API', 'fp-publisher' ),
+                    __( 'Una o più integrazioni stanno restituendo errori. Verifica i limiti di utilizzo dalle console dei vari provider.', 'fp-publisher' ),
+                    add_query_arg( array( 'page' => 'fp-publisher-test-connections' ), $admin_url )
+                );
+            }
+        }
+
+        if ( isset( $health_data['checks']['scheduler'] ) ) {
+            $scheduler = $health_data['checks']['scheduler'];
+            if ( ! empty( $scheduler['details'] ) && is_array( $scheduler['details'] ) ) {
+                foreach ( $scheduler['details'] as $hook => $status ) {
+                    if ( 'not_scheduled' === $status ) {
+                        $add_suggestion(
+                            __( 'Ripristina le attività pianificate', 'fp-publisher' ),
+                            sprintf( __( 'La routine "%s" non è pianificata. Esegui un controllo cron o salva di nuovo le impostazioni per riattivarla.', 'fp-publisher' ), $hook ),
+                            add_query_arg( array( 'page' => 'fp-publisher-health' ), $admin_url )
+                        );
+                    }
+                }
+            }
+        }
+
+        if ( isset( $health_data['checks']['tokens'] ) ) {
+            $token_health = $health_data['checks']['tokens'];
+
+            if ( ! empty( $token_health['missing_tokens'] ) ) {
+                $add_suggestion(
+                    __( 'Completa i token mancanti', 'fp-publisher' ),
+                    sprintf( __( 'Clienti da aggiornare: %s.', 'fp-publisher' ), $format_token_list( $token_health['missing_tokens'] ) ),
+                    admin_url( 'edit.php?post_type=tts_client' )
+                );
+            }
+
+            if ( ! empty( $token_health['expiring_tokens'] ) ) {
+                $add_suggestion(
+                    __( 'Rinnova i token in scadenza', 'fp-publisher' ),
+                    sprintf( __( 'Token prossimi alla scadenza: %s.', 'fp-publisher' ), $format_token_list( $token_health['expiring_tokens'] ) ),
+                    add_query_arg( array( 'page' => 'fp-publisher-social-connections' ), $admin_url )
+                );
+            }
+
+            if ( ! empty( $token_health['stale_tokens'] ) ) {
+                $add_suggestion(
+                    __( 'Verifica la durata dei token', 'fp-publisher' ),
+                    sprintf( __( 'Aggiorna le integrazioni per registrare la scadenza dei token: %s.', 'fp-publisher' ), $format_token_list( $token_health['stale_tokens'] ) ),
+                    add_query_arg( array( 'page' => 'fp-publisher-test-connections' ), $admin_url )
+                );
+            }
+        }
+
+        global $wpdb;
+        $logs_table = $wpdb->prefix . 'tts_logs';
+
+        // Highlight webhook delivery issues.
+        $webhook_errors = (int) $wpdb->get_var( "
+            SELECT COUNT(*) FROM {$logs_table}
+            WHERE channel = 'webhook'
+              AND status = 'error'
+              AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        " );
+
+        if ( $webhook_errors > 0 ) {
+            $add_suggestion(
+                __( 'Rinnova il webhook Trello', 'fp-publisher' ),
+                __( 'Sono stati registrati errori webhook nelle ultime 24 ore. Conferma che il board Trello sia raggiungibile e rinnova il webhook.', 'fp-publisher' ),
+                add_query_arg( array( 'page' => 'fp-publisher-health' ), $admin_url )
+            );
+        }
+
+        // Detect API quota related messages.
+        $quota_errors = (int) $wpdb->get_var( $wpdb->prepare( "
+            SELECT COUNT(*) FROM {$logs_table}
+            WHERE status = 'error'
+              AND message LIKE %s
+              AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        ", '%quota%' ) );
+
+        if ( $quota_errors > 0 ) {
+            $add_suggestion(
+                __( 'Pianifica un raffreddamento delle API', 'fp-publisher' ),
+                __( 'Sono stati rilevati errori di quota API. Valuta di ridurre la frequenza delle pubblicazioni o di suddividerle su fasce orarie diverse.', 'fp-publisher' ),
+                add_query_arg( array( 'page' => 'fp-publisher-frequency-status' ), $admin_url )
+            );
+        }
+
+        // Highlight token refresh issues in logs.
+        $token_errors = (int) $wpdb->get_var( $wpdb->prepare( "
+            SELECT COUNT(*) FROM {$logs_table}
+            WHERE status = 'error'
+              AND channel IN ('facebook', 'instagram', 'youtube', 'tiktok')
+              AND (message LIKE %s OR message LIKE %s)
+              AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        ", '%token%', '%auth%' ) );
+
+        if ( $token_errors > 0 ) {
+            $add_suggestion(
+                __( 'Aggiorna i token scaduti', 'fp-publisher' ),
+                __( 'Il registro mostra errori di autenticazione recenti. Accedi di nuovo ai canali social per generare token aggiornati.', 'fp-publisher' ),
+                add_query_arg( array( 'page' => 'fp-publisher-social-connections' ), $admin_url )
+            );
+        }
+
+        return $suggestions;
+    }
+
+    /**
+     * Build an actionable health summary for key components.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function get_actionable_health_summary() {
+        $health_data = get_option( 'tts_last_health_check', array() );
+        $summary     = array();
+
+        $raise_severity = static function ( array &$item, $candidate ) {
+            $current_level = TTS_Monitoring::get_status_level_weight( isset( $item['status'] ) ? $item['status'] : 'ok' );
+            $new_level     = TTS_Monitoring::get_status_level_weight( $candidate );
+
+            if ( $new_level > $current_level ) {
+                $item['status'] = $candidate;
+            }
+        };
+
+        $token_overview = array(
+            'key'         => 'tokens',
+            'label'       => __( 'Token social', 'fp-publisher' ),
+            'status'      => 'ok',
+            'description' => __( 'Tutti i token risultano validi.', 'fp-publisher' ),
+            'count'       => 0,
+            'actions'     => array(),
+        );
+
+        if ( isset( $health_data['checks']['tokens'] ) && is_array( $health_data['checks']['tokens'] ) ) {
+            $token_health          = $health_data['checks']['tokens'];
+            $missing_tokens        = isset( $token_health['missing_tokens'] ) ? (array) $token_health['missing_tokens'] : array();
+            $expiring_tokens       = isset( $token_health['expiring_tokens'] ) ? (array) $token_health['expiring_tokens'] : array();
+            $stale_tokens          = isset( $token_health['stale_tokens'] ) ? (array) $token_health['stale_tokens'] : array();
+            $affected_integrations = count( $missing_tokens ) + count( $expiring_tokens );
+
+            if ( $affected_integrations > 0 ) {
+                $token_overview['count']       = $affected_integrations;
+                $token_overview['description'] = sprintf(
+                    /* translators: %d: number of integrations without a valid token. */
+                    __( '%d integrazioni richiedono un token valido o aggiornato.', 'fp-publisher' ),
+                    (int) $affected_integrations
+                );
+            }
+
+            if ( ! empty( $missing_tokens ) ) {
+                $token_overview['affected_clients'] = array_map(
+                    static function ( $entry ) {
+                        return isset( $entry['client_name'] ) ? $entry['client_name'] : '';
+                    },
+                    $missing_tokens
+                );
+
+                $token_overview['actions'][] = array(
+                    'description' => __( 'Completa le credenziali mancanti per i client interessati.', 'fp-publisher' ),
+                    'url'         => admin_url( 'edit.php?post_type=tts_client' ),
+                );
+
+                $raise_severity( $token_overview, 'critical' );
+            }
+
+            if ( ! empty( $expiring_tokens ) ) {
+                $token_overview['actions'][] = array(
+                    'description' => __( 'Rinnova i token in scadenza dalla pagina Connessioni social.', 'fp-publisher' ),
+                    'url'         => add_query_arg( array( 'page' => 'fp-publisher-social-connections' ), admin_url( 'admin.php' ) ),
+                );
+
+                $raise_severity( $token_overview, 'warning' );
+            }
+
+            if ( empty( $missing_tokens ) && empty( $expiring_tokens ) && ! empty( $stale_tokens ) ) {
+                $token_overview['description'] = __( 'Aggiorna la data di scadenza per alcune integrazioni.', 'fp-publisher' );
+                $token_overview['actions'][]   = array(
+                    'description' => __( 'Apri la pagina di test connessioni per registrare le nuove scadenze.', 'fp-publisher' ),
+                    'url'         => add_query_arg( array( 'page' => 'fp-publisher-test-connections' ), admin_url( 'admin.php' ) ),
+                );
+
+                $raise_severity( $token_overview, 'warning' );
+            }
+        }
+
+        $summary[] = $token_overview;
+
+        $scheduler_overview = array(
+            'key'         => 'scheduler',
+            'label'       => __( 'Attività pianificate', 'fp-publisher' ),
+            'status'      => 'ok',
+            'description' => __( 'Tutte le routine richieste risultano pianificate.', 'fp-publisher' ),
+            'count'       => 0,
+            'actions'     => array(),
+        );
+
+        if ( isset( $health_data['checks']['scheduler'] ) && is_array( $health_data['checks']['scheduler'] ) ) {
+            $scheduler_checks = $health_data['checks']['scheduler'];
+
+            if ( isset( $scheduler_checks['details'] ) && is_array( $scheduler_checks['details'] ) ) {
+                $missing_hooks = array_keys(
+                    array_filter(
+                        $scheduler_checks['details'],
+                        static function ( $status ) {
+                            return 'scheduled' !== $status;
+                        }
+                    )
+                );
+
+                if ( ! empty( $missing_hooks ) ) {
+                    $scheduler_overview['count']       = count( $missing_hooks );
+                    $scheduler_overview['description'] = sprintf(
+                        /* translators: %d: number of missing cron hooks. */
+                        __( '%d routine non risultano pianificate.', 'fp-publisher' ),
+                        (int) $scheduler_overview['count']
+                    );
+
+                    $scheduler_overview['details']   = $missing_hooks;
+                    $scheduler_overview['actions'][] = array(
+                        'description' => __( 'Apri la pagina Salute per riattivare le attività e controllare WP-Cron.', 'fp-publisher' ),
+                        'url'         => add_query_arg( array( 'page' => 'fp-publisher-health' ), admin_url( 'admin.php' ) ),
+                    );
+
+                    $raise_severity( $scheduler_overview, 'critical' );
+                }
+            }
+        }
+
+        $summary[] = $scheduler_overview;
+
+        global $wpdb;
+        $logs_table   = $wpdb->prefix . 'tts_logs';
+        $logs_enabled = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $logs_table ) );
+
+        $webhook_overview = array(
+            'key'         => 'webhook',
+            'label'       => __( 'Consegna webhook', 'fp-publisher' ),
+            'status'      => 'ok',
+            'description' => __( 'Nessun errore webhook nelle ultime 24 ore.', 'fp-publisher' ),
+            'count'       => 0,
+            'actions'     => array(),
+        );
+
+        $webhook_errors = 0;
+        if ( $logs_enabled ) {
+            $webhook_errors = (int) $wpdb->get_var( "
+                SELECT COUNT(*) FROM {$logs_table}
+                WHERE channel = 'webhook'
+                  AND status = 'error'
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            " );
+        }
+
+        if ( $webhook_errors > 0 ) {
+            $webhook_overview['count']       = $webhook_errors;
+            $webhook_overview['description'] = sprintf(
+                /* translators: %d: number of webhook errors. */
+                __( '%d errori webhook rilevati nelle ultime 24 ore.', 'fp-publisher' ),
+                (int) $webhook_errors
+            );
+
+            $webhook_overview['actions'][] = array(
+                'description' => __( 'Verifica lo stato del webhook Trello e rinnova la sottoscrizione.', 'fp-publisher' ),
+                'url'         => add_query_arg( array( 'page' => 'fp-publisher-health' ), admin_url( 'admin.php' ) ),
+            );
+
+            $raise_severity( $webhook_overview, $webhook_errors > 3 ? 'critical' : 'warning' );
+        }
+
+        $summary[] = $webhook_overview;
+
+        $quota_overview = array(
+            'key'         => 'api_quota',
+            'label'       => __( 'Quote API', 'fp-publisher' ),
+            'status'      => 'ok',
+            'description' => __( 'Nessun errore di quota registrato.', 'fp-publisher' ),
+            'count'       => 0,
+            'actions'     => array(),
+        );
+
+        $quota_errors = 0;
+        if ( $logs_enabled ) {
+            $quota_errors = (int) $wpdb->get_var( $wpdb->prepare( "
+                SELECT COUNT(*) FROM {$logs_table}
+                WHERE status = 'error'
+                  AND message LIKE %s
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            ", '%quota%' ) );
+        }
+
+        if ( $quota_errors > 0 ) {
+            $quota_overview['count']       = $quota_errors;
+            $quota_overview['description'] = sprintf(
+                /* translators: %d: number of quota related errors. */
+                __( '%d errori legati alle quote API nelle ultime 24 ore.', 'fp-publisher' ),
+                (int) $quota_errors
+            );
+
+            $quota_overview['actions'][] = array(
+                'description' => __( 'Riduci la frequenza di pubblicazione o suddividi le campagne.', 'fp-publisher' ),
+                'url'         => add_query_arg( array( 'page' => 'fp-publisher-frequency-status' ), admin_url( 'admin.php' ) ),
+            );
+
+            $raise_severity( $quota_overview, $quota_errors > 5 ? 'critical' : 'warning' );
+        }
+
+        $summary[] = $quota_overview;
+
+        if ( isset( $health_data['checks']['database'] ) && is_array( $health_data['checks']['database'] ) ) {
+            $database    = $health_data['checks']['database'];
+            $db_overview = array(
+                'key'         => 'database',
+                'label'       => __( 'Database', 'fp-publisher' ),
+                'status'      => ! empty( $database['status'] ) ? 'ok' : 'critical',
+                'description' => isset( $database['message'] ) ? $database['message'] : __( 'Database non verificato.', 'fp-publisher' ),
+                'actions'     => array(),
+            );
+
+            if ( isset( $database['status'] ) && ! $database['status'] ) {
+                $db_overview['actions'][] = array(
+                    'description' => __( 'Esegui l’ottimizzazione tabelle dal pannello manutenzione.', 'fp-publisher' ),
+                    'url'         => add_query_arg( array( 'page' => 'fp-publisher-health' ), admin_url( 'admin.php' ) ),
+                );
+            }
+
+            if ( isset( $database['details']['response_time_ms'] ) && $database['details']['response_time_ms'] > 1200 ) {
+                $response_time = number_format_i18n( (float) $database['details']['response_time_ms'], 2 );
+                $db_overview['description'] = sprintf(
+                    /* translators: %s: database response time. */
+                    __( 'Tempo di risposta elevato: %s ms.', 'fp-publisher' ),
+                    $response_time
+                );
+
+                $raise_severity( $db_overview, 'warning' );
+            }
+
+            $summary[] = $db_overview;
+        }
+
+        if ( isset( $health_data['checks']['api_connections'] ) && is_array( $health_data['checks']['api_connections'] ) ) {
+            $api_health   = $health_data['checks']['api_connections'];
+            $api_overview = array(
+                'key'         => 'api_connections',
+                'label'       => __( 'Connessioni API', 'fp-publisher' ),
+                'status'      => 'ok',
+                'description' => __( 'Tutte le integrazioni rispondono correttamente.', 'fp-publisher' ),
+                'count'       => 0,
+                'actions'     => array(),
+            );
+
+            if ( isset( $api_health['failed_connections'] ) && $api_health['failed_connections'] > 0 ) {
+                $api_overview['count']       = (int) $api_health['failed_connections'];
+                $api_overview['description'] = sprintf(
+                    /* translators: %d: number of failing API connections. */
+                    __( '%d integrazioni stanno riportando errori.', 'fp-publisher' ),
+                    (int) $api_overview['count']
+                );
+
+                $api_overview['actions'][] = array(
+                    'description' => __( 'Apri il pannello di test per ristabilire le connessioni.', 'fp-publisher' ),
+                    'url'         => add_query_arg( array( 'page' => 'fp-publisher-test-connections' ), admin_url( 'admin.php' ) ),
+                );
+
+                $raise_severity( $api_overview, $api_overview['count'] > 2 ? 'critical' : 'warning' );
+            }
+
+            $summary[] = $api_overview;
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Translate status label to sorting weight.
+     *
+     * @param string $status Status label.
+     * @return int
+     */
+    private static function get_status_level_weight( $status ) {
+        switch ( $status ) {
+            case 'critical':
+                return 3;
+            case 'warning':
+                return 2;
+            case 'ok':
+            default:
+                return 1;
+        }
+    }
+
+    /**
+     * Return a summary of scheduled maintenance hooks and their next execution.
+     *
+     * @return array<int, array<string, string|int|null>>
+     */
+    public static function get_scheduled_task_summary() {
+        $tasks = array(
+            'tts_refresh_tokens'      => array(
+                'label' => __( 'Refresh token social', 'fp-publisher' ),
+                'frequency' => __( 'Settimanale', 'fp-publisher' ),
+            ),
+            'tts_hourly_health_check' => array(
+                'label' => __( 'Verifica salute sistema', 'fp-publisher' ),
+                'frequency' => __( 'Oraria', 'fp-publisher' ),
+            ),
+            'tts_fetch_metrics'       => array(
+                'label' => __( 'Import metriche canali', 'fp-publisher' ),
+                'frequency' => __( 'Ogni 6 ore', 'fp-publisher' ),
+            ),
+            'tts_check_links'         => array(
+                'label' => __( 'Link checker contenuti', 'fp-publisher' ),
+                'frequency' => __( 'Giornaliera', 'fp-publisher' ),
+            ),
+        );
+
+        $summary = array();
+
+        foreach ( $tasks as $hook => $meta ) {
+            $next_run = wp_next_scheduled( $hook );
+            $summary[] = array(
+                'hook'      => $hook,
+                'label'     => $meta['label'],
+                'frequency' => $meta['frequency'],
+                'next_run'  => $next_run ? $next_run : null,
+                'status'    => $next_run ? 'scheduled' : 'missing',
+            );
+        }
+
+        return $summary;
     }
     
     /**

@@ -1,0 +1,49 @@
+name: Build Release Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Generate distributable artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer
+          extensions: mbstring, json
+
+      - name: Make packaging script executable
+        run: chmod +x wp-content/plugins/trello-social-auto-publisher/tools/build-release-package.sh
+
+      - name: Build release package
+        run: bash wp-content/plugins/trello-social-auto-publisher/tools/build-release-package.sh
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fp-publisher-release-${{ github.run_number }}
+          path: build/release/artifacts/
+          retention-days: 14
+
+      - name: Attach artifacts to tag
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            build/release/artifacts/trello-social-auto-publisher-*.zip
+            build/release/artifacts/checksums.txt
+            build/release/artifacts/manifest.json
+            build/release/artifacts/release-notes.md
+          body_path: build/release/artifacts/release-notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
