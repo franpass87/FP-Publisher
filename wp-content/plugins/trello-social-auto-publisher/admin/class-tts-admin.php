@@ -666,6 +666,9 @@ class TTS_Admin {
             case 'fp-publisher_page_fp-publisher-ai-features':
                 $this->enqueue_ai_features_assets();
                 break;
+            case 'fp-publisher_page_fp-publisher-log':
+                $this->enqueue_shared_admin_page_assets();
+                break;
             case 'fp-publisher-clienti_page_fp-publisher-social-posts':
                 $this->enqueue_shared_admin_page_assets();
                 $this->enqueue_social_post_editor_assets();
