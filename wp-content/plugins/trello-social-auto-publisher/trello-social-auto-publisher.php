@@ -496,6 +496,7 @@ add_action( 'plugins_loaded', function () {
         'class-tts-workflow-system.php',
         'class-tts-advanced-media.php',
         'class-tts-integration-hub.php',
+        'class-tts-cli.php',
         'tts-logger.php',
         'tts-notify.php',
         'tts-template.php',

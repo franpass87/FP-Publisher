@@ -1,0 +1,34 @@
+{
+  "name": "FP Publisher - Starter Social",
+  "description": "Board template per il pacchetto Quickstart 'Starter Social'. Include le colonne e le etichette suggerite dal plugin.",
+  "labels": [
+    { "name": "Facebook", "color": "blue" },
+    { "name": "Instagram", "color": "purple" },
+    { "name": "Pronto", "color": "green" }
+  ],
+  "lists": [
+    { "name": "Idee", "pos": 100 },
+    { "name": "In approvazione", "pos": 200 },
+    { "name": "Pronto", "pos": 300 },
+    { "name": "Pubblicato", "pos": 400 },
+    { "name": "Archivio", "pos": 500 }
+  ],
+  "example_cards": [
+    {
+      "name": "Post di esempio",
+      "desc": "Usa questa card per definire tono, canali e asset da allegare al contenuto.",
+      "labels": ["Facebook", "Instagram"],
+      "checklist": [
+        "Copy approvato",
+        "Grafica caricata",
+        "Asset programmati su FP Publisher"
+      ],
+      "list": "Idee"
+    }
+  ],
+  "guidelines": [
+    "Etichette Facebook/Instagram per distinguere i canali da sincronizzare",
+    "Sposta la card in 'Pronto' quando i contenuti sono schedulati in FP Publisher",
+    "Archivia periodicamente le card completate per mantenere la board pulita"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+    "name": "fp-publisher/trello-social-auto-publisher",
+    "description": "Operational tooling and automation for the Trello Social Auto Publisher plugin.",
+    "type": "project",
+    "license": "GPL-2.0-or-later",
+    "require": {},
+    "require-dev": {},
+    "scripts": {
+        "test": "bash tools/run-tests.sh"
+    }
+}

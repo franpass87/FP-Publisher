@@ -14,6 +14,8 @@ Plugin WordPress per l'automazione della pubblicazione sui social e sui blog a p
 - [Automazioni e workflow](#automazioni-e-workflow)
 - [Sicurezza, qualità e compliance](#sicurezza-qualità-e-compliance)
 - [Performance e monitoraggio](#performance-e-monitoraggio)
+- [Strumenti da riga di comando](#strumenti-da-riga-di-comando)
+- [Qualità e test automatici](#qualità-e-test-automatici)
 - [Documentazione di riferimento](#documentazione-di-riferimento)
 - [Storico versioni](#storico-versioni)
 - [Supporto](#supporto)
@@ -26,6 +28,23 @@ FP Publisher centralizza la gestione dei contenuti provenienti da Trello e da so
 2. Apri l'ultima esecuzione completata del workflow **Build WordPress Plugin**.
 3. Scarica l'artifact `fp-publisher-wordpress-plugin-latest`.
 4. Carica il file ZIP in **WordPress Admin → Plugin → Aggiungi nuovo → Carica plugin**.
+5. In alternativa avvia il workflow [Build Release Package](https://github.com/franpass87/FP-Publisher/actions/workflows/release-package.yml) per ottenere automaticamente ZIP firmato, checksum, manifest e note di rilascio.
+
+### Genera un pacchetto in locale
+Per creare un pacchetto firmato direttamente dall'ambiente di sviluppo esegui:
+
+```bash
+chmod +x wp-content/plugins/trello-social-auto-publisher/tools/build-release-package.sh
+wp-content/plugins/trello-social-auto-publisher/tools/build-release-package.sh
+```
+
+Lo script produce:
+- `build/release/trello-social-auto-publisher-<versione>.zip`
+- `build/release/artifacts/checksums.txt`
+- `build/release/artifacts/release-notes.md`
+- `build/release/artifacts/manifest.json`
+
+Il numero di versione viene letto automaticamente dall'header del plugin o, in sua assenza, generato con timestamp.
 
 ### Requisiti
 - WordPress 6.0 o superiore.
@@ -36,11 +55,14 @@ FP Publisher centralizza la gestione dei contenuti provenienti da Trello e da so
 ## Funzionalità principali
 - **Dashboard operativa:** statistiche aggregate, attività recenti e scorciatoie verso le sezioni chiave.
 - **Clienti e credenziali:** gestione multi-cliente con metabox dedicati per secret, token e mappature Trello → canali social.
-- **Client Wizard:** onboarding guidato con verifica webhook, configurazione API e mappatura delle liste.
+- **Client Wizard:** onboarding guidato con checklist dinamica, percentuale di completamento, suggerimenti contestuali, test immediati delle credenziali Trello/social e reset rapido dei progressi.
+- **Pacchetti Quickstart:** preset Trello/social/blog con validazione ambiente (pronto/attenzione/bloccato), anteprima delle sovrascritture, template Trello scaricabili, link ai percorsi guidati e prefill automatico delle impostazioni nel wizard.
+- **Modalità di utilizzo personalizzate:** scegli tra profilo Standard, Avanzato o Enterprise dalle impostazioni per mostrare solo le funzionalità necessarie e abilitare i moduli avanzati quando servono.
 - **Calendario editoriale:** vista mensile con stati di pubblicazione, canale, orario e conteggio dei contenuti.
 - **Gestione post social:** filtri per cliente/stato, approvazioni massime, pubblicazione immediata e dettagli dei log.
 - **Analytics:** aggregazione delle metriche dei canali, grafico interattivo (Chart.js) ed esportazione CSV.
 - **Health Status:** controllo quotidiano di token, hook Trello, Action Scheduler, requisiti WordPress e retention log configurabile.
+- **Sintesi componenti critici:** dashboard e CLI evidenziano token mancanti, webhook in errore, quote API e cron non pianificati con link rapidi alla remediation.
 - **Blog WordPress:** pubblicazione automatica di articoli con gestione featured image, SEO, WPML, link dinamici e hashtag di default per ogni canale.
 
 ## Configurazione dei canali
@@ -90,7 +112,45 @@ Parametri supportati: `post_type`, `post_status`, `author_id`, `category_id`, `l
 ## Performance e monitoraggio
 - Cache multilivello (transient, object cache, browser) e query ottimizzate descritte in [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md).
 - Script `./optimize-assets.sh` per generare asset minificati ready-for-production.
-- Dashboard con metriche in tempo reale, performance monitor e controlli di stato dei servizi esterni.
+- Dashboard con metriche in tempo reale, performance monitor, controllo salute token (mancanti/in scadenza/senza scadenza) e controlli di stato dei servizi esterni.
+
+## Strumenti da riga di comando
+FP Publisher espone comandi [WP-CLI](https://wp-cli.org/) per eseguire diagnosi e validazioni anche su ambienti headless.
+
+### Controllo salute
+```bash
+wp tts health
+```
+- Senza parametri recupera l'ultimo snapshot memorizzato.
+- Aggiungi `--force` per lanciare immediatamente una nuova scansione e ricevere l'elenco aggiornato delle azioni consigliate.
+- L'output include la tabella *Stato componenti critici* con token, webhook, quote e cron da monitorare.
+
+### Pacchetti Quickstart
+```bash
+wp tts quickstart --list
+wp tts quickstart --slug=social_starter
+```
+- `--list` mostra slug, profilo richiesto e descrizione dei preset disponibili.
+- `--slug=<pacchetto>` produce la tabella dei prerequisiti (token, mapping, blog) e riepiloga mapping/template/UTM che verrebbero applicati.
+
+Consulta [docs/guides/cli-automation.md](docs/guides/cli-automation.md) per scenari avanzati e best practice di integrazione nei runbook operativi.
+
+## Qualità e test automatici
+
+Per mantenere il plugin stabile e pronto alla distribuzione è disponibile un test suite automatizzato che copre sicurezza, integrazione Trello, token e REST API. Il repository esegue lo stesso flusso in GitHub Actions ad ogni push o pull request tramite il workflow **Plugin Quality Checks**.
+
+### Esegui i test in locale
+
+1. Assicurati di avere PHP 8.1 o superiore e Composer installati.
+2. Dalla root del progetto avvia:
+
+   ```bash
+   composer test
+   ```
+
+Lo script `tools/run-tests.sh` avvia in sequenza ogni file `tests/test-*.php` e interrompe la procedura se uno dei check fallisce, indicando il file responsabile.
+
+> Suggerimento: integra `composer test` nelle pipeline di CI/CD interne per bloccare merge o deploy quando falliscono le verifiche automatiche.
 
 ## Documentazione di riferimento
 - [MENU_STRUCTURE.md](MENU_STRUCTURE.md): struttura aggiornata del menu WordPress e benefici UX.
@@ -99,6 +159,12 @@ Parametri supportati: `post_type`, `post_status`, `author_id`, `category_id`, `l
 - [SECURITY_IMPROVEMENTS.md](SECURITY_IMPROVEMENTS.md): audit di sicurezza e miglioramenti qualitativi.
 - [SOCIAL_MEDIA_SETUP.md](SOCIAL_MEDIA_SETUP.md): checklist operative per i singoli canali.
 - [ENTERPRISE_FEATURES.md](ENTERPRISE_FEATURES.md): funzionalità avanzate per team e scenari enterprise.
+- Percorsi guidati:
+  - [Onboarding clienti](docs/journeys/client-onboarding.md)
+  - [Setup rapido](docs/guides/quick-start.md)
+  - [Operazioni giornaliere](docs/guides/daily-operations.md)
+  - [Quality Assurance automatizzata](docs/guides/quality-assurance.md)
+  - [Troubleshooting](docs/guides/troubleshooting.md)
 
 ## Storico versioni
 Consulta il [CHANGELOG.md](CHANGELOG.md) per il dettaglio completo delle release. In sintesi:

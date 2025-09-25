@@ -108,6 +108,14 @@ class TTS_Admin {
             'nonce_action' => 'tts_ajax_nonce',
             'capabilities' => array( 'tts_manage_integrations' ),
         ),
+        'ajax_validate_trello_credentials' => array(
+            'nonce_action' => 'tts_wizard',
+            'capabilities' => array( 'tts_manage_clients' ),
+        ),
+        'ajax_test_wizard_token' => array(
+            'nonce_action' => 'tts_wizard',
+            'capabilities' => array( 'tts_manage_clients' ),
+        ),
     );
 
     /**
@@ -257,6 +265,8 @@ class TTS_Admin {
         add_action( 'wp_ajax_tts_show_import_modal', array( $this, 'ajax_show_import_modal' ) );
         add_action( 'wp_ajax_tts_test_client_connections', array( $this, 'ajax_test_client_connections' ) );
         add_action( 'wp_ajax_tts_test_single_connection', array( $this, 'ajax_test_single_connection' ) );
+        add_action( 'wp_ajax_tts_validate_trello_credentials', array( $this, 'ajax_validate_trello_credentials' ) );
+        add_action( 'wp_ajax_tts_test_wizard_token', array( $this, 'ajax_test_wizard_token' ) );
         add_filter( 'manage_tts_social_post_posts_columns', array( $this, 'add_approved_column' ) );
         add_action( 'manage_tts_social_post_posts_custom_column', array( $this, 'render_approved_column' ), 10, 2 );
         add_filter( 'bulk_actions-edit-tts_social_post', array( $this, 'register_bulk_actions' ) );
@@ -394,6 +404,11 @@ class TTS_Admin {
                         'slug'     => 'fp-publisher-client-wizard',
                         'callback' => 'tts_render_client_wizard',
                     ),
+                    array(
+                        'title'    => __( 'Quickstart Packages', 'fp-publisher' ),
+                        'slug'     => 'fp-publisher-quickstart',
+                        'callback' => 'render_quickstart_packages_page',
+                    ),
                 ),
             ),
             array(
@@ -507,6 +522,101 @@ class TTS_Admin {
     }
 
     /**
+     * Return the active usage profile.
+     *
+     * @return string
+     */
+    private function get_usage_profile() {
+        $settings = get_option( 'tts_settings', array() );
+        $profile  = isset( $settings['usage_profile'] ) ? sanitize_key( $settings['usage_profile'] ) : 'standard';
+
+        $allowed = array( 'standard', 'advanced', 'enterprise' );
+        if ( ! in_array( $profile, $allowed, true ) ) {
+            $profile = 'standard';
+        }
+
+        return $profile;
+    }
+
+    /**
+     * Check if the active usage profile grants access to a capability tier.
+     *
+     * @param string $target Target profile tier.
+     * @return bool
+     */
+    private function usage_profile_allows( $target ) {
+        $order = array(
+            'standard'   => 1,
+            'advanced'   => 2,
+            'enterprise' => 3,
+        );
+
+        $current = $this->get_usage_profile();
+
+        if ( ! isset( $order[ $target ] ) || ! isset( $order[ $current ] ) ) {
+            return false;
+        }
+
+        return $order[ $current ] >= $order[ $target ];
+    }
+
+    /**
+     * Public helper to expose the localized label for a usage profile.
+     *
+     * @param string $profile Usage profile slug.
+     * @return string
+     */
+    public function get_usage_profile_label( $profile ) {
+        return $this->format_usage_profile_label( $profile );
+    }
+
+    /**
+     * Return a human readable label for a usage profile slug.
+     *
+     * @param string $profile Usage profile slug.
+     * @return string
+     */
+    private function format_usage_profile_label( $profile ) {
+        $labels = array(
+            'standard'   => __( 'Profilo Standard', 'fp-publisher' ),
+            'advanced'   => __( 'Profilo Avanzato', 'fp-publisher' ),
+            'enterprise' => __( 'Profilo Enterprise', 'fp-publisher' ),
+        );
+
+        $profile = sanitize_key( $profile );
+
+        if ( isset( $labels[ $profile ] ) ) {
+            return $labels[ $profile ];
+        }
+
+        return ucfirst( $profile );
+    }
+
+    /**
+     * Resolve an asset URL within the plugin directory.
+     *
+     * @param string $relative_path Relative path from the plugin root.
+     *
+     * @return string Asset URL or empty string when missing.
+     */
+    private function get_plugin_asset_url( $relative_path ) {
+        $relative_path = ltrim( (string) $relative_path, '/' );
+
+        if ( '' === $relative_path ) {
+            return '';
+        }
+
+        $base_path = trailingslashit( TSAP_PLUGIN_DIR );
+        $absolute  = $base_path . $relative_path;
+
+        if ( ! file_exists( $absolute ) ) {
+            return '';
+        }
+
+        return plugins_url( $relative_path, TSAP_PLUGIN_DIR . 'trello-social-auto-publisher.php' );
+    }
+
+    /**
      * Determine if a menu callback can be registered.
      *
      * @param string $method            Callback method name.
@@ -547,6 +657,235 @@ class TTS_Admin {
             'menu_title' => $menu_title,
             'method'     => $method,
         );
+    }
+
+
+    /**
+     * Evaluate environment readiness for a quickstart package.
+     *
+     * @param array<string, mixed> $package Quickstart definition.
+     * @return array<string, mixed>
+     */
+    private function assess_quickstart_package_readiness( array $package ) {
+        $status = 'ready';
+        $checks = array();
+
+        if ( ! empty( $package['column_mapping'] ) ) {
+            $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
+
+            if ( $trello_enabled ) {
+                $checks[] = array(
+                    'status'  => 'ok',
+                    'label'   => __( 'Trello abilitato', 'fp-publisher' ),
+                    'message' => __( 'La sincronizzazione Trello è pronta per ricevere le nuove mappature.', 'fp-publisher' ),
+                    'scope'   => 'trello',
+                );
+            } else {
+                $status   = 'blocked';
+                $checks[] = array(
+                    'status'  => 'blocked',
+                    'label'   => __( 'Abilita Trello', 'fp-publisher' ),
+                    'message' => __( 'Riattiva Trello nelle impostazioni generali prima di usare questo preset.', 'fp-publisher' ),
+                    'scope'   => 'trello',
+                );
+            }
+        }
+
+        $channels         = isset( $package['channels'] ) ? (array) $package['channels'] : array();
+        $channel_messages = array();
+
+        foreach ( $channels as $channel ) {
+            $channel       = sanitize_key( $channel );
+            $channel_label = ucfirst( $channel );
+            $connection    = $this->check_platform_connection_status( $channel );
+            $message       = isset( $connection['message'] ) ? $connection['message'] : '';
+
+            switch ( isset( $connection['status'] ) ? $connection['status'] : '' ) {
+                case 'not-configured':
+                    $status             = 'blocked';
+                    $channel_messages[] = array(
+                        'status'  => 'blocked',
+                        'label'   => sprintf( __( '%s: credenziali mancanti', 'fp-publisher' ), $channel_label ),
+                        'message' => $message ? $message : __( "Configura l'app dal pannello Connessioni social.", 'fp-publisher' ),
+                        'scope'   => 'channels',
+                        'channel' => $channel,
+                    );
+                    break;
+                case 'configured':
+                    if ( 'blocked' !== $status ) {
+                        $status = 'warning';
+                    }
+                    $channel_messages[] = array(
+                        'status'  => 'warning',
+                        'label'   => sprintf( __( "%s: collega l'account", 'fp-publisher' ), $channel_label ),
+                        'message' => $message ? $message : __( 'Apri il Client Wizard per completare la connessione OAuth.', 'fp-publisher' ),
+                        'scope'   => 'channels',
+                        'channel' => $channel,
+                    );
+                    break;
+                default:
+                    $checks[] = array(
+                        'status'  => 'ok',
+                        'label'   => sprintf( __( '%s: integrazione pronta', 'fp-publisher' ), $channel_label ),
+                        'message' => $message,
+                        'scope'   => 'channels',
+                        'channel' => $channel,
+                    );
+                    break;
+            }
+        }
+
+        if ( ! empty( $channel_messages ) ) {
+            $checks = array_merge( $checks, $channel_messages );
+        }
+
+        $blog_settings = isset( $package['blog_settings'] ) ? (string) $package['blog_settings'] : '';
+        if ( '' !== $blog_settings ) {
+            $blog_config   = $this->parse_quickstart_blog_settings( $blog_settings );
+            $blog_messages = array();
+
+            if ( isset( $blog_config['post_type'] ) && ! post_type_exists( $blog_config['post_type'] ) ) {
+                $status         = 'blocked';
+                $blog_messages[] = array(
+                    'status'  => 'blocked',
+                    'label'   => __( 'Post type inesistente', 'fp-publisher' ),
+                    'message' => sprintf( __( 'Il post type "%s" non è registrato in questo sito.', 'fp-publisher' ), $blog_config['post_type'] ),
+                    'scope'   => 'blog',
+                );
+            }
+
+            if ( isset( $blog_config['author_id'] ) ) {
+                $author_id = absint( $blog_config['author_id'] );
+                if ( $author_id && ! get_user_by( 'ID', $author_id ) ) {
+                    if ( 'blocked' !== $status ) {
+                        $status = 'warning';
+                    }
+                    $blog_messages[] = array(
+                        'status'  => 'warning',
+                        'label'   => __( 'Autore non trovato', 'fp-publisher' ),
+                        'message' => sprintf( __( "Crea o aggiorna l'utente #%d per assegnare i post.", 'fp-publisher' ), $author_id ),
+                        'scope'   => 'blog',
+                    );
+                }
+            }
+
+            if ( isset( $blog_config['category_id'] ) ) {
+                $category_id = absint( $blog_config['category_id'] );
+                if ( $category_id && ! get_term( $category_id, 'category' ) ) {
+                    if ( 'blocked' !== $status ) {
+                        $status = 'warning';
+                    }
+                    $blog_messages[] = array(
+                        'status'  => 'warning',
+                        'label'   => __( 'Categoria assente', 'fp-publisher' ),
+                        'message' => sprintf( __( 'La categoria #%d non è disponibile in questo WordPress.', 'fp-publisher' ), $category_id ),
+                        'scope'   => 'blog',
+                    );
+                }
+            }
+
+            if ( empty( $blog_messages ) ) {
+                $checks[] = array(
+                    'status'  => 'ok',
+                    'label'   => __( 'Preset blog valido', 'fp-publisher' ),
+                    'message' => __( 'Autore e tassonomie corrispondono a risorse disponibili.', 'fp-publisher' ),
+                    'scope'   => 'blog',
+                );
+            } else {
+                $checks = array_merge( $checks, $blog_messages );
+            }
+        } else {
+            if ( 'blocked' !== $status ) {
+                $status = 'warning';
+            }
+            $checks[] = array(
+                'status'  => 'warning',
+                'label'   => __( 'Compila le impostazioni blog', 'fp-publisher' ),
+                'message' => __( 'Il pacchetto non fornisce parametri blog: completali dal Client Wizard.', 'fp-publisher' ),
+                'scope'   => 'blog',
+            );
+        }
+
+        $checks = array_map( array( $this, 'sanitize_quickstart_check_entry' ), $checks );
+
+        if ( 'ready' === $status ) {
+            $summary = __( 'Tutti i prerequisiti risultano soddisfatti: puoi applicare il pacchetto in sicurezza.', 'fp-publisher' );
+        } elseif ( 'warning' === $status ) {
+            $summary = __( "Alcuni elementi richiedono attenzione ma non impediscono l'applicazione del preset.", 'fp-publisher' );
+        } else {
+            $summary = __( "Risolvi i requisiti bloccanti prima di procedere con l'applicazione.", 'fp-publisher' );
+        }
+
+        return array(
+            'status'  => $status,
+            'label'   => __( 'Validazione ambiente', 'fp-publisher' ),
+            'summary' => $summary,
+            'checks'  => $checks,
+        );
+    }
+
+    /**
+     * Sanitize quickstart checklist entries.
+     *
+     * @param array<string, mixed> $entry Raw entry.
+     * @return array<string, mixed>
+     */
+    private function sanitize_quickstart_check_entry( $entry ) {
+        $allowed_status = array( 'ok', 'warning', 'blocked', 'skipped' );
+
+        $status = isset( $entry['status'] ) ? sanitize_key( $entry['status'] ) : 'ok';
+        if ( ! in_array( $status, $allowed_status, true ) ) {
+            $status = 'ok';
+        }
+
+        $sanitized = array(
+            'status'  => $status,
+            'label'   => isset( $entry['label'] ) ? wp_strip_all_tags( $entry['label'], true ) : '',
+            'message' => isset( $entry['message'] ) ? wp_strip_all_tags( $entry['message'], true ) : '',
+        );
+
+        if ( isset( $entry['scope'] ) ) {
+            $sanitized['scope'] = sanitize_key( $entry['scope'] );
+        }
+
+        if ( isset( $entry['channel'] ) ) {
+            $sanitized['channel'] = sanitize_key( $entry['channel'] );
+        }
+
+        return $sanitized;
+    }
+
+    /**
+     * Parse the blog settings string into an associative array.
+     *
+     * @param string $settings Blog settings string.
+     * @return array<string, string>
+     */
+    private function parse_quickstart_blog_settings( $settings ) {
+        $result = array();
+
+        foreach ( explode( '|', $settings ) as $chunk ) {
+            $chunk = trim( $chunk );
+            if ( '' === $chunk ) {
+                continue;
+            }
+
+            $parts = explode( ':', $chunk, 2 );
+            if ( count( $parts ) < 2 ) {
+                continue;
+            }
+
+            $key   = sanitize_key( trim( $parts[0] ) );
+            $value = trim( $parts[1] );
+
+            if ( '' === $key || '' === $value ) {
+                continue;
+            }
+
+            $result[ $key ] = $value;
+        }
+
+        return $result;
     }
 
     /**
@@ -594,6 +933,7 @@ class TTS_Admin {
             'fp-publisher_page_fp-publisher-test-connections',
             'fp-publisher-clienti_page_fp-publisher-clienti',
             'fp-publisher-clienti_page_fp-publisher-client-wizard',
+            'fp-publisher-clienti_page_fp-publisher-quickstart',
             'fp-publisher-clienti_page_fp-publisher-social-posts'
         );
 
@@ -1371,18 +1711,29 @@ class TTS_Admin {
     public function render_dashboard_page() {
         echo '<div class="wrap">';
         echo '<h1>' . esc_html__( 'Social Auto Publisher Dashboard', 'fp-publisher' ) . '</h1>';
-        
+
+        $profile = $this->get_usage_profile();
+        if ( 'standard' === $profile ) {
+            echo '<div class="notice notice-info"><p>' . esc_html__( 'Modalità Standard attiva: mostriamo solo i widget essenziali per monitorare le pubblicazioni.', 'fp-publisher' ) . '</p></div>';
+        } elseif ( 'enterprise' === $profile ) {
+            echo '<div class="notice notice-info"><p>' . esc_html__( 'Modalità Enterprise: controlli avanzati, audit e strumenti di remediation sono abilitati.', 'fp-publisher' ) . '</p></div>';
+        }
+
         // Add notification area
         echo '<div id="tts-notification-area" style="margin: 15px 0;"></div>';
-        
+
         // Health status banner (if there are issues)
         $this->render_health_status_banner();
         
         // Quick stats cards
         $this->render_dashboard_stats();
-        
+
         // Enhanced monitoring section
-        $this->render_monitoring_dashboard();
+        if ( $this->usage_profile_allows( 'advanced' ) ) {
+            $this->render_monitoring_dashboard();
+        } else {
+            $this->render_standard_health_snapshot( $profile );
+        }
         
         // Recent activity and actions
         echo '<div class="tts-dashboard-sections">';
@@ -1391,14 +1742,16 @@ class TTS_Admin {
         echo '</div>';
         
         echo '<div class="tts-dashboard-right">';
-        $this->render_quick_actions_section();
+        $this->render_quick_actions_section( $profile );
         $this->render_connection_test_widget();
-        $this->render_system_status_widget();
+        $this->render_system_status_widget( $profile );
         echo '</div>';
         echo '</div>';
-        
+
         // Advanced tools section
-        $this->render_advanced_tools_section();
+        if ( $this->usage_profile_allows( 'enterprise' ) ) {
+            $this->render_advanced_tools_section();
+        }
         
         // React component container for advanced features
         echo '<div id="tts-dashboard-root"></div>';
@@ -1455,6 +1808,59 @@ class TTS_Admin {
         echo '</div>';
         echo '</div>';
     }
+
+    /**
+     * Render condensed health overview for standard profile.
+     *
+     * @param string $profile Active usage profile.
+     */
+    private function render_standard_health_snapshot( $profile ) {
+        $health            = TTS_Monitoring::get_current_health_status();
+        $health_data       = get_option( 'tts_last_health_check', array() );
+        $suggestions       = TTS_Monitoring::get_remediation_suggestions( $health_data );
+        $actionable_items  = TTS_Monitoring::get_actionable_health_summary();
+        $open_issues       = array_filter(
+            $actionable_items,
+            static function ( $item ) {
+                return isset( $item['status'] ) && 'ok' !== $item['status'];
+            }
+        );
+
+        echo '<div class="tts-standard-health">';
+        echo '<h2>' . esc_html__( 'Stato rapido di pubblicazione', 'fp-publisher' ) . '</h2>';
+        echo '<p class="tts-health-score">' . esc_html__( 'Salute sistema', 'fp-publisher' ) . ': <strong>' . esc_html( ucfirst( $health['status'] ) ) . '</strong> (' . intval( $health['score'] ) . '/100)</p>';
+        if ( ! empty( $health['message'] ) ) {
+            echo '<p>' . esc_html( $health['message'] ) . '</p>';
+        }
+
+        if ( ! empty( $open_issues ) ) {
+            $this->render_actionable_health_summary( $open_issues, true );
+        }
+
+        if ( ! empty( $suggestions ) ) {
+            echo '<div class="tts-health-suggestions">';
+            echo '<strong>' . esc_html__( 'Azioni consigliate', 'fp-publisher' ) . '</strong>';
+            echo '<ul>';
+            foreach ( $suggestions as $suggestion ) {
+                echo '<li>' . esc_html( $suggestion['title'] ) . ' — ' . esc_html( $suggestion['description'] );
+                if ( ! empty( $suggestion['link'] ) ) {
+                    echo ' <a href="' . esc_url( $suggestion['link'] ) . '" class="button-link">' . esc_html__( 'Apri', 'fp-publisher' ) . '</a>';
+                }
+                echo '</li>';
+            }
+            echo '</ul>';
+            echo '</div>';
+        } else {
+            echo '<p>' . esc_html__( 'Nessuna azione pendente: sei pronto a pubblicare.', 'fp-publisher' ) . '</p>';
+        }
+
+        if ( 'standard' === $profile ) {
+            echo '<p class="description">' . esc_html__( 'Passa al profilo Avanzato per sbloccare monitoraggio in tempo reale e controlli granulari.', 'fp-publisher' ) . '</p>';
+        }
+
+        echo '</div>';
+    }
+
 
     /**
      * Render health score widget.
@@ -2006,154 +2412,314 @@ class TTS_Admin {
 
     /**
      * Render quick actions section.
+     *
+     * @param string $profile Active usage profile.
      */
-    private function render_quick_actions_section() {
+    private function render_quick_actions_section( $profile = 'standard' ) {
         echo '<div class="tts-dashboard-section">';
-        echo '<h2>' . esc_html__('Quick Actions', 'fp-publisher') . '</h2>';
+        echo '<h2>' . esc_html__( 'Quick Actions', 'fp-publisher' ) . '</h2>';
         echo '<div class="tts-quick-actions">';
-        
+
         $actions = array(
             array(
-                'title' => __('Add New Client', 'fp-publisher'),
-                'description' => __('Set up a new social media client', 'fp-publisher'),
-                'url' => admin_url('admin.php?page=fp-publisher-client-wizard'),
-                'icon' => 'dashicons-plus',
-                'color' => '#135e96'
+                'title'       => __( 'Add New Client', 'fp-publisher' ),
+                'description' => __( 'Set up a new social media client', 'fp-publisher' ),
+                'url'         => admin_url( 'admin.php?page=fp-publisher-client-wizard' ),
+                'icon'        => 'dashicons-plus',
+                'color'       => '#135e96',
+                'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
             ),
             array(
-                'title' => __('View Calendar', 'fp-publisher'),
-                'description' => __('See scheduled posts in calendar view', 'fp-publisher'),
-                'url' => admin_url('admin.php?page=fp-publisher-calendar'),
-                'icon' => 'dashicons-calendar',
-                'color' => '#f56e28'
+                'title'       => __( 'View Calendar', 'fp-publisher' ),
+                'description' => __( 'See scheduled posts in calendar view', 'fp-publisher' ),
+                'url'         => admin_url( 'admin.php?page=fp-publisher-calendar' ),
+                'icon'        => 'dashicons-calendar',
+                'color'       => '#f56e28',
+                'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
             ),
             array(
-                'title' => __('Check Health Status', 'fp-publisher'),
-                'description' => __('Monitor system health and tokens', 'fp-publisher'),
-                'url' => admin_url('admin.php?page=fp-publisher-health'),
-                'icon' => 'dashicons-heart',
-                'color' => '#00a32a'
+                'title'       => __( 'Check Health Status', 'fp-publisher' ),
+                'description' => __( 'Monitor system health and tokens', 'fp-publisher' ),
+                'url'         => admin_url( 'admin.php?page=fp-publisher-health' ),
+                'icon'        => 'dashicons-heart',
+                'color'       => '#00a32a',
+                'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
             ),
             array(
-                'title' => __('View Analytics', 'fp-publisher'),
-                'description' => __('Analyze performance and engagement', 'fp-publisher'),
-                'url' => admin_url('admin.php?page=fp-publisher-analytics'),
-                'icon' => 'dashicons-chart-area',
-                'color' => '#7c3aed'
+                'title'       => __( 'Quickstart Packages', 'fp-publisher' ),
+                'description' => __( 'Import preset templates and mappings', 'fp-publisher' ),
+                'url'         => admin_url( 'admin.php?page=fp-publisher-quickstart' ),
+                'icon'        => 'dashicons-portfolio',
+                'color'       => '#6366f1',
+                'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
             ),
             array(
-                'title' => __('Manage Posts', 'fp-publisher'),
-                'description' => __('View and manage all social posts', 'fp-publisher'),
-                'url' => admin_url('admin.php?page=fp-publisher-social-posts'),
-                'icon' => 'dashicons-admin-post',
-                'color' => '#2563eb'
+                'title'       => __( 'View Analytics', 'fp-publisher' ),
+                'description' => __( 'Analyze performance and engagement', 'fp-publisher' ),
+                'url'         => admin_url( 'admin.php?page=fp-publisher-analytics' ),
+                'icon'        => 'dashicons-chart-area',
+                'color'       => '#7c3aed',
+                'profiles'    => array( 'advanced', 'enterprise' ),
             ),
             array(
-                'title' => __('View Logs', 'fp-publisher'),
-                'description' => __('Check system logs and debugging info', 'fp-publisher'),
-                'url' => admin_url('admin.php?page=fp-publisher-log'),
-                'icon' => 'dashicons-list-view',
-                'color' => '#64748b'
-            )
+                'title'       => __( 'Manage Posts', 'fp-publisher' ),
+                'description' => __( 'View and manage all social posts', 'fp-publisher' ),
+                'url'         => admin_url( 'admin.php?page=fp-publisher-social-posts' ),
+                'icon'        => 'dashicons-admin-post',
+                'color'       => '#2563eb',
+                'profiles'    => array( 'advanced', 'enterprise' ),
+            ),
+            array(
+                'title'       => __( 'Audit & Logs', 'fp-publisher' ),
+                'description' => __( 'Controlla log, audit trail e backup', 'fp-publisher' ),
+                'url'         => admin_url( 'admin.php?page=fp-publisher-log' ),
+                'icon'        => 'dashicons-shield-alt',
+                'color'       => '#0f172a',
+                'profiles'    => array( 'enterprise' ),
+            ),
         );
-        
-        foreach ($actions as $action) {
-            echo '<a href="' . esc_url($action['url']) . '" class="tts-quick-action tts-tooltip" style="border-left: 4px solid ' . $action['color'] . ';">';
+
+        $visible_actions = array_filter(
+            $actions,
+            function ( $action ) use ( $profile ) {
+                if ( empty( $action['profiles'] ) ) {
+                    return true;
+                }
+                return in_array( $profile, $action['profiles'], true );
+            }
+        );
+
+        foreach ( $visible_actions as $action ) {
+            echo '<a href="' . esc_url( $action['url'] ) . '" class="tts-quick-action tts-tooltip" style="border-left: 4px solid ' . esc_attr( $action['color'] ) . ';">';
             echo '<div style="display: flex; align-items: center;">';
-            echo '<span class="dashicons ' . esc_attr($action['icon']) . '" style="color: ' . $action['color'] . '; margin-right: 12px; font-size: 20px;"></span>';
+            echo '<span class="dashicons ' . esc_attr( $action['icon'] ) . '" style="color: ' . esc_attr( $action['color'] ) . '; margin-right: 12px; font-size: 20px;"></span>';
             echo '<div>';
-            echo '<div style="font-weight: 600; margin-bottom: 2px;">' . esc_html($action['title']) . '</div>';
-            echo '<div style="font-size: 12px; color: #666;">' . esc_html($action['description']) . '</div>';
+            echo '<div style="font-weight: 600; margin-bottom: 2px;">' . esc_html( $action['title'] ) . '</div>';
+            echo '<div style="font-size: 12px; color: #666;">' . esc_html( $action['description'] ) . '</div>';
             echo '</div>';
             echo '</div>';
-            echo '<span class="tts-tooltiptext">' . esc_html($action['description']) . '</span>';
+            echo '<span class="tts-tooltiptext">' . esc_html( $action['description'] ) . '</span>';
             echo '</a>';
         }
-        
+
         echo '</div>';
         echo '</div>';
     }
 
+
     /**
-     * Render system status widget for dashboard.
+     * Render actionable health summary items.
+     *
+     * @param array<int, array<string, mixed>> $items   Summary items from monitoring.
+     * @param bool                              $compact Whether to render a compact layout.
      */
-    private function render_system_status_widget() {
-        echo '<div class="tts-dashboard-section">';
-        echo '<h2>' . esc_html__('System Status', 'fp-publisher') . '</h2>';
-        
-        // Check various system components
-        $status_checks = array();
-        
-        // Check WordPress requirements
-        $wp_version = get_bloginfo('version');
-        $status_checks['wordpress'] = array(
-            'name' => 'WordPress Version',
-            'status' => version_compare($wp_version, '5.0', '>=') ? 'success' : 'error',
-            'message' => 'WordPress ' . $wp_version
-        );
-        
-        // Check if Action Scheduler is available
-        $status_checks['scheduler'] = array(
-            'name' => 'Action Scheduler',
-            'status' => class_exists('ActionScheduler') ? 'success' : 'warning',
-            'message' => class_exists('ActionScheduler') ? 'Available' : 'Not available'
-        );
-        
-        // Check recent error logs
-        $recent_errors = get_posts(array(
-            'post_type' => 'tts_log',
-            'posts_per_page' => 1,
-            'meta_query' => array(
-                array(
-                    'key' => '_log_level',
-                    'value' => 'error',
-                    'compare' => '='
-                )
-            ),
-            'date_query' => array(
-                array(
-                    'after' => '24 hours ago'
-                )
-            )
-        ));
-        
-        $status_checks['errors'] = array(
-            'name' => 'Recent Errors',
-            'status' => empty($recent_errors) ? 'success' : 'warning',
-            'message' => empty($recent_errors) ? 'No errors in 24h' : count($recent_errors) . ' error(s) in 24h'
-        );
-        
-        // Overall health calculation
-        $success_count = 0;
-        foreach ($status_checks as $check) {
-            if ($check['status'] === 'success') $success_count++;
+    private function render_actionable_health_summary( array $items, $compact = false ) {
+        if ( empty( $items ) ) {
+            return;
         }
-        $health_percentage = round(($success_count / count($status_checks)) * 100);
-        
-        // Health indicator
-        echo '<div style="text-align: center; margin-bottom: 15px;">';
-        $health_color = $health_percentage >= 80 ? '#00a32a' : ($health_percentage >= 60 ? '#f56e28' : '#d63638');
-        echo '<div style="font-size: 24px; color: ' . $health_color . '; font-weight: bold;">';
-        echo $health_percentage . '% ' . esc_html__('Healthy', 'fp-publisher');
-        echo '</div>';
-        echo '</div>';
-        
-        // Status items
-        foreach ($status_checks as $key => $check) {
-            $icon_color = $check['status'] === 'success' ? '#00a32a' : ($check['status'] === 'warning' ? '#f56e28' : '#d63638');
-            echo '<div style="display: flex; align-items: center; margin-bottom: 8px;">';
-            echo '<span class="tts-status-indicator ' . $check['status'] . '" style="background: ' . $icon_color . ';"></span>';
-            echo '<span style="flex: 1;">' . esc_html($check['name']) . '</span>';
-            echo '<span style="color: #666; font-size: 12px;">' . esc_html($check['message']) . '</span>';
+
+        $status_icons = array(
+            'critical' => '🚨',
+            'warning'  => '⚠️',
+            'ok'       => '✅',
+        );
+
+        $status_classes = array(
+            'critical' => 'tts-status-critical',
+            'warning'  => 'tts-status-warning',
+            'ok'       => 'tts-status-ok',
+        );
+
+        $wrapper_classes = array( 'tts-actionable-summary' );
+        if ( $compact ) {
+            $wrapper_classes[] = 'tts-actionable-summary--compact';
+        }
+
+        echo '<div class="' . esc_attr( implode( ' ', $wrapper_classes ) ) . '">';
+
+        if ( ! $compact ) {
+            echo '<h4>' . esc_html__( 'Componenti da monitorare', 'fp-publisher' ) . '</h4>';
+        }
+
+        echo '<ul class="tts-actionable-list">';
+        foreach ( $items as $item ) {
+            $status = isset( $item['status'] ) ? $item['status'] : 'ok';
+            $icon   = isset( $status_icons[ $status ] ) ? $status_icons[ $status ] : 'ℹ️';
+            $class  = isset( $status_classes[ $status ] ) ? $status_classes[ $status ] : 'tts-status-ok';
+
+            echo '<li class="' . esc_attr( 'tts-actionable-item ' . $class ) . '">';
+            echo '<div class="tts-actionable-item-header">';
+            echo '<span class="tts-actionable-icon">' . esc_html( $icon ) . '</span>';
+
+            if ( isset( $item['count'] ) && (int) $item['count'] > 0 ) {
+                echo '<span class="tts-actionable-count">' . intval( $item['count'] ) . '</span>';
+            }
+
+            echo '<div class="tts-actionable-copy">';
+            echo '<strong>' . esc_html( isset( $item['label'] ) ? $item['label'] : __( 'Componente', 'fp-publisher' ) ) . '</strong>';
+
+            if ( ! empty( $item['description'] ) ) {
+                echo '<p>' . esc_html( $item['description'] ) . '</p>';
+            }
+
             echo '</div>';
+            echo '</div>';
+
+            if ( ! empty( $item['actions'] ) && is_array( $item['actions'] ) ) {
+                echo '<ul class="tts-actionable-actions">';
+                foreach ( $item['actions'] as $action ) {
+                    if ( empty( $action ) || ! is_array( $action ) ) {
+                        continue;
+                    }
+
+                    echo '<li>' . esc_html( isset( $action['description'] ) ? $action['description'] : '' );
+
+                    if ( ! empty( $action['url'] ) ) {
+                        echo ' <a class="button-link" href="' . esc_url( $action['url'] ) . '">' . esc_html__( 'Dettagli', 'fp-publisher' ) . '</a>';
+                    }
+
+                    echo '</li>';
+                }
+                echo '</ul>';
+            }
+
+            echo '</li>';
         }
-        
-        echo '<div style="margin-top: 15px;">';
-        echo '<a href="' . admin_url('admin.php?page=fp-publisher-health') . '" class="tts-btn small">View Detailed Status</a>';
-        echo '</div>';
-        
+        echo '</ul>';
         echo '</div>';
     }
+
+
+    /**
+     * Render system status widget for dashboard.
+     *
+     * @param string $profile Active usage profile.
+     */
+    private function render_system_status_widget( $profile = 'standard' ) {
+        echo '<div class="tts-dashboard-section">';
+        echo '<h2>' . esc_html__( 'System Status', 'fp-publisher' ) . '</h2>';
+
+        // Check various system components
+        $status_checks = array();
+        $health_data   = get_option( 'tts_last_health_check', array() );
+
+        // Check WordPress requirements
+        $wp_version = get_bloginfo( 'version' );
+        $status_checks['wordpress'] = array(
+            'name'    => 'WordPress Version',
+            'status'  => version_compare( $wp_version, '5.0', '>=' ) ? 'success' : 'error',
+            'message' => 'WordPress ' . $wp_version,
+        );
+
+        // Check if Action Scheduler is available
+        $status_checks['scheduler'] = array(
+            'name'    => 'Action Scheduler',
+            'status'  => class_exists( 'ActionScheduler' ) ? 'success' : 'warning',
+            'message' => class_exists( 'ActionScheduler' ) ? 'Available' : 'Not available',
+        );
+
+        // Check recent error logs
+        $recent_errors = get_posts( array(
+            'post_type'      => 'tts_log',
+            'posts_per_page' => 1,
+            'meta_query'     => array(
+                array(
+                    'key'   => '_log_level',
+                    'value' => 'error',
+                    'compare' => '=',
+                ),
+            ),
+            'date_query'     => array(
+                array(
+                    'after' => '24 hours ago',
+                ),
+            ),
+        ) );
+
+        $status_checks['errors'] = array(
+            'name'    => 'Recent Errors',
+            'status'  => empty( $recent_errors ) ? 'success' : 'warning',
+            'message' => empty( $recent_errors ) ? 'No errors in 24h' : count( $recent_errors ) . ' error(s) in 24h',
+        );
+
+        // Overall health calculation
+        $success_count = 0;
+        foreach ( $status_checks as $check ) {
+            if ( 'success' === $check['status'] ) {
+                $success_count++;
+            }
+        }
+        $health_percentage = round( ( $success_count / count( $status_checks ) ) * 100 );
+
+        // Health indicator
+        echo '<div style="text-align: center; margin-bottom: 15px;">';
+        $health_color = $health_percentage >= 80 ? '#00a32a' : ( $health_percentage >= 60 ? '#f56e28' : '#d63638' );
+        echo '<div style="font-size: 24px; color: ' . $health_color . '; font-weight: bold;">';
+        echo $health_percentage . '% ' . esc_html__( 'Healthy', 'fp-publisher' );
+        echo '</div>';
+        echo '</div>';
+
+        // Status items
+        foreach ( $status_checks as $key => $check ) {
+            $icon_color = 'success' === $check['status'] ? '#00a32a' : ( 'warning' === $check['status'] ? '#f56e28' : '#d63638' );
+            echo '<div style="display: flex; align-items: center; margin-bottom: 8px;">';
+            echo '<span class="tts-status-indicator ' . esc_attr( $check['status'] ) . '" style="background: ' . esc_attr( $icon_color ) . ';"></span>';
+            echo '<span style="flex: 1;">' . esc_html( $check['name'] ) . '</span>';
+            echo '<span style="color: #666; font-size: 12px;">' . esc_html( $check['message'] ) . '</span>';
+            echo '</div>';
+        }
+
+        $actionable_summary = TTS_Monitoring::get_actionable_health_summary();
+        if ( ! empty( $actionable_summary ) ) {
+            $this->render_actionable_health_summary( $actionable_summary );
+        }
+
+        // Scheduled tasks summary
+        $tasks = TTS_Monitoring::get_scheduled_task_summary();
+        if ( ! empty( $tasks ) ) {
+            echo '<div class="tts-scheduled-tasks">';
+            echo '<h4>' . esc_html__( 'Attività pianificate', 'fp-publisher' ) . '</h4>';
+            echo '<ul>';
+            foreach ( $tasks as $task ) {
+                $status    = 'scheduled' === $task['status'] ? '🟢' : '⚠️';
+                $next_run  = $task['next_run'];
+                $next_text = __( 'Non pianificata', 'fp-publisher' );
+
+                if ( $next_run ) {
+                    $next_text = human_time_diff( $next_run, time() );
+                }
+
+                echo '<li>' . esc_html( $status . ' ' . $task['label'] . ' · ' . $task['frequency'] . ' — ' . $next_text ) . '</li>';
+            }
+            echo '</ul>';
+            echo '</div>';
+        }
+
+        if ( $this->usage_profile_allows( 'advanced' ) ) {
+            $suggestions = TTS_Monitoring::get_remediation_suggestions( $health_data );
+            if ( ! empty( $suggestions ) ) {
+                echo '<div class="tts-remediation-hints">';
+                echo '<h4>' . esc_html__( 'Prossime azioni consigliate', 'fp-publisher' ) . '</h4>';
+                echo '<ul>';
+                foreach ( $suggestions as $suggestion ) {
+                    echo '<li>' . esc_html( $suggestion['title'] ) . ' — ' . esc_html( $suggestion['description'] );
+                    if ( ! empty( $suggestion['link'] ) ) {
+                        echo ' <a href="' . esc_url( $suggestion['link'] ) . '" class="button-link">' . esc_html__( 'Dettagli', 'fp-publisher' ) . '</a>';
+                    }
+                    echo '</li>';
+                }
+                echo '</ul>';
+                echo '</div>';
+            }
+        }
+
+        echo '<div style="margin-top: 15px;">';
+        echo '<a href="' . admin_url( 'admin.php?page=fp-publisher-health' ) . '" class="tts-btn small">' . esc_html__( 'View Detailed Status', 'fp-publisher' ) . '</a>';
+        echo '</div>';
+
+        echo '</div>';
+    }
+
 
     /**
      * Render the clients list page.
@@ -2247,7 +2813,1234 @@ class TTS_Admin {
     }
 
     /**
-     * Render the client creation wizard.
+     * Render the quickstart packages page.
+     */
+    public function render_quickstart_packages_page() {
+        if ( ! session_id() ) {
+            session_start();
+        }
+
+        $packages        = $this->get_quickstart_packages();
+        $active_prefill  = isset( $_SESSION['tts_quickstart_prefill'] ) ? $_SESSION['tts_quickstart_prefill'] : array();
+        $current_settings = get_option( 'tts_settings', array() );
+        $previewed_slug   = isset( $_GET['package_preview'] ) ? sanitize_key( wp_unslash( $_GET['package_preview'] ) ) : '';
+        $notice_message  = '';
+        $notice_type     = 'updated';
+        $current_profile = $this->get_usage_profile();
+        $base_quickstart_url = admin_url( 'admin.php?page=fp-publisher-quickstart' );
+
+        if ( isset( $_POST['tts_apply_package'] ) ) {
+            check_admin_referer( 'tts_apply_quickstart' );
+
+            $slug     = isset( $_POST['tts_package_slug'] ) ? sanitize_key( wp_unslash( $_POST['tts_package_slug'] ) ) : '';
+            $override = ! empty( $_POST['tts_override_existing'] );
+            $result   = $this->apply_quickstart_package( $slug, $override );
+
+            if ( is_wp_error( $result ) ) {
+                $notice_message = $result->get_error_message();
+                $notice_type    = 'error';
+            } else {
+                $notice_message = $result['message'];
+                $active_prefill = isset( $_SESSION['tts_quickstart_prefill'] ) ? $_SESSION['tts_quickstart_prefill'] : array();
+            }
+        }
+
+        echo '<div class="wrap tts-quickstart-packages">';
+        echo '<h1>' . esc_html__( 'Pacchetti Quickstart', 'fp-publisher' ) . '</h1>';
+        echo '<p class="description">' . esc_html__( 'Seleziona un pacchetto precostituito per popolare mapping Trello, template social e impostazioni blog prima di avviare il Client Wizard.', 'fp-publisher' ) . '</p>';
+        echo '<p class="description tts-active-profile">' . sprintf(
+            /* translators: %s: current usage profile label. */
+            esc_html__( 'Profilo attivo: %s', 'fp-publisher' ),
+            esc_html( $this->format_usage_profile_label( $current_profile ) )
+        ) . '</p>';
+        $quickstart_guide_url = admin_url( 'admin.php?page=fp-publisher-help#quickstart' );
+        printf(
+            '<p class="description">%s</p>',
+            sprintf(
+                wp_kses(
+                    __( 'Consulta la <a href="%s">Guida Quickstart</a> per esempi dettagliati e checklist complete.', 'fp-publisher' ),
+                    array( 'a' => array( 'href' => array() ) )
+                ),
+                esc_url( $quickstart_guide_url )
+            )
+        );
+        echo '<style>'
+            . '.tts-packages-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;margin-top:20px;}'
+            . '.tts-package-card{background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:20px;box-shadow:0 1px 1px rgb(0 0 0 / 4%);display:flex;flex-direction:column;}'
+            . '.tts-package-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;}'
+            . '.tts-package-profile{display:inline-flex;align-items:center;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:#f6f7f7;color:#1d2327;text-transform:uppercase;letter-spacing:0.5px;}'
+            . '.tts-package-readiness{border:1px solid #e0e0e0;border-radius:6px;padding:12px;margin:16px 0;background:#f9fafb;}'
+            . '.tts-package-readiness.is-warning{border-color:#f56e28;background:#fff4e5;}'
+            . '.tts-package-readiness.is-blocked{border-color:#d63638;background:#fde7ea;}'
+            . '.tts-package-checklist{margin:10px 0 0;padding-left:0;list-style:none;}'
+            . '.tts-package-checklist li{display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;}'
+            . '.tts-check-icon{font-size:18px;line-height:1;}'
+            . '.tts-check-message{display:block;font-size:13px;color:#50575e;}'
+            . '.tts-package-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;}'
+            . '.tts-package-preview{margin-top:12px;}'
+            . '.tts-package-preview summary{cursor:pointer;font-weight:600;}'
+            . '.tts-package-preview[open]{margin-bottom:10px;}'
+            . '.tts-package-preview.is-active{border:1px solid #2271b1;border-radius:6px;padding:8px 12px;background:#f0f6fc;}'
+            . '.tts-override-toggle{display:block;margin-top:12px;}'
+            . '.tts-profile-warning,.tts-readiness-warning{margin:8px 0 0;color:#d63638;}'
+            . '.tts-preview-section{margin-top:12px;padding-top:12px;border-top:1px solid #ececec;}'
+            . '.tts-preview-section:first-of-type{border-top:none;padding-top:0;margin-top:0;}'
+            . '.tts-preview-table{width:100%;border-collapse:collapse;margin-top:8px;}'
+            . '.tts-preview-table th,.tts-preview-table td{border-bottom:1px solid #ececec;padding:6px 8px;font-size:13px;text-align:left;vertical-align:top;}'
+            . '.tts-preview-table th{background:#f6f7f7;font-weight:600;}'
+            . '.tts-preview-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;}'
+            . '.tts-preview-status-override{background:#fde7ea;color:#b52738;}'
+            . '.tts-preview-status-add{background:#e6f4ea;color:#1b5e20;}'
+            . '.tts-preview-status-match{background:#edf2fa;color:#1d3f72;}'
+            . '.tts-preview-meta{font-size:12px;color:#50575e;margin-top:4px;}'
+            . '.tts-preview-list{list-style:disc;margin:8px 0 0 18px;font-size:13px;color:#1d2327;}'
+            . '.tts-package-resources{margin-top:12px;padding:12px;border:1px dashed #c3c4c7;border-radius:6px;background:#f8f9fa;}'
+            . '.tts-package-resources strong{display:block;margin-bottom:6px;}'
+            . '.tts-package-resources .description{margin:0 0 12px;font-size:13px;color:#50575e;}'
+            . '.tts-package-links{display:flex;flex-wrap:wrap;gap:8px;}'
+            . '</style>';
+
+        if ( $notice_message ) {
+            printf( '<div class="notice notice-%1$s"><p>%2$s</p></div>', esc_attr( $notice_type ), esc_html( $notice_message ) );
+        }
+
+        if ( $previewed_slug && isset( $packages[ $previewed_slug ] ) ) {
+            echo '<div class="notice notice-info"><p>' . esc_html__( 'Anteprima attiva: scorri il pacchetto selezionato per verificare sovrascritture e nuovi elementi.', 'fp-publisher' ) . '</p></div>';
+        }
+
+        if ( ! empty( $active_prefill['package'] ) ) {
+            echo '<div class="notice notice-info"><p>' . sprintf(
+                /* translators: %s: quickstart package label. */
+                esc_html__( 'Pacchetto attivo: %s. I passaggi del wizard verranno precompilati di conseguenza.', 'fp-publisher' ),
+                '<strong>' . esc_html( isset( $active_prefill['label'] ) ? $active_prefill['label'] : $active_prefill['package'] ) . '</strong>'
+            ) . '</p></div>';
+        }
+
+        echo '<div class="tts-packages-grid">';
+        foreach ( $packages as $slug => $package ) {
+            $package_profile = isset( $package['profile'] ) ? sanitize_key( $package['profile'] ) : 'standard';
+            $profile_allowed = $this->usage_profile_allows( $package_profile );
+            $profile_label   = $this->format_usage_profile_label( $package_profile );
+            $readiness       = $this->assess_quickstart_package_readiness( $package );
+            $state_class     = isset( $readiness['status'] ) ? ' is-' . sanitize_html_class( $readiness['status'] ) : '';
+
+            echo '<div class="tts-package-card">';
+            echo '<div class="tts-package-head">';
+            echo '<h2>' . esc_html( $package['title'] ) . '</h2>';
+            echo '<span class="tts-package-profile tts-profile-' . esc_attr( $package_profile ) . '">' . esc_html( $profile_label ) . '</span>';
+            echo '</div>';
+            echo '<p>' . esc_html( $package['description'] ) . '</p>';
+
+            $preview       = $this->build_quickstart_preview( $package, $current_settings );
+            $is_previewed  = ( $previewed_slug === $slug );
+            $preview_url   = add_query_arg( array( 'package_preview' => $slug ), $base_quickstart_url );
+            $clear_preview = $base_quickstart_url;
+
+            if ( ! empty( $package['channels'] ) ) {
+                echo '<p><strong>' . esc_html__( 'Canali inclusi', 'fp-publisher' ) . ':</strong> ' . esc_html( implode( ', ', array_map( 'ucfirst', $package['channels'] ) ) ) . '</p>';
+            }
+
+            if ( ! empty( $preview['trello_guidelines'] ) ) {
+                echo '<div class="tts-package-section">';
+                echo '<strong>' . esc_html__( 'Board Trello consigliata', 'fp-publisher' ) . '</strong>';
+                echo '<ul>';
+                foreach ( $preview['trello_guidelines'] as $guideline ) {
+                    echo '<li>' . esc_html( $guideline ) . '</li>';
+                }
+                echo '</ul>';
+                echo '</div>';
+            }
+
+            $template_url = '';
+            if ( isset( $package['trello_template'] ) ) {
+                $template_url = $this->get_plugin_asset_url( $package['trello_template'] );
+            }
+
+            $journey_url = '';
+            if ( isset( $package['journey_doc'] ) ) {
+                $journey_doc = $package['journey_doc'];
+                if ( is_string( $journey_doc ) ) {
+                    $journey_url = $this->get_plugin_asset_url( $journey_doc );
+                } elseif ( is_array( $journey_doc ) ) {
+                    $journey_path   = isset( $journey_doc['path'] ) ? (string) $journey_doc['path'] : '';
+                    $journey_anchor = isset( $journey_doc['anchor'] ) ? (string) $journey_doc['anchor'] : '';
+                    $journey_url    = $this->get_plugin_asset_url( $journey_path );
+                    if ( $journey_url && '' !== $journey_anchor ) {
+                        $journey_anchor = '#' === $journey_anchor[0] ? $journey_anchor : '#' . ltrim( $journey_anchor, '#' );
+                        $journey_url   .= $journey_anchor;
+                    }
+                }
+            }
+
+            if ( $template_url || $journey_url ) {
+                echo '<div class="tts-package-resources">';
+                echo '<strong>' . esc_html__( 'Risorse collegate', 'fp-publisher' ) . '</strong>';
+                echo '<p class="description">' . esc_html__( 'Scarica la board di partenza o apri il percorso guidato per completare onboarding e checklist.', 'fp-publisher' ) . '</p>';
+                echo '<div class="tts-package-links">';
+                if ( $template_url ) {
+                    echo '<a class="button button-secondary" href="' . esc_url( $template_url ) . '" download>' . esc_html__( 'Scarica template Trello', 'fp-publisher' ) . '</a>';
+                }
+                if ( $journey_url ) {
+                    echo '<a class="button button-link" href="' . esc_url( $journey_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Apri percorso guidato', 'fp-publisher' ) . '</a>';
+                }
+                echo '</div>';
+                echo '</div>';
+            }
+
+            echo '<div class="tts-package-actions">';
+            echo '<a class="button button-secondary" href="' . esc_url( $preview_url ) . '">' . esc_html__( 'Anteprima modifiche', 'fp-publisher' ) . '</a>';
+            if ( $is_previewed ) {
+                echo '<a class="button-link" href="' . esc_url( $clear_preview ) . '">' . esc_html__( 'Nascondi anteprima', 'fp-publisher' ) . '</a>';
+            }
+            echo '</div>';
+
+            echo '<div class="tts-package-readiness' . esc_attr( $state_class ) . '">';
+            $status_label = isset( $readiness['label'] ) ? $readiness['label'] : '';
+            if ( $status_label ) {
+                echo '<strong>' . esc_html( $status_label ) . '</strong>';
+            }
+
+            if ( ! empty( $readiness['summary'] ) ) {
+                echo '<p>' . esc_html( $readiness['summary'] ) . '</p>';
+            }
+
+            if ( ! empty( $readiness['checks'] ) ) {
+                echo '<ul class="tts-package-checklist">';
+                foreach ( $readiness['checks'] as $check ) {
+                    $icon = '✅';
+                    if ( isset( $check['status'] ) ) {
+                        if ( 'warning' === $check['status'] ) {
+                            $icon = '⚠️';
+                        } elseif ( 'blocked' === $check['status'] ) {
+                            $icon = '❌';
+                        } elseif ( 'skipped' === $check['status'] ) {
+                            $icon = '➖';
+                        }
+                    }
+
+                    $label = isset( $check['label'] ) ? $check['label'] : '';
+                    $message = isset( $check['message'] ) ? $check['message'] : '';
+
+                    echo '<li>';
+                    echo '<span class="tts-check-icon">' . esc_html( $icon ) . '</span>';
+                    echo '<span class="tts-check-content">';
+                    if ( '' !== $label ) {
+                        echo '<strong>' . esc_html( $label ) . '</strong>';
+                    }
+                    if ( '' !== $message ) {
+                        echo '<span class="tts-check-message">' . esc_html( $message ) . '</span>';
+                    }
+                    echo '</span>';
+                    echo '</li>';
+                }
+                echo '</ul>';
+            }
+            echo '</div>';
+
+            $details_classes = 'tts-package-preview';
+            if ( $is_previewed ) {
+                $details_classes .= ' is-active';
+            }
+
+            echo '<details class="' . esc_attr( $details_classes ) . '"' . ( $is_previewed ? ' open' : '' ) . '>';
+            echo '<summary>' . esc_html__( 'Anteprima modifiche', 'fp-publisher' ) . '</summary>';
+
+            if ( ! empty( $preview['mapping']['overrides'] ) || ! empty( $preview['mapping']['added'] ) ) {
+                echo '<div class="tts-preview-section">';
+                echo '<h4>' . esc_html__( 'Mappature Trello proposte', 'fp-publisher' ) . '</h4>';
+                if ( $preview['mapping']['current_total'] > 0 && ! empty( $preview['mapping']['overrides'] ) ) {
+                    echo '<p class="tts-preview-meta">' . esc_html__( 'Le liste esistenti contrassegnate saranno aggiornate per allinearsi al pacchetto.', 'fp-publisher' ) . '</p>';
+                }
+                echo '<table class="tts-preview-table"><thead><tr>';
+                echo '<th>' . esc_html__( 'Lista', 'fp-publisher' ) . '</th>';
+                echo '<th>' . esc_html__( 'Canale', 'fp-publisher' ) . '</th>';
+                echo '<th>' . esc_html__( 'Stato', 'fp-publisher' ) . '</th>';
+                echo '<th>' . esc_html__( 'Azione', 'fp-publisher' ) . '</th>';
+                echo '</tr></thead><tbody>';
+                foreach ( $preview['mapping']['overrides'] as $entry ) {
+                    $action_label    = __( 'Aggiorna esistente', 'fp-publisher' );
+                    $channel_label   = 'all' === $entry['channel'] ? __( 'Tutti', 'fp-publisher' ) : ucfirst( $entry['channel'] );
+                    $current_channel = isset( $entry['current_channel'] ) ? $entry['current_channel'] : '';
+                    $current_status  = isset( $entry['current_status'] ) ? $entry['current_status'] : '';
+                    echo '<tr>';
+                    echo '<td>' . esc_html( $entry['list'] ) . '</td>';
+                    echo '<td>' . esc_html( $channel_label ) . '</td>';
+                    echo '<td>' . esc_html( $entry['status'] ) . '</td>';
+                    echo '<td><span class="tts-preview-badge tts-preview-status-override">' . esc_html( $action_label ) . '</span>';
+                    if ( '' !== $current_status && $current_status !== $entry['status'] ) {
+                        echo '<div class="tts-preview-meta">' . sprintf( esc_html__( 'Stato attuale: %s', 'fp-publisher' ), esc_html( $current_status ) ) . '</div>';
+                    }
+                    if ( '' !== $current_channel && $current_channel !== $entry['channel'] ) {
+                        $current_channel_label = 'all' === $current_channel ? __( 'Tutti', 'fp-publisher' ) : ucfirst( $current_channel );
+                        echo '<div class="tts-preview-meta">' . sprintf( esc_html__( 'Canale attuale: %s', 'fp-publisher' ), esc_html( $current_channel_label ) ) . '</div>';
+                    }
+                    echo '</td></tr>';
+                }
+                foreach ( $preview['mapping']['added'] as $entry ) {
+                    $channel_label = 'all' === $entry['channel'] ? __( 'Tutti', 'fp-publisher' ) : ucfirst( $entry['channel'] );
+                    echo '<tr>';
+                    echo '<td>' . esc_html( $entry['list'] ) . '</td>';
+                    echo '<td>' . esc_html( $channel_label ) . '</td>';
+                    echo '<td>' . esc_html( $entry['status'] ) . '</td>';
+                    echo '<td><span class="tts-preview-badge tts-preview-status-add">' . esc_html__( 'Nuova mappatura', 'fp-publisher' ) . '</span></td>';
+                    echo '</tr>';
+                }
+                echo '</tbody></table>';
+                echo '</div>';
+            }
+
+            if ( ! empty( $preview['templates'] ) ) {
+                echo '<div class="tts-preview-section">';
+                echo '<h4>' . esc_html__( 'Template social', 'fp-publisher' ) . '</h4>';
+                echo '<table class="tts-preview-table"><thead><tr>';
+                echo '<th>' . esc_html__( 'Canale', 'fp-publisher' ) . '</th>';
+                echo '<th>' . esc_html__( 'Nuovo contenuto', 'fp-publisher' ) . '</th>';
+                echo '<th>' . esc_html__( 'Valore attuale', 'fp-publisher' ) . '</th>';
+                echo '<th>' . esc_html__( 'Azione', 'fp-publisher' ) . '</th>';
+                echo '</tr></thead><tbody>';
+                foreach ( $preview['templates'] as $entry ) {
+                    $action_class = 'tts-preview-status-add';
+                    $action_label = __( 'Nuovo', 'fp-publisher' );
+                    if ( 'override' === $entry['action'] ) {
+                        $action_class = 'tts-preview-status-override';
+                        $action_label = __( 'Sovrascrive', 'fp-publisher' );
+                    } elseif ( 'match' === $entry['action'] ) {
+                        $action_class = 'tts-preview-status-match';
+                        $action_label = __( 'Invariato', 'fp-publisher' );
+                    }
+                    echo '<tr>';
+                    echo '<td>' . esc_html( $entry['channel_label'] ) . '</td>';
+                    echo '<td><code>' . esc_html( $entry['new'] ) . '</code></td>';
+                    echo '<td>' . ( '' !== $entry['current'] ? '<code>' . esc_html( $entry['current'] ) . '</code>' : '—' ) . '</td>';
+                    echo '<td><span class="tts-preview-badge ' . esc_attr( $action_class ) . '">' . esc_html( $action_label ) . '</span></td>';
+                    echo '</tr>';
+                }
+                echo '</tbody></table>';
+                echo '</div>';
+            }
+
+            if ( ! empty( $preview['utm'] ) ) {
+                echo '<div class="tts-preview-section">';
+                echo '<h4>' . esc_html__( 'Parametri UTM', 'fp-publisher' ) . '</h4>';
+                echo '<table class="tts-preview-table"><thead><tr>';
+                echo '<th>' . esc_html__( 'Canale', 'fp-publisher' ) . '</th>';
+                echo '<th>' . esc_html__( 'Parametro', 'fp-publisher' ) . '</th>';
+                echo '<th>' . esc_html__( 'Nuovo valore', 'fp-publisher' ) . '</th>';
+                echo '<th>' . esc_html__( 'Valore attuale', 'fp-publisher' ) . '</th>';
+                echo '<th>' . esc_html__( 'Azione', 'fp-publisher' ) . '</th>';
+                echo '</tr></thead><tbody>';
+                foreach ( $preview['utm'] as $entry ) {
+                    $action_class = 'tts-preview-status-add';
+                    $action_label = __( 'Nuovo', 'fp-publisher' );
+                    if ( 'override' === $entry['action'] ) {
+                        $action_class = 'tts-preview-status-override';
+                        $action_label = __( 'Sovrascrive', 'fp-publisher' );
+                    } elseif ( 'match' === $entry['action'] ) {
+                        $action_class = 'tts-preview-status-match';
+                        $action_label = __( 'Invariato', 'fp-publisher' );
+                    }
+                    $channel_label = 'all' === $entry['channel'] ? __( 'Tutti', 'fp-publisher' ) : ucfirst( $entry['channel'] );
+                    echo '<tr>';
+                    echo '<td>' . esc_html( $channel_label ) . '</td>';
+                    echo '<td><code>' . esc_html( $entry['param'] ) . '</code></td>';
+                    echo '<td><code>' . esc_html( $entry['new'] ) . '</code></td>';
+                    $current_value = '' !== $entry['current'] ? '<code>' . esc_html( $entry['current'] ) . '</code>' : '—';
+                    echo '<td>' . $current_value . '</td>';
+                    echo '<td><span class="tts-preview-badge ' . esc_attr( $action_class ) . '">' . esc_html( $action_label ) . '</span></td>';
+                    echo '</tr>';
+                }
+                echo '</tbody></table>';
+                echo '</div>';
+            }
+
+            if ( ! empty( $preview['blog'] ) ) {
+                echo '<div class="tts-preview-section">';
+                echo '<h4>' . esc_html__( 'Prefill blog', 'fp-publisher' ) . '</h4>';
+                echo '<ul class="tts-preview-list">';
+                foreach ( $preview['blog'] as $key => $value ) {
+                    echo '<li><strong>' . esc_html( $key ) . '</strong>: ' . esc_html( $value ) . '</li>';
+                }
+                echo '</ul>';
+                echo '</div>';
+            }
+
+            if ( ! empty( $preview['notes'] ) ) {
+                echo '<div class="tts-preview-section"><em>' . esc_html( $preview['notes'] ) . '</em></div>';
+            }
+
+            echo '</details>';
+
+            echo '<form method="post" class="tts-package-form">';
+            wp_nonce_field( 'tts_apply_quickstart' );
+            echo '<input type="hidden" name="tts_package_slug" value="' . esc_attr( $slug ) . '" />';
+            echo '<label class="tts-override-toggle"><input type="checkbox" name="tts_override_existing" value="1" /> ' . esc_html__( 'Sovrascrivi impostazioni esistenti (template, mapping, UTM)', 'fp-publisher' ) . '</label>';
+
+            $button_attrs = array();
+            if ( 'blocked' === $readiness['status'] || ! $profile_allowed ) {
+                $button_attrs[] = 'disabled="disabled"';
+            }
+
+            $button_label = esc_html__( 'Applica pacchetto', 'fp-publisher' );
+            if ( ! $profile_allowed ) {
+                echo '<p class="description tts-profile-warning">' . sprintf(
+                    /* translators: %s: required usage profile label. */
+                    esc_html__( 'Richiede profilo %s o superiore.', 'fp-publisher' ),
+                    esc_html( $profile_label )
+                ) . '</p>';
+            }
+
+            if ( 'blocked' === $readiness['status'] ) {
+                echo '<p class="description tts-readiness-warning">' . esc_html__( 'Completa i requisiti contrassegnati in rosso prima di applicare il preset.', 'fp-publisher' ) . '</p>';
+            }
+
+            echo '<p><button type="submit" name="tts_apply_package" class="button button-primary" ' . implode( ' ', $button_attrs ) . '>' . $button_label . '</button></p>';
+            echo '</form>';
+
+            echo '</div>';
+        }
+        echo '</div>';
+
+        echo '<p style="margin-top:30px;">' . esc_html__( "Dopo l'applicazione apri il Client Wizard per completare la checklist guidata.", 'fp-publisher' ) . '</p>';
+
+        echo '</div>';
+    }
+
+    /**
+     * Expose quickstart packages for programmatic contexts (CLI/tests).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function get_quickstart_package_catalog() {
+        $packages = $this->get_quickstart_packages();
+        $catalog  = array();
+
+        foreach ( $packages as $slug => $package ) {
+            $catalog[] = array(
+                'slug'        => $slug,
+                'title'       => isset( $package['title'] ) ? (string) $package['title'] : $slug,
+                'profile'     => isset( $package['profile'] ) ? sanitize_key( $package['profile'] ) : 'standard',
+                'description' => isset( $package['description'] ) ? (string) $package['description'] : '',
+            );
+        }
+
+        return $catalog;
+    }
+
+    /**
+     * Return readiness information and preview details for a quickstart package.
+     *
+     * @param string               $slug     Package identifier.
+     * @param array<string, mixed> $settings Optional settings snapshot to compare.
+     *
+     * @return array<string, mixed>|WP_Error
+     */
+    public function get_quickstart_package_overview( $slug, $settings = null ) {
+        $slug     = sanitize_key( $slug );
+        $packages = $this->get_quickstart_packages();
+
+        if ( ! isset( $packages[ $slug ] ) ) {
+            return new WP_Error( 'tts-invalid-package', __( 'Pacchetto non disponibile.', 'fp-publisher' ) );
+        }
+
+        $package = $packages[ $slug ];
+        $profile = isset( $package['profile'] ) ? sanitize_key( $package['profile'] ) : 'standard';
+
+        if ( null === $settings ) {
+            $settings = get_option( 'tts_settings', array() );
+        }
+
+        if ( ! is_array( $settings ) ) {
+            $settings = array();
+        }
+
+        $readiness = $this->assess_quickstart_package_readiness( $package );
+        $preview   = $this->build_quickstart_preview( $package, $settings );
+
+        return array(
+            'slug'             => $slug,
+            'definition'       => $package,
+            'readiness'        => $readiness,
+            'preview'          => $preview,
+            'required_profile' => $profile,
+            'profile_allowed'  => $this->usage_profile_allows( $profile ),
+            'active_profile'   => $this->get_usage_profile(),
+        );
+    }
+
+    /**
+     * Return predefined quickstart package definitions.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function get_quickstart_packages() {
+        return array(
+            'social_starter'  => array(
+                'title'            => __( 'Starter Social', 'fp-publisher' ),
+                'description'      => __( 'Flusso base per team piccoli con mapping Trello lineare e template social immediati.', 'fp-publisher' ),
+                'profile'          => 'standard',
+                'channels'         => array( 'facebook', 'instagram' ),
+                'blog_settings'    => 'post_type:post|post_status:draft|author_id:1|language:it|seo_title={title} | canonical_url:{url}',
+                'column_mapping'   => array(
+                    array( 'list' => 'Idee', 'status' => 'draft', 'channel' => 'all' ),
+                    array( 'list' => 'In approvazione', 'status' => 'review', 'channel' => 'all' ),
+                    array( 'list' => 'Pronto', 'status' => 'scheduled', 'channel' => 'all' ),
+                    array( 'list' => 'Pubblicato', 'status' => 'published', 'channel' => 'all' ),
+                ),
+                'templates'        => array(
+                    'facebook_template'  => '{title} {url} #brand',
+                    'instagram_template' => '{title}\n\n{hashtags}',
+                ),
+                'utm'              => array(
+                    'facebook'  => array(
+                        'utm_source'   => 'facebook',
+                        'utm_medium'   => 'social',
+                        'utm_campaign' => 'editoriale',
+                    ),
+                    'instagram' => array(
+                        'utm_source'   => 'instagram',
+                        'utm_medium'   => 'social',
+                        'utm_campaign' => 'editoriale',
+                    ),
+                ),
+                'trello_guidelines' => array(
+                    __( 'Liste suggerite: Idee → In approvazione → Pronto → Pubblicato.', 'fp-publisher' ),
+                    __( 'Usa etichette Trello per distinguere i canali Facebook e Instagram.', 'fp-publisher' ),
+                ),
+                'trello_template'   => 'assets/quickstart/social-starter.json',
+                'journey_doc'       => array(
+                    'path'   => 'docs/journeys/client-onboarding.md',
+                    'anchor' => '#starter-social',
+                ),
+                'notes'            => __( 'Ideale per avviare nuovi brand senza complicare il flusso.', 'fp-publisher' ),
+            ),
+            'editorial_suite' => array(
+                'title'            => __( 'Editorial Suite', 'fp-publisher' ),
+                'description'      => __( 'Preset completo per team editoriali con blog, YouTube e short form video.', 'fp-publisher' ),
+                'profile'          => 'advanced',
+                'channels'         => array( 'facebook', 'instagram', 'youtube', 'tiktok' ),
+                'blog_settings'    => 'post_type:post|post_status:pending|author_id:2|category_id:3|language:it|focus_keyword:{title}|seo_title={title} | meta_description={excerpt}',
+                'column_mapping'   => array(
+                    array( 'list' => 'Briefing', 'status' => 'draft', 'channel' => 'all' ),
+                    array( 'list' => 'Produzione', 'status' => 'in-progress', 'channel' => 'all' ),
+                    array( 'list' => 'Revisione', 'status' => 'review', 'channel' => 'all' ),
+                    array( 'list' => 'Pronto Social', 'status' => 'scheduled', 'channel' => 'social' ),
+                    array( 'list' => 'Pubblicato', 'status' => 'published', 'channel' => 'all' ),
+                ),
+                'templates'        => array(
+                    'facebook_template'  => '{title} → {url}\n#contentcalendar',
+                    'instagram_template' => '{title}\n\n📅 {due}\n{hashtags}',
+                    'youtube_template'   => '{title} | {due} | {url}',
+                    'tiktok_template'    => '{title} 🎬 {due}',
+                ),
+                'utm'              => array(
+                    'facebook'  => array(
+                        'utm_source'   => 'facebook',
+                        'utm_medium'   => 'social',
+                        'utm_campaign' => 'editorial-suite',
+                    ),
+                    'instagram' => array(
+                        'utm_source'   => 'instagram',
+                        'utm_medium'   => 'social',
+                        'utm_campaign' => 'editorial-suite',
+                    ),
+                    'youtube'   => array(
+                        'utm_source'   => 'youtube',
+                        'utm_medium'   => 'video',
+                        'utm_campaign' => 'editorial-suite',
+                    ),
+                    'tiktok'    => array(
+                        'utm_source'   => 'tiktok',
+                        'utm_medium'   => 'video',
+                        'utm_campaign' => 'editorial-suite',
+                    ),
+                ),
+                'trello_guidelines' => array(
+                    __( 'Aggiungi checklist Trello per script, grafiche e revisione SEO.', 'fp-publisher' ),
+                    __( 'Allinea le scadenze con il calendario editoriale di FP Publisher.', 'fp-publisher' ),
+                ),
+                'trello_template'   => 'assets/quickstart/editorial-suite.json',
+                'journey_doc'       => array(
+                    'path'   => 'docs/journeys/client-onboarding.md',
+                    'anchor' => '#editorial-suite',
+                ),
+                'notes'            => __( 'Perfetto per contenuti multi-canale con controllo qualità centralizzato.', 'fp-publisher' ),
+            ),
+            'enterprise_control' => array(
+                'title'            => __( 'Enterprise Control', 'fp-publisher' ),
+                'description'      => __( 'Configurazione per organizzazioni complesse con audit trail e fasi di verifica aggiuntive.', 'fp-publisher' ),
+                'profile'          => 'enterprise',
+                'channels'         => array( 'facebook', 'instagram', 'youtube', 'tiktok' ),
+                'blog_settings'    => 'post_type:post|post_status:pending|author_id:5|language:it|seo_title={title} | canonical_url:{url}|meta_description={excerpt}',
+                'column_mapping'   => array(
+                    array( 'list' => 'Intake', 'status' => 'draft', 'channel' => 'all' ),
+                    array( 'list' => 'Quality Assurance', 'status' => 'review', 'channel' => 'all' ),
+                    array( 'list' => 'Security Check', 'status' => 'review', 'channel' => 'all' ),
+                    array( 'list' => 'Ready to Launch', 'status' => 'scheduled', 'channel' => 'all' ),
+                    array( 'list' => 'Live + Audit', 'status' => 'published', 'channel' => 'all' ),
+                ),
+                'templates'        => array(
+                    'facebook_template'  => '[APPROVED] {title} {url} #{client}',
+                    'instagram_template' => '{title}\n\nTeam: {owner}\n{hashtags}',
+                    'youtube_template'   => '[Release] {title} | Owner: {owner}',
+                    'tiktok_template'    => '{title} ⚙️ QA:{qa_owner}',
+                ),
+                'utm'              => array(
+                    'facebook'  => array(
+                        'utm_source'   => 'facebook',
+                        'utm_medium'   => 'social',
+                        'utm_campaign' => 'enterprise-control',
+                    ),
+                    'instagram' => array(
+                        'utm_source'   => 'instagram',
+                        'utm_medium'   => 'social',
+                        'utm_campaign' => 'enterprise-control',
+                    ),
+                    'youtube'   => array(
+                        'utm_source'   => 'youtube',
+                        'utm_medium'   => 'video',
+                        'utm_campaign' => 'enterprise-control',
+                    ),
+                    'tiktok'    => array(
+                        'utm_source'   => 'tiktok',
+                        'utm_medium'   => 'video',
+                        'utm_campaign' => 'enterprise-control',
+                    ),
+                ),
+                'trello_guidelines' => array(
+                    __( 'Prevedi una card checklist per i controlli legali e privacy prima della pubblicazione.', 'fp-publisher' ),
+                    __( "Attiva l'audit Trello e sincronizza i log con FP Publisher per avere una cronologia completa.", 'fp-publisher' ),
+                ),
+                'trello_template'   => 'assets/quickstart/enterprise-control.json',
+                'journey_doc'       => array(
+                    'path'   => 'docs/journeys/client-onboarding.md',
+                    'anchor' => '#enterprise-control',
+                ),
+                'notes'            => __( 'Pensato per chi necessita di visibilità completa su approvatori e compliance.', 'fp-publisher' ),
+            ),
+        );
+    }
+
+    /**
+     * Build preview information for a quickstart package versus current settings.
+     *
+     * @param array<string, mixed> $package  Quickstart definition.
+     * @param array<string, mixed> $settings Current plugin settings.
+     * @return array<string, mixed>
+     */
+    private function build_quickstart_preview( array $package, array $settings ) {
+        $settings = is_array( $settings ) ? $settings : array();
+
+        $preview = array(
+            'mapping'           => array(
+                'added'         => array(),
+                'overrides'     => array(),
+                'current_total' => 0,
+            ),
+            'templates'         => array(),
+            'utm'               => array(),
+            'blog'              => array(),
+            'notes'             => isset( $package['notes'] ) ? (string) $package['notes'] : '',
+            'trello_guidelines' => array(),
+        );
+
+        $current_mapping = array();
+        if ( isset( $settings['column_mapping'] ) ) {
+            $decoded = $settings['column_mapping'];
+            if ( is_string( $decoded ) ) {
+                $decoded = json_decode( $decoded, true );
+            }
+            if ( is_array( $decoded ) ) {
+                foreach ( $decoded as $entry ) {
+                    if ( ! is_array( $entry ) ) {
+                        continue;
+                    }
+                    $item = array(
+                        'list'    => isset( $entry['list'] ) ? (string) $entry['list'] : '',
+                        'channel' => isset( $entry['channel'] ) ? (string) $entry['channel'] : 'all',
+                        'status'  => isset( $entry['status'] ) ? (string) $entry['status'] : '',
+                    );
+                    if ( '' === $item['list'] ) {
+                        continue;
+                    }
+                    if ( '' === $item['channel'] ) {
+                        $item['channel'] = 'all';
+                    }
+                    $current_mapping[] = $item;
+                }
+            }
+        }
+
+        $preview['mapping']['current_total'] = count( $current_mapping );
+
+        $current_index = array();
+        foreach ( $current_mapping as $item ) {
+            $key                 = strtolower( $item['list'] ) . '|' . strtolower( $item['channel'] );
+            $current_index[ $key ] = $item;
+        }
+
+        if ( isset( $package['column_mapping'] ) && is_array( $package['column_mapping'] ) ) {
+            foreach ( $package['column_mapping'] as $entry ) {
+                if ( ! is_array( $entry ) ) {
+                    continue;
+                }
+                $item = array(
+                    'list'    => isset( $entry['list'] ) ? (string) $entry['list'] : '',
+                    'channel' => isset( $entry['channel'] ) ? (string) $entry['channel'] : 'all',
+                    'status'  => isset( $entry['status'] ) ? (string) $entry['status'] : '',
+                );
+                if ( '' === $item['list'] ) {
+                    continue;
+                }
+                if ( '' === $item['channel'] ) {
+                    $item['channel'] = 'all';
+                }
+
+                $key = strtolower( $item['list'] ) . '|' . strtolower( $item['channel'] );
+                if ( isset( $current_index[ $key ] ) ) {
+                    $current_item              = $current_index[ $key ];
+                    $item['current_channel']   = isset( $current_item['channel'] ) ? (string) $current_item['channel'] : '';
+                    $item['current_status']    = isset( $current_item['status'] ) ? (string) $current_item['status'] : '';
+                    $preview['mapping']['overrides'][] = $item;
+                } else {
+                    $preview['mapping']['added'][] = $item;
+                }
+            }
+        }
+
+        if ( isset( $package['templates'] ) && is_array( $package['templates'] ) ) {
+            foreach ( $package['templates'] as $key => $template ) {
+                $key            = sanitize_key( $key );
+                $new_value      = (string) $template;
+                $current_value  = isset( $settings[ $key ] ) ? (string) $settings[ $key ] : '';
+                $action         = 'add';
+                if ( '' !== trim( $current_value ) ) {
+                    $action = trim( $current_value ) === trim( $new_value ) ? 'match' : 'override';
+                }
+                $channel_slug  = str_replace( '_template', '', $key );
+                $channel_label = ucwords( str_replace( '_', ' ', $channel_slug ) );
+
+                $preview['templates'][] = array(
+                    'key'           => $key,
+                    'channel_label' => $channel_label,
+                    'new'           => $new_value,
+                    'current'       => $current_value,
+                    'action'        => $action,
+                );
+            }
+        }
+
+        if ( isset( $package['utm'] ) && is_array( $package['utm'] ) ) {
+            foreach ( $package['utm'] as $channel => $params ) {
+                $channel = sanitize_key( $channel );
+                if ( ! is_array( $params ) ) {
+                    continue;
+                }
+                foreach ( $params as $param_key => $param_value ) {
+                    $param_key     = sanitize_key( $param_key );
+                    $new_value     = (string) $param_value;
+                    $current_value = isset( $settings['utm'][ $channel ][ $param_key ] ) ? (string) $settings['utm'][ $channel ][ $param_key ] : '';
+                    $action        = 'add';
+                    if ( '' !== trim( $current_value ) ) {
+                        $action = trim( $current_value ) === trim( $new_value ) ? 'match' : 'override';
+                    }
+
+                    $preview['utm'][] = array(
+                        'channel' => $channel,
+                        'param'   => $param_key,
+                        'new'     => $new_value,
+                        'current' => $current_value,
+                        'action'  => $action,
+                    );
+                }
+            }
+        }
+
+        if ( ! empty( $package['blog_settings'] ) ) {
+            $preview['blog'] = $this->parse_quickstart_blog_settings( (string) $package['blog_settings'] );
+        }
+
+        if ( isset( $package['trello_guidelines'] ) && is_array( $package['trello_guidelines'] ) ) {
+            $preview['trello_guidelines'] = array_map( 'sanitize_text_field', $package['trello_guidelines'] );
+        }
+
+        return $preview;
+    }
+
+    /**
+     * Apply quickstart package presets.
+     *
+     * @param string $slug     Package slug.
+     * @param bool   $override Whether to override existing settings.
+     * @return array|WP_Error
+     */
+    private function apply_quickstart_package( $slug, $override = false ) {
+        $packages = $this->get_quickstart_packages();
+
+        if ( ! isset( $packages[ $slug ] ) ) {
+            return new WP_Error( 'tts-invalid-package', __( 'Pacchetto non disponibile.', 'fp-publisher' ) );
+        }
+
+        $package         = $packages[ $slug ];
+        $package_profile = isset( $package['profile'] ) ? sanitize_key( $package['profile'] ) : 'standard';
+
+        if ( ! $this->usage_profile_allows( $package_profile ) ) {
+            return new WP_Error(
+                'tts-package-profile-mismatch',
+                __( 'Il pacchetto richiede un profilo di utilizzo più avanzato rispetto a quello attivo.', 'fp-publisher' )
+            );
+        }
+
+        $readiness = $this->assess_quickstart_package_readiness( $package );
+        if ( isset( $readiness['status'] ) && 'blocked' === $readiness['status'] ) {
+            return new WP_Error(
+                'tts-package-not-ready',
+                __( 'Completa prima i prerequisiti critici evidenziati nella validazione del pacchetto.', 'fp-publisher' )
+            );
+        }
+
+        $settings = get_option( 'tts_settings', array() );
+
+        if ( isset( $package['column_mapping'] ) ) {
+            $encoded = wp_json_encode( $package['column_mapping'] );
+            if ( $override || empty( $settings['column_mapping'] ) ) {
+                $settings['column_mapping'] = $encoded;
+            }
+        }
+
+        if ( isset( $package['templates'] ) && is_array( $package['templates'] ) ) {
+            foreach ( $package['templates'] as $key => $value ) {
+                if ( $override || empty( $settings[ $key ] ) ) {
+                    $settings[ $key ] = sanitize_text_field( $value );
+                }
+            }
+        }
+
+        if ( isset( $package['utm'] ) && is_array( $package['utm'] ) ) {
+            foreach ( $package['utm'] as $channel => $params ) {
+                foreach ( $params as $param_key => $param_value ) {
+                    if ( $override || empty( $settings['utm'][ $channel ][ $param_key ] ) ) {
+                        $settings['utm'][ $channel ][ $param_key ] = sanitize_text_field( $param_value );
+                    }
+                }
+            }
+        }
+
+        update_option( 'tts_settings', $settings );
+        update_option( 'tts_quickstart_last_package', array(
+            'slug'       => $slug,
+            'applied_at' => current_time( 'mysql' ),
+        ) );
+
+        if ( ! session_id() ) {
+            session_start();
+        }
+
+        $_SESSION['tts_quickstart_prefill'] = array(
+            'package'        => $slug,
+            'label'          => $package['title'],
+            'channels'       => isset( $package['channels'] ) ? array_map( 'sanitize_key', (array) $package['channels'] ) : array(),
+            'blog_settings'  => isset( $package['blog_settings'] ) ? sanitize_textarea_field( $package['blog_settings'] ) : '',
+            'trello_guidelines' => isset( $package['trello_guidelines'] ) ? array_map( 'sanitize_text_field', (array) $package['trello_guidelines'] ) : array(),
+            'column_mapping' => isset( $package['column_mapping'] ) ? $package['column_mapping'] : array(),
+            'profile'        => $package_profile,
+            'validation'     => $readiness,
+        );
+
+        $message = sprintf(
+            /* translators: %s: quickstart package title. */
+            __( 'Pacchetto "%s" applicato con successo. Apri il Client Wizard per completare la configurazione guidata.', 'fp-publisher' ),
+            $package['title']
+        );
+
+        return array(
+            'message' => $message,
+            'package' => $package,
+        );
+    }
+
+    /**
+     * Render onboarding checklist for the wizard.
+     *
+     * @param array $state          Progress state.
+     * @param int   $step           Current step number.
+     * @param array $prefill        Prefill metadata from quickstart packages.
+     * @param bool  $trello_enabled Whether Trello step is enabled.
+     * @param array $context        Runtime context (tokens, channels, validation hints).
+     */
+    private function render_client_wizard_checklist( array $state, $step, array $prefill, $trello_enabled, array $context = array() ) {
+        $defaults = array(
+            'trello_key'      => '',
+            'trello_token'    => '',
+            'trello_board'    => '',
+            'channels'        => array(),
+            'blog_settings'   => '',
+            'tokens'          => array(),
+            'mapping_count'   => 0,
+            'prefill_package' => '',
+            'validation'      => array(),
+            'usage_profile'   => $this->get_usage_profile(),
+        );
+
+        $context = wp_parse_args( $context, $defaults );
+
+        $validation_checks = array();
+        if ( isset( $context['validation']['checks'] ) && is_array( $context['validation']['checks'] ) ) {
+            foreach ( $context['validation']['checks'] as $check ) {
+                $scope = isset( $check['scope'] ) ? $check['scope'] : 'general';
+                if ( ! isset( $validation_checks[ $scope ] ) ) {
+                    $validation_checks[ $scope ] = array();
+                }
+                $validation_checks[ $scope ][] = $check;
+            }
+        }
+        $validation_summary = isset( $context['validation']['summary'] ) ? $context['validation']['summary'] : '';
+
+        $trello_status = array(
+            'status'  => 'pending',
+            'message' => __( 'Inserisci API key e token Trello per iniziare.', 'fp-publisher' ),
+        );
+
+        if ( ! $trello_enabled ) {
+            $trello_status = array(
+                'status'  => 'skipped',
+                'message' => __( 'Trello è disattivato nelle impostazioni generali.', 'fp-publisher' ),
+            );
+        } else {
+            $has_key    = '' !== trim( (string) $context['trello_key'] );
+            $has_token  = '' !== trim( (string) $context['trello_token'] );
+            $has_board  = '' !== trim( (string) $context['trello_board'] );
+
+            if ( ! $has_key || ! $has_token ) {
+                $trello_status = array(
+                    'status'  => 'blocked',
+                    'message' => __( 'Aggiungi API key e token Trello per proseguire.', 'fp-publisher' ),
+                );
+            } elseif ( ! $has_board ) {
+                $trello_status = array(
+                    'status'  => 'warning',
+                    'message' => __( 'Seleziona la board Trello da monitorare.', 'fp-publisher' ),
+                );
+            } else {
+                $trello_status = array(
+                    'status'  => ! empty( $state['trello'] ) ? 'complete' : 'pending',
+                    'message' => __( 'Credenziali Trello impostate, passa alla scelta dei canali.', 'fp-publisher' ),
+                );
+            }
+        }
+
+        $selected_channels = array_filter( array_map( 'sanitize_key', (array) $context['channels'] ) );
+        $connected_channels = array();
+        foreach ( $selected_channels as $selected_channel ) {
+            $token_value = '';
+            if ( isset( $context['tokens'][ $selected_channel ] ) ) {
+                $token_value = $context['tokens'][ $selected_channel ];
+            }
+            if ( '' !== trim( (string) $token_value ) ) {
+                $connected_channels[] = $selected_channel;
+            }
+        }
+
+        if ( empty( $selected_channels ) ) {
+            $channel_status = array(
+                'status'  => 'pending',
+                'message' => __( 'Seleziona almeno un canale da collegare.', 'fp-publisher' ),
+            );
+        } elseif ( count( $connected_channels ) === count( $selected_channels ) ) {
+            $channel_status = array(
+                'status'  => 'complete',
+                'message' => __( 'Tutti i canali selezionati risultano autorizzati.', 'fp-publisher' ),
+            );
+        } elseif ( ! empty( $connected_channels ) ) {
+            $channel_status = array(
+                'status'  => 'warning',
+                'message' => __( 'Autorizza anche i canali mancanti per evitare lacune di pubblicazione.', 'fp-publisher' ),
+            );
+        } else {
+            $channel_status = array(
+                'status'  => 'pending',
+                'message' => __( "Completa l'OAuth dal Client Wizard per almeno un canale.", 'fp-publisher' ),
+            );
+        }
+
+        if ( isset( $validation_checks['channels'] ) ) {
+            foreach ( $validation_checks['channels'] as $warning ) {
+                if ( 'blocked' === $warning['status'] ) {
+                    $channel_status['status'] = 'blocked';
+                    break;
+                }
+                if ( 'warning' === $warning['status'] && 'blocked' !== $channel_status['status'] ) {
+                    $channel_status['status'] = 'warning';
+                }
+            }
+        }
+
+        if ( ! $trello_enabled ) {
+            $mapping_status = array(
+                'status'  => 'skipped',
+                'message' => __( 'La mappatura Trello è facoltativa perché la sincronizzazione è disattivata.', 'fp-publisher' ),
+            );
+        } else {
+            $mapping_status = array(
+                'status'  => ( ! empty( $state['mapping'] ) || $context['mapping_count'] > 0 ) ? 'complete' : 'pending',
+                'message' => __( 'Associa almeno una lista Trello ai canali social.', 'fp-publisher' ),
+            );
+        }
+
+        $has_blog_settings = '' !== trim( (string) $context['blog_settings'] );
+        $blog_status = array(
+            'status'  => $has_blog_settings ? 'complete' : 'pending',
+            'message' => $has_blog_settings
+                ? __( 'Impostazioni blog presenti: puoi verificare i campi SEO nel riepilogo.', 'fp-publisher' )
+                : __( 'Compila le impostazioni blog per generare contenuti WordPress.', 'fp-publisher' ),
+        );
+
+        if ( isset( $validation_checks['blog'] ) ) {
+            foreach ( $validation_checks['blog'] as $warning ) {
+                if ( 'blocked' === $warning['status'] ) {
+                    $blog_status['status'] = 'blocked';
+                    $blog_status['message'] = $warning['message'];
+                    break;
+                }
+                if ( 'warning' === $warning['status'] && 'blocked' !== $blog_status['status'] ) {
+                    $blog_status['status'] = 'warning';
+                    $blog_status['message'] = $warning['message'];
+                }
+            }
+        }
+
+        $review_status = array(
+            'status'  => ! empty( $state['review'] ) ? 'complete' : 'pending',
+            'message' => ! empty( $state['review'] )
+                ? __( 'Riepilogo verificato: pronto alla creazione del cliente.', 'fp-publisher' )
+                : __( 'Controlla i dati raccolti e conferma per creare il cliente.', 'fp-publisher' ),
+        );
+
+        $items = array(
+            'trello'   => array(
+                'label'       => __( 'Connessione Trello', 'fp-publisher' ),
+                'description' => $trello_enabled
+                    ? __( 'Inserisci API key e token e scegli la board da monitorare.', 'fp-publisher' )
+                    : __( 'Trello è disabilitato nelle impostazioni generali.', 'fp-publisher' ),
+                'status'      => $trello_status['status'],
+                'message'     => $trello_status['message'],
+                'hints'       => isset( $validation_checks['trello'] ) ? $validation_checks['trello'] : array(),
+                'actions'     => $trello_enabled ? array(
+                    array(
+                        'label' => __( 'Gestisci integrazione Trello', 'fp-publisher' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-social-connections' ),
+                    ),
+                ) : array(),
+                'docs'        => array(
+                    array(
+                        'label' => __( 'Apri la Guida Quickstart', 'fp-publisher' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-help#quickstart' ),
+                    ),
+                ),
+            ),
+            'channels' => array(
+                'label'       => __( 'Selezione canali', 'fp-publisher' ),
+                'description' => __( 'Indica i social da collegare e verifica le app OAuth.', 'fp-publisher' ),
+                'status'      => $channel_status['status'],
+                'message'     => $channel_status['message'],
+                'hints'       => isset( $validation_checks['channels'] ) ? $validation_checks['channels'] : array(),
+                'actions'     => array(
+                    array(
+                        'label' => __( 'Apri Connessioni social', 'fp-publisher' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-social-connections' ),
+                    ),
+                    array(
+                        'label' => __( 'Testa le connessioni', 'fp-publisher' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-test-connections' ),
+                    ),
+                ),
+                'docs'        => array(
+                    array(
+                        'label' => __( 'Leggi la guida alle app social', 'fp-publisher' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-help#overview' ),
+                    ),
+                ),
+            ),
+            'mapping'  => array(
+                'label'       => __( 'Mappatura Trello → canali', 'fp-publisher' ),
+                'description' => __( 'Associa le liste Trello ai canali social o al blog.', 'fp-publisher' ),
+                'status'      => $mapping_status['status'],
+                'message'     => $mapping_status['message'],
+                'hints'       => isset( $validation_checks['trello'] ) ? $validation_checks['trello'] : array(),
+                'actions'     => $trello_enabled ? array(
+                    array(
+                        'label' => __( 'Apri passaggio mappatura', 'fp-publisher' ),
+                        'url'   => add_query_arg( array( 'step' => 3 ), admin_url( 'admin.php?page=fp-publisher-client-wizard' ) ),
+                    ),
+                ) : array(),
+                'docs'        => array(
+                    array(
+                        'label' => __( 'Suggerimenti di mappatura', 'fp-publisher' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-help#quickstart' ),
+                    ),
+                ),
+            ),
+            'blog'     => array(
+                'label'       => __( 'Impostazioni blog', 'fp-publisher' ),
+                'description' => __( 'Definisci post type, stato, SEO e categorie del blog collegato.', 'fp-publisher' ),
+                'status'      => $blog_status['status'],
+                'message'     => $blog_status['message'],
+                'hints'       => isset( $validation_checks['blog'] ) ? $validation_checks['blog'] : array(),
+                'actions'     => array(),
+                'docs'        => array(
+                    array(
+                        'label' => __( 'Configura blog & SEO', 'fp-publisher' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-help#blog' ),
+                    ),
+                ),
+            ),
+            'review'   => array(
+                'label'       => __( 'Riepilogo finale', 'fp-publisher' ),
+                'description' => __( 'Conferma i dati e crea il cliente pronto alla pubblicazione.', 'fp-publisher' ),
+                'status'      => $review_status['status'],
+                'message'     => $review_status['message'],
+                'hints'       => array(),
+                'actions'     => array(),
+                'docs'        => array(
+                    array(
+                        'label' => __( 'Controlla la checklist finale', 'fp-publisher' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-help#quickstart' ),
+                    ),
+                ),
+            ),
+        );
+
+        $status_icons = array(
+            'complete' => '✅',
+            'pending'  => '⬜',
+            'warning'  => '⚠️',
+            'blocked'  => '❌',
+            'skipped'  => '➖',
+        );
+
+        $progress_items = array_filter(
+            $items,
+            static function ( $item ) {
+                return 'skipped' !== $item['status'];
+            }
+        );
+        $total_steps     = count( $progress_items );
+        $completed_steps = count(
+            array_filter(
+                $progress_items,
+                static function ( $item ) {
+                    return 'complete' === $item['status'];
+                }
+            )
+        );
+        $progress_percent = $total_steps > 0 ? round( ( $completed_steps / $total_steps ) * 100 ) : 0;
+
+        echo '<div class="tts-wizard-checklist">';
+        echo '<h2>' . esc_html__( 'Checklist onboarding', 'fp-publisher' ) . '</h2>';
+        echo '<p class="tts-checklist-progress">' . esc_html( sprintf( __( 'Avanzamento: %1$s di %2$s passaggi completati (%3$s%%).', 'fp-publisher' ), $completed_steps, $total_steps, $progress_percent ) ) . '</p>';
+
+        if ( ! empty( $prefill['label'] ) ) {
+            echo '<p class="tts-checklist-prefill">' . sprintf(
+                /* translators: %s: quickstart package label. */
+                esc_html__( 'Preset attivo: %s', 'fp-publisher' ),
+                '<strong>' . esc_html( $prefill['label'] ) . '</strong>'
+            ) . '</p>';
+        }
+
+        echo '<ul class="tts-checklist-items">';
+        foreach ( $items as $key => $item ) {
+            $status = $item['status'];
+            $icon   = isset( $status_icons[ $status ] ) ? $status_icons[ $status ] : '⬜';
+            $classes = array( 'tts-checklist-item', 'status-' . $status );
+            if ( 'complete' === $status ) {
+                $classes[] = 'is-complete';
+            }
+
+            echo '<li class="' . esc_attr( implode( ' ', $classes ) ) . '">';
+            echo '<span class="tts-checklist-icon">' . esc_html( $icon ) . '</span>';
+            echo '<span class="tts-checklist-content">';
+            echo '<strong>' . esc_html( $item['label'] ) . '</strong>';
+            echo '<span class="tts-checklist-description">' . esc_html( $item['description'] ) . '</span>';
+            if ( '' !== $item['message'] ) {
+                echo '<span class="tts-checklist-message">' . esc_html( $item['message'] ) . '</span>';
+            }
+
+            if ( ! empty( $item['hints'] ) ) {
+                echo '<ul class="tts-checklist-hints">';
+                foreach ( $item['hints'] as $hint ) {
+                    $hint_status = isset( $hint['status'] ) && isset( $status_icons[ $hint['status'] ] ) ? $status_icons[ $hint['status'] ] : '•';
+                    $hint_label  = isset( $hint['label'] ) ? $hint['label'] : '';
+                    $hint_msg    = isset( $hint['message'] ) ? $hint['message'] : '';
+                    echo '<li>';
+                    echo '<span class="tts-checklist-hint-icon">' . esc_html( $hint_status ) . '</span>';
+                    echo '<span class="tts-checklist-hint-text">';
+                    if ( '' !== $hint_label ) {
+                        echo '<strong>' . esc_html( $hint_label ) . '</strong> ';
+                    }
+                    if ( '' !== $hint_msg ) {
+                        echo esc_html( $hint_msg );
+                    }
+                    echo '</span>';
+                    echo '</li>';
+                }
+                echo '</ul>';
+            }
+
+            if ( ! empty( $item['actions'] ) ) {
+                echo '<div class="tts-checklist-links">';
+                foreach ( $item['actions'] as $action ) {
+                    $label = isset( $action['label'] ) ? $action['label'] : '';
+                    $url   = isset( $action['url'] ) ? $action['url'] : '';
+                    if ( '' === $label || '' === $url ) {
+                        continue;
+                    }
+                    echo '<a class="button button-secondary" href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a> ';
+                }
+                echo '</div>';
+            }
+
+            if ( ! empty( $item['docs'] ) ) {
+                echo '<div class="tts-checklist-links tts-checklist-docs">';
+                foreach ( $item['docs'] as $doc ) {
+                    $doc_label = isset( $doc['label'] ) ? $doc['label'] : '';
+                    $doc_url   = isset( $doc['url'] ) ? $doc['url'] : '';
+                    if ( '' === $doc_label || '' === $doc_url ) {
+                        continue;
+                    }
+                    echo '<a class="button-link" href="' . esc_url( $doc_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( $doc_label ) . '</a>';
+                }
+                echo '</div>';
+            }
+
+            echo '</span>';
+            echo '</li>';
+        }
+        echo '</ul>';
+
+        echo '<form method="post" class="tts-checklist-actions">';
+        wp_nonce_field( 'tts_reset_wizard', 'tts_reset_wizard_nonce' );
+        echo '<input type="hidden" name="tts_reset_wizard_progress" value="1" />';
+        echo '<button type="submit" class="button">' . esc_html__( 'Azzera checklist', 'fp-publisher' ) . '</button>';
+        echo '</form>';
+
+        if ( $validation_summary ) {
+            echo '<p class="tts-validation-summary">' . esc_html( $validation_summary ) . '</p>';
+        }
+
+        if ( ! empty( $prefill['trello_guidelines'] ) && is_array( $prefill['trello_guidelines'] ) ) {
+            echo '<div class="tts-checklist-guidelines">';
+            echo '<strong>' . esc_html__( 'Suggerimenti dal pacchetto selezionato', 'fp-publisher' ) . '</strong>';
+            echo '<ul>';
+            foreach ( $prefill['trello_guidelines'] as $guideline ) {
+                echo '<li>' . esc_html( $guideline ) . '</li>';
+            }
+            echo '</ul>';
+            echo '</div>';
+        }
+
+        echo '</div>';
+    }
+    /**
+     * Render the client wizard page.
      */
     public function tts_render_client_wizard() {
         if ( ! session_id() ) {
@@ -2280,19 +4073,6 @@ class TTS_Admin {
             } elseif ( 3 === $step ) {
                 $step = 4;
             }
-        }
-
-        echo '<div class="wrap tts-client-wizard">';
-        echo '<h1>' . esc_html__( 'Client Wizard', 'fp-publisher' ) . '</h1>';
-
-        // Add helpful notice about social media setup
-        if ( 2 === $step ) {
-            echo '<div class="notice notice-info">';
-            echo '<h3>' . esc_html__( 'Social Media Setup Required', 'fp-publisher' ) . '</h3>';
-            echo '<p>' . esc_html__( 'To connect social media accounts, you must first configure OAuth apps for each platform. Click "Configure App" for platforms that are not set up.', 'fp-publisher' ) . '</p>';
-            echo '<p><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ) . '" class="button">' . esc_html__( 'Manage Social Connections', 'fp-publisher' ) . '</a> ';
-            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-help' ) ) . '" target="_blank">' . esc_html__( 'View Setup Guide', 'fp-publisher' ) . '</a></p>';
-            echo '</div>';
         }
 
         $fb_token = get_transient( 'tts_oauth_facebook_token' );
@@ -2341,6 +4121,74 @@ class TTS_Admin {
         }
         $client_name = trim( $client_name );
 
+        if ( isset( $_POST['blog_settings'] ) ) {
+            $blog_settings = sanitize_textarea_field( wp_unslash( $_POST['blog_settings'] ) );
+        } elseif ( isset( $_GET['blog_settings'] ) ) {
+            $blog_settings = sanitize_textarea_field( wp_unslash( $_GET['blog_settings'] ) );
+        } else {
+            $blog_settings = '';
+        }
+
+        $checklist_notice = '';
+        if ( isset( $_POST['tts_reset_wizard_progress'] ) ) {
+            if ( isset( $_POST['tts_reset_wizard_nonce'] ) && wp_verify_nonce( wp_unslash( $_POST['tts_reset_wizard_nonce'] ), 'tts_reset_wizard' ) ) {
+                unset( $_SESSION['tts_wizard_progress'] );
+                $checklist_notice = __( 'Checklist ripristinata.', 'fp-publisher' );
+            }
+        }
+
+        $prefill = isset( $_SESSION['tts_quickstart_prefill'] ) ? $_SESSION['tts_quickstart_prefill'] : array();
+
+        if ( empty( $channels ) && ! empty( $prefill['channels'] ) && is_array( $prefill['channels'] ) ) {
+            $channels = array_map( 'sanitize_text_field', $prefill['channels'] );
+        }
+
+        if ( '' === $blog_settings && ! empty( $prefill['blog_settings'] ) ) {
+            $blog_settings = $prefill['blog_settings'];
+        }
+
+        $wizard_progress = isset( $_SESSION['tts_wizard_progress'] ) ? (array) $_SESSION['tts_wizard_progress'] : array(
+            'trello'   => false,
+            'channels' => false,
+            'mapping'  => false,
+            'blog'     => false,
+            'review'   => false,
+        );
+
+        if ( ! $trello_enabled || ( $trello_key && $trello_token && $board ) ) {
+            $wizard_progress['trello'] = true;
+        }
+
+        if ( ! empty( $channels ) ) {
+            $wizard_progress['channels'] = true;
+        }
+
+        if ( '' !== trim( $blog_settings ) ) {
+            $wizard_progress['blog'] = true;
+        }
+
+        $mapping_count = 0;
+        if ( isset( $_POST['tts_trello_map'] ) && is_array( $_POST['tts_trello_map'] ) ) {
+            foreach ( $_POST['tts_trello_map'] as $row ) {
+                if ( ! empty( $row['canale_social'] ) ) {
+                    $mapping_count++;
+                }
+            }
+        } elseif ( isset( $wizard_progress['mapping_count'] ) ) {
+            $mapping_count = (int) $wizard_progress['mapping_count'];
+        }
+
+        if ( ! $trello_enabled || $mapping_count > 0 ) {
+            $wizard_progress['mapping'] = true;
+        }
+
+        if ( isset( $_POST['finalize'] ) ) {
+            $wizard_progress['review'] = true;
+        }
+
+        $wizard_progress['mapping_count'] = $mapping_count;
+        $_SESSION['tts_wizard_progress'] = $wizard_progress;
+
         $client_name_error = '';
         $required_step     = $trello_enabled ? 3 : 4;
         if ( $post_step >= $required_step && '' === $client_name ) {
@@ -2348,15 +4196,82 @@ class TTS_Admin {
             $step              = 2;
         }
 
+        $wizard_context = array(
+            'trello_key'      => $trello_key,
+            'trello_token'    => $trello_token,
+            'trello_board'    => $board,
+            'channels'        => $channels,
+            'blog_settings'   => $blog_settings,
+            'tokens'          => array(
+                'facebook'  => $fb_token,
+                'instagram' => $ig_token,
+                'youtube'   => $yt_token,
+                'tiktok'    => $tt_token,
+            ),
+            'mapping_count'   => $mapping_count,
+            'prefill_package' => isset( $prefill['label'] ) ? $prefill['label'] : '',
+            'validation'      => isset( $prefill['validation'] ) ? $prefill['validation'] : array(),
+            'usage_profile'   => $this->get_usage_profile(),
+        );
+
+        echo '<div class="wrap tts-client-wizard">';
+        echo '<h1>' . esc_html__( 'Client Wizard', 'fp-publisher' ) . '</h1>';
+        echo '<style>'
+            . '.tts-wizard-checklist{background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:20px;margin-bottom:20px;}'
+            . '.tts-checklist-progress{font-weight:600;margin-bottom:8px;color:#1d2327;}'
+            . '.tts-checklist-prefill{margin-bottom:8px;color:#005ae0;}'
+            . '.tts-checklist-items{list-style:none;margin:0;padding:0;}'
+            . '.tts-checklist-item{display:flex;gap:12px;border-top:1px solid #ececec;padding:12px 0;}'
+            . '.tts-checklist-item:first-child{border-top:0;padding-top:0;}'
+            . '.tts-checklist-icon{font-size:20px;line-height:1;}'
+            . '.tts-checklist-content strong{display:block;font-size:15px;margin-bottom:2px;}'
+            . '.tts-checklist-description{display:block;color:#50575e;font-size:13px;margin-bottom:4px;}'
+            . '.tts-checklist-message{display:block;color:#1d2327;font-size:13px;margin-bottom:4px;}'
+            . '.tts-checklist-hints{list-style:none;margin:6px 0 0;padding:0;}'
+            . '.tts-checklist-hints li{display:flex;gap:6px;font-size:12px;color:#50575e;margin-bottom:4px;}'
+            . '.tts-checklist-hint-icon{font-size:14px;line-height:1.2;}'
+            . '.tts-checklist-links{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;}'
+            . '.tts-checklist-docs a{font-size:12px;color:#2271b1;}'
+            . '.tts-checklist-actions{margin-top:12px;}'
+            . '.tts-inline-actions{margin:0 0 8px;}'
+            . '.tts-validate-result,.tts-token-result{margin-bottom:12px;font-size:13px;}'
+            . '.tts-validate-result.success,.tts-token-result.success{color:#007017;}'
+            . '.tts-validate-result.error,.tts-token-result.error{color:#b52738;}'
+            . '.tts-validation-summary{margin-top:12px;font-size:13px;color:#1d2327;}'
+            . '</style>';
+
+        if ( $checklist_notice ) {
+            echo '<div class="notice notice-info"><p>' . esc_html( $checklist_notice ) . '</p></div>';
+        }
+
+        $this->render_client_wizard_checklist( $wizard_progress, $step, $prefill, $trello_enabled, $wizard_context );
+
+        // Add helpful notice about social media setup.
+        if ( 2 === $step ) {
+            echo '<div class="notice notice-info">';
+            echo '<h3>' . esc_html__( 'Social Media Setup Required', 'fp-publisher' ) . '</h3>';
+            echo '<p>' . esc_html__( 'To connect social media accounts, you must first configure OAuth apps for each platform. Click "Configure App" for platforms that are not set up.', 'fp-publisher' ) . '</p>';
+            echo '<p><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ) . '" class="button">' . esc_html__( 'Manage Social Connections', 'fp-publisher' ) . '</a> ';
+            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-help' ) ) . '" target="_blank">' . esc_html__( 'View Setup Guide', 'fp-publisher' ) . '</a></p>';
+            echo '</div>';
+        }
+
         if ( $trello_enabled && 1 === $step ) {
             echo '<form method="post" class="tts-wizard-step tts-step-1">';
             wp_nonce_field( 'tts_client_wizard', 'tts_wizard_nonce' );
             echo '<input type="hidden" name="step" value="2" />';
             echo '<input type="hidden" name="client_name" value="' . esc_attr( $client_name ) . '" />';
+            echo '<input type="hidden" name="blog_settings" value="' . esc_attr( $blog_settings ) . '" />';
             echo '<p><label>' . esc_html__( 'Trello API Key', 'fp-publisher' ) . '<br />';
             echo '<input type="text" name="trello_key" value="' . esc_attr( $trello_key ) . '"' . ( $trello_enabled ? ' required' : '' ) . ' /></label></p>';
             echo '<p><label>' . esc_html__( 'Trello Token', 'fp-publisher' ) . '<br />';
             echo '<input type="text" name="trello_token" value="' . esc_attr( $trello_token ) . '"' . ( $trello_enabled ? ' required' : '' ) . ' /></label></p>';
+
+            echo '<p class="tts-inline-actions">';
+            echo '<button type="button" class="button tts-validate-trello" data-nonce="' . esc_attr( wp_create_nonce( 'tts_wizard' ) ) . '">'
+                . esc_html__( 'Verifica credenziali Trello', 'fp-publisher' ) . '</button>';
+            echo '</p>';
+            echo '<div class="tts-validate-result" aria-live="polite"></div>';
 
             $boards = array();
             if ( $trello_key && $trello_token ) {
@@ -2397,12 +4312,19 @@ class TTS_Admin {
             echo '<p><label>' . esc_html__( 'Client Name', 'fp-publisher' ) . '<br />';
             echo '<input type="text" name="client_name" value="' . esc_attr( $client_name ) . '" required /></label></p>';
 
+            echo '<p><label>' . esc_html__( 'Impostazioni blog', 'fp-publisher' ) . '<br />';
+            echo '<textarea name="blog_settings" class="widefat" rows="3" placeholder="post_type:post|post_status:draft|author_id:1|category_id:1">' . esc_textarea( $blog_settings ) . '</textarea>';
+            echo '<span class="description">' . esc_html__( 'Inserisci parametri separati da | per post_type, stato, autore, categorie e SEO.', 'fp-publisher' ) . '</span>';
+            echo '</label></p>';
+
             $opts = array(
                 'facebook'  => __( 'Facebook', 'fp-publisher' ),
                 'instagram' => __( 'Instagram', 'fp-publisher' ),
                 'youtube'   => __( 'YouTube', 'fp-publisher' ),
                 'tiktok'    => __( 'TikTok', 'fp-publisher' ),
             );
+
+            $wizard_nonce = wp_create_nonce( 'tts_wizard' );
 
             foreach ( $opts as $slug => $label ) {
                 $token     = '';
@@ -2444,11 +4366,13 @@ class TTS_Admin {
                     echo '<br><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ) . '" class="button">' . esc_html__( 'Configure App', 'fp-publisher' ) . '</a>';
                 } elseif ( $connected ) {
                     echo '<br><span style="color: #00a32a;">✅ ' . esc_html__( 'Connected', 'fp-publisher' ) . '</span>';
+                    echo '<br><button type="button" class="button button-secondary tts-test-token" data-platform="' . esc_attr( $slug ) . '" data-nonce="' . esc_attr( $wizard_nonce ) . '">' . esc_html__( 'Test token', 'fp-publisher' ) . '</button>';
                 } else {
                     $url = add_query_arg( array( 'action' => 'tts_oauth_' . $slug, 'step' => 2 ), admin_url( 'admin-post.php' ) );
                     echo '<br><span style="color: #f56e28;">🟡 ' . esc_html__( 'Ready to connect', 'fp-publisher' ) . '</span>';
                     echo '<br><a href="' . esc_url( $url ) . '" class="button button-primary">' . esc_html__( 'Connect Account', 'fp-publisher' ) . '</a>';
                 }
+                echo '<div class="tts-token-result" data-platform="' . esc_attr( $slug ) . '" aria-live="polite"></div>';
                 echo '</div>';
             }
 
@@ -2472,6 +4396,7 @@ class TTS_Admin {
             echo '<input type="hidden" name="trello_token" value="' . esc_attr( $trello_token ) . '" />';
             echo '<input type="hidden" name="trello_board" value="' . esc_attr( $board ) . '" />';
             echo '<input type="hidden" name="client_name" value="' . esc_attr( $client_name ) . '" />';
+            echo '<input type="hidden" name="blog_settings" value="' . esc_attr( $blog_settings ) . '" />';
             foreach ( $channels as $ch ) {
                 echo '<input type="hidden" name="channels[]" value="' . esc_attr( $ch ) . '" />';
             }
@@ -2507,6 +4432,9 @@ class TTS_Admin {
                     if ( $tt_token ) {
                         update_post_meta( $post_id, '_tts_tt_token', $tt_token );
                     }
+                    if ( '' !== $blog_settings ) {
+                        update_post_meta( $post_id, '_tts_blog_settings', $blog_settings );
+                    }
                     if ( $trello_enabled && isset( $_POST['tts_trello_map'] ) && is_array( $_POST['tts_trello_map'] ) ) {
                         $map = array();
                         foreach ( $_POST['tts_trello_map'] as $id_list => $row ) {
@@ -2527,6 +4455,12 @@ class TTS_Admin {
                     delete_transient( 'tts_oauth_instagram_token' );
                     delete_transient( 'tts_oauth_youtube_token' );
                     delete_transient( 'tts_oauth_tiktok_token' );
+
+                    $_SESSION['tts_wizard_progress']['trello']   = true;
+                    $_SESSION['tts_wizard_progress']['channels'] = true;
+                    $_SESSION['tts_wizard_progress']['mapping']  = true;
+                    $_SESSION['tts_wizard_progress']['blog']     = '' !== $blog_settings;
+                    $_SESSION['tts_wizard_progress']['review']   = true;
 
                     echo '<p>' . esc_html__( 'Client created.', 'fp-publisher' ) . '</p>';
                 }
@@ -2552,6 +4486,7 @@ class TTS_Admin {
             echo '<input type="hidden" name="trello_token" value="' . esc_attr( $trello_token ) . '" />';
             echo '<input type="hidden" name="trello_board" value="' . esc_attr( $board ) . '" />';
             echo '<input type="hidden" name="client_name" value="' . esc_attr( $client_name ) . '" />';
+            echo '<input type="hidden" name="blog_settings" value="' . esc_attr( $blog_settings ) . '" />';
             foreach ( $channels as $ch ) {
                 echo '<input type="hidden" name="channels[]" value="' . esc_attr( $ch ) . '" />';
             }
@@ -2563,6 +4498,10 @@ class TTS_Admin {
 
             echo '<h2>' . esc_html__( 'Summary', 'fp-publisher' ) . '</h2>';
             echo '<p>' . esc_html__( 'Client Name:', 'fp-publisher' ) . ' ' . esc_html( $client_name ? $client_name : __( 'Client', 'fp-publisher' ) ) . '</p>';
+
+            if ( '' !== $blog_settings ) {
+                echo '<p><strong>' . esc_html__( 'Impostazioni blog', 'fp-publisher' ) . ':</strong><br><code>' . esc_html( $blog_settings ) . '</code></p>';
+            }
             if ( $trello_enabled && $board ) {
                 echo '<p>' . esc_html__( 'Trello Board:', 'fp-publisher' ) . ' ' . esc_html( $board ) . '</p>';
             }
@@ -2572,6 +4511,82 @@ class TTS_Admin {
         }
 
         echo '</div>';
+
+        $ajax_url = admin_url( 'admin-ajax.php' );
+        ob_start();
+        ?>
+        <script>
+        jQuery(function($){
+            var ajaxUrl = <?php echo wp_json_encode( $ajax_url ); ?>;
+
+            $(document).on('click', '.tts-validate-trello', function(e){
+                e.preventDefault();
+                var $btn = $(this);
+                var nonce = $btn.data('nonce');
+                var $form = $btn.closest('form');
+                var apiKey = $form.find('input[name="trello_key"]').val();
+                var token = $form.find('input[name="trello_token"]').val();
+                var $output = $form.find('.tts-validate-result');
+
+                $output.removeClass('success error').text(<?php echo wp_json_encode( __( 'Verifica in corso…', 'fp-publisher' ) ); ?>);
+                $btn.prop('disabled', true);
+
+                $.post(ajaxUrl, {
+                    action: 'tts_validate_trello_credentials',
+                    nonce: nonce,
+                    api_key: apiKey,
+                    token: token
+                }).done(function(response){
+                    if (response && response.success && response.data) {
+                        var statusClass = response.data.success ? 'success' : 'error';
+                        var message = response.data.message || <?php echo wp_json_encode( __( 'Risposta non disponibile.', 'fp-publisher' ) ); ?>;
+                        $output.removeClass('success error').addClass(statusClass).text(message);
+                    } else {
+                        $output.removeClass('success').addClass('error').text(<?php echo wp_json_encode( __( 'Impossibile validare le credenziali.', 'fp-publisher' ) ); ?>);
+                    }
+                }).fail(function(){
+                    $output.removeClass('success').addClass('error').text(<?php echo wp_json_encode( __( 'Errore di comunicazione con il server.', 'fp-publisher' ) ); ?>);
+                }).always(function(){
+                    $btn.prop('disabled', false);
+                });
+            });
+
+            $(document).on('click', '.tts-test-token', function(e){
+                e.preventDefault();
+                var $btn = $(this);
+                var platform = $btn.data('platform');
+                var nonce = $btn.data('nonce');
+                var $output = $btn.closest('div').find('.tts-token-result[data-platform="' + platform + '"]');
+
+                if (!$output.length) {
+                    return;
+                }
+
+                $output.removeClass('success error').text(<?php echo wp_json_encode( __( 'Verifica in corso…', 'fp-publisher' ) ); ?>);
+                $btn.prop('disabled', true);
+
+                $.post(ajaxUrl, {
+                    action: 'tts_test_wizard_token',
+                    nonce: nonce,
+                    platform: platform
+                }).done(function(response){
+                    if (response && response.success && response.data) {
+                        var statusClass = response.data.success ? 'success' : 'error';
+                        var message = response.data.message || <?php echo wp_json_encode( __( 'Risposta non disponibile.', 'fp-publisher' ) ); ?>;
+                        $output.removeClass('success error').addClass(statusClass).text(message);
+                    } else {
+                        $output.removeClass('success').addClass('error').text(<?php echo wp_json_encode( __( 'Impossibile testare il token.', 'fp-publisher' ) ); ?>);
+                    }
+                }).fail(function(){
+                    $output.removeClass('success').addClass('error').text(<?php echo wp_json_encode( __( 'Errore di comunicazione con il server.', 'fp-publisher' ) ); ?>);
+                }).always(function(){
+                    $btn.prop('disabled', false);
+                });
+            });
+        });
+        </script>
+        <?php
+        echo ob_get_clean();
     }
 
     /**
@@ -4494,16 +6509,21 @@ class TTS_Admin {
                     <h3><?php esc_html_e( 'Quick Links', 'fp-publisher' ); ?></h3>
                     <ul>
                         <li><a href="#overview"><?php esc_html_e( 'Overview', 'fp-publisher' ); ?></a></li>
+                        <li><a href="#quickstart"><?php esc_html_e( 'Quickstart Packages', 'fp-publisher' ); ?></a></li>
+                        <li><a href="#blog"><?php esc_html_e( 'Blog & SEO', 'fp-publisher' ); ?></a></li>
                         <li><a href="#facebook"><?php esc_html_e( 'Facebook Setup', 'fp-publisher' ); ?></a></li>
                         <li><a href="#instagram"><?php esc_html_e( 'Instagram Setup', 'fp-publisher' ); ?></a></li>
                         <li><a href="#youtube"><?php esc_html_e( 'YouTube Setup', 'fp-publisher' ); ?></a></li>
                         <li><a href="#tiktok"><?php esc_html_e( 'TikTok Setup', 'fp-publisher' ); ?></a></li>
                         <li><a href="#troubleshooting"><?php esc_html_e( 'Troubleshooting', 'fp-publisher' ); ?></a></li>
                     </ul>
-                    
+
                     <div class="tts-help-actions">
                         <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ); ?>" class="button button-primary">
                             <?php esc_html_e( 'Configure Social Apps', 'fp-publisher' ); ?>
+                        </a>
+                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-quickstart' ) ); ?>" class="button">
+                            <?php esc_html_e( 'Manage Quickstart Packages', 'fp-publisher' ); ?>
                         </a>
                         <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-client-wizard' ) ); ?>" class="button">
                             <?php esc_html_e( 'Create Client', 'fp-publisher' ); ?>
@@ -4525,6 +6545,28 @@ class TTS_Admin {
                         <div class="tts-notice-warning">
                             <p><strong><?php esc_html_e( 'Important:', 'fp-publisher' ); ?></strong> <?php esc_html_e( 'Each social media platform requires you to create a developer application. This is a one-time setup per platform.', 'fp-publisher' ); ?></p>
                         </div>
+                    </section>
+
+                    <section id="quickstart">
+                        <h2><?php esc_html_e( '⚙️ Quickstart Packages', 'fp-publisher' ); ?></h2>
+                        <p><?php esc_html_e( 'Use curated presets to prefill the Client Wizard with Trello mappings, social templates and UTM parameters.', 'fp-publisher' ); ?></p>
+                        <ol>
+                            <li><?php esc_html_e( 'Open Clients → Quickstart Packages and choose the preset that matches your active usage profile.', 'fp-publisher' ); ?></li>
+                            <li><?php esc_html_e( 'Click “Anteprima modifiche” to review mapping, template and UTM overrides before applying the preset.', 'fp-publisher' ); ?></li>
+                            <li><?php esc_html_e( 'Resolve any blocked requirements highlighted in the readiness checklist, then apply the package.', 'fp-publisher' ); ?></li>
+                            <li><?php esc_html_e( 'Launch the Client Wizard: the onboarding checklist will reuse the validation results and link back to this guide.', 'fp-publisher' ); ?></li>
+                        </ol>
+                        <p><?php esc_html_e( 'Tip: adjust the usage profile (Standard, Advanced, Enterprise) from Settings → Modalità di utilizzo to surface only the tools your team needs.', 'fp-publisher' ); ?></p>
+                    </section>
+
+                    <section id="blog">
+                        <h2><?php esc_html_e( '📝 Blog & SEO', 'fp-publisher' ); ?></h2>
+                        <p><?php esc_html_e( 'The blog prefill string accepts pipe-separated parameters such as post_type, post_status, author_id, language and SEO metadata.', 'fp-publisher' ); ?></p>
+                        <ul>
+                            <li><?php esc_html_e( 'Use the Quickstart preview to confirm how blog settings will be prefilled in the Client Wizard.', 'fp-publisher' ); ?></li>
+                            <li><?php esc_html_e( 'Populate seo_title, meta_description and canonical_url to align WordPress articles with your editorial strategy.', 'fp-publisher' ); ?></li>
+                            <li><?php esc_html_e( 'For multilingual setups include the language parameter and ensure WPML integration is configured in the publisher.', 'fp-publisher' ); ?></li>
+                        </ul>
                     </section>
 
                     <section id="facebook">
@@ -6659,6 +8701,136 @@ class TTS_Admin {
         );
 
         return wp_send_json_success( $sanitized_response );
+    }
+
+    /**
+     * AJAX handler to validate Trello credentials from the wizard.
+     */
+    public function ajax_validate_trello_credentials() {
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
+        }
+
+        $nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+        if ( ! wp_verify_nonce( $nonce, 'tts_wizard' ) ) {
+            return wp_send_json_error( __( 'Security check failed.', 'fp-publisher' ), 403 );
+        }
+
+        $api_key = isset( $_POST['api_key'] ) ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) ) : '';
+        $token   = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
+
+        if ( '' === $api_key || '' === $token ) {
+            return wp_send_json_success(
+                array(
+                    'success' => false,
+                    'message' => __( 'Fornisci sia API key che token Trello.', 'fp-publisher' ),
+                )
+            );
+        }
+
+        $result  = $this->test_trello_connection( $api_key, $token );
+        $success = ! empty( $result['success'] );
+        $message = isset( $result['message'] ) ? sanitize_text_field( $result['message'] ) : '';
+
+        if ( '' === $message ) {
+            $message = $success
+                ? __( 'Credenziali verificate con successo.', 'fp-publisher' )
+                : __( 'Credenziali non valide. Ricontrolla key e token.', 'fp-publisher' );
+        }
+
+        return wp_send_json_success(
+            array(
+                'success' => $success,
+                'message' => $message,
+            )
+        );
+    }
+
+    /**
+     * AJAX handler to test OAuth tokens captured during the wizard flow.
+     */
+    public function ajax_test_wizard_token() {
+        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
+            return;
+        }
+
+        $nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+        if ( ! wp_verify_nonce( $nonce, 'tts_wizard' ) ) {
+            return wp_send_json_error( __( 'Security check failed.', 'fp-publisher' ), 403 );
+        }
+
+        $platform = isset( $_POST['platform'] ) ? sanitize_key( wp_unslash( $_POST['platform'] ) ) : '';
+        if ( '' === $platform ) {
+            return wp_send_json_success(
+                array(
+                    'success' => false,
+                    'message' => __( 'Piattaforma non valida.', 'fp-publisher' ),
+                )
+            );
+        }
+
+        $transient_map = array(
+            'facebook'  => 'tts_oauth_facebook_token',
+            'instagram' => 'tts_oauth_instagram_token',
+            'youtube'   => 'tts_oauth_youtube_token',
+            'tiktok'    => 'tts_oauth_tiktok_token',
+        );
+
+        if ( ! isset( $transient_map[ $platform ] ) ) {
+            return wp_send_json_success(
+                array(
+                    'success' => false,
+                    'message' => __( 'Piattaforma non supportata.', 'fp-publisher' ),
+                )
+            );
+        }
+
+        $token = get_transient( $transient_map[ $platform ] );
+        if ( '' === trim( (string) $token ) ) {
+            return wp_send_json_success(
+                array(
+                    'success' => false,
+                    'message' => __( 'Completa prima la procedura OAuth per questo canale.', 'fp-publisher' ),
+                )
+            );
+        }
+
+        switch ( $platform ) {
+            case 'facebook':
+                $result = $this->test_facebook_client_connection( $token );
+                break;
+            case 'instagram':
+                $result = $this->test_instagram_client_connection( $token );
+                break;
+            case 'youtube':
+                $result = $this->test_youtube_client_connection( $token );
+                break;
+            case 'tiktok':
+                $result = $this->test_tiktok_client_connection( $token );
+                break;
+            default:
+                $result = array(
+                    'success' => false,
+                    'message' => __( 'Piattaforma non supportata.', 'fp-publisher' ),
+                );
+                break;
+        }
+
+        $success = ! empty( $result['success'] );
+        $message = isset( $result['message'] ) ? sanitize_text_field( $result['message'] ) : '';
+
+        if ( '' === $message ) {
+            $message = $success
+                ? __( 'Token valido.', 'fp-publisher' )
+                : __( 'Token non valido o senza permessi sufficienti.', 'fp-publisher' );
+        }
+
+        return wp_send_json_success(
+            array(
+                'success' => $success,
+                'message' => $message,
+            )
+        );
     }
 
     /**

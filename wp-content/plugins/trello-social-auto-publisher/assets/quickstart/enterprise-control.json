@@ -1,0 +1,37 @@
+{
+  "name": "FP Publisher - Enterprise Control",
+  "description": "Template Trello pensato per il pacchetto Quickstart 'Enterprise Control' con focus su audit e compliance.",
+  "labels": [
+    { "name": "Legale", "color": "yellow" },
+    { "name": "Compliance", "color": "orange" },
+    { "name": "Sicurezza", "color": "red" },
+    { "name": "Social", "color": "blue" }
+  ],
+  "lists": [
+    { "name": "Intake", "pos": 100 },
+    { "name": "Quality Assurance", "pos": 200 },
+    { "name": "Security Check", "pos": 300 },
+    { "name": "Ready to Launch", "pos": 400 },
+    { "name": "Live + Audit", "pos": 500 },
+    { "name": "Archivio", "pos": 600 }
+  ],
+  "example_cards": [
+    {
+      "name": "Richiesta contenuto enterprise",
+      "desc": "Card modello con campi per responsabile, approvatore, data di lancio e checklist di verifica.",
+      "labels": ["Legale", "Compliance", "Social"],
+      "checklist": [
+        "Verifica requisiti brand",
+        "Audit privacy completato",
+        "Controllo accessi e permessi aggiornati",
+        "Log sincronizzati con FP Publisher"
+      ],
+      "list": "Intake"
+    }
+  ],
+  "guidelines": [
+    "Imposta automazioni Trello per notificare i revisori quando una card entra in 'Quality Assurance'",
+    "Collega le checklist alle policy aziendali e mantieni la cronologia degli audit",
+    "Utilizza la lista 'Live + Audit' per tracciare retrospettive e follow-up"
+  ]
+}

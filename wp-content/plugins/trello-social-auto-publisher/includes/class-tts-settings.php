@@ -84,6 +84,22 @@ class TTS_Settings {
             'tts_column_mapping'
         );
 
+        // Usage modes.
+        add_settings_section(
+            'tts_usage_modes',
+            __( 'Modalità di utilizzo', 'fp-publisher' ),
+            array( $this, 'render_usage_modes_intro' ),
+            'tts_settings'
+        );
+
+        add_settings_field(
+            'usage_profile',
+            __( 'Interfaccia preferita', 'fp-publisher' ),
+            array( $this, 'render_usage_profile_field' ),
+            'tts_settings',
+            'tts_usage_modes'
+        );
+
         // Social access token.
         add_settings_section(
             'tts_social_token',
@@ -375,6 +391,47 @@ class TTS_Settings {
     }
 
     /**
+     * Render introductory copy for the usage modes section.
+     */
+    public function render_usage_modes_intro() {
+        echo '<p class="description">' . esc_html__( 'Seleziona il profilo che meglio rappresenta il tuo team per mostrare solo gli strumenti necessari.', 'fp-publisher' ) . '</p>';
+    }
+
+    /**
+     * Render usage profile selector field.
+     */
+    public function render_usage_profile_field() {
+        $options = get_option( 'tts_settings', array() );
+        $value   = isset( $options['usage_profile'] ) ? sanitize_key( $options['usage_profile'] ) : 'standard';
+
+        $choices = array(
+            'standard'   => array(
+                'label'       => __( 'Profilo Standard', 'fp-publisher' ),
+                'description' => __( 'Mostra un set di strumenti essenziali per piccoli team o chi è alle prime armi.', 'fp-publisher' ),
+            ),
+            'advanced'   => array(
+                'label'       => __( 'Profilo Avanzato', 'fp-publisher' ),
+                'description' => __( 'Aggiunge monitoraggio approfondito, suggerimenti operativi e automazioni aggiuntive.', 'fp-publisher' ),
+            ),
+            'enterprise' => array(
+                'label'       => __( 'Profilo Enterprise', 'fp-publisher' ),
+                'description' => __( 'Sblocca audit trail completi, controlli di sicurezza e preset multi-brand.', 'fp-publisher' ),
+            ),
+        );
+
+        echo '<fieldset class="tts-usage-profile">';
+        foreach ( $choices as $key => $choice ) {
+            $checked = checked( $value, $key, false );
+            echo '<label style="display:block;margin-bottom:12px;">';
+            echo '<input type="radio" name="tts_settings[usage_profile]" value="' . esc_attr( $key ) . '" ' . $checked . ' /> ';
+            echo '<strong>' . esc_html( $choice['label'] ) . '</strong>';
+            echo '<br /><span class="description">' . esc_html( $choice['description'] ) . '</span>';
+            echo '</label>';
+        }
+        echo '</fieldset>';
+    }
+
+    /**
      * Render scheduling offset field for a channel.
      *
      * @param array $args Field arguments.
@@ -596,6 +653,12 @@ function tts_sanitize_settings( $input ) {
 
     if ( isset( $input['log_retention_days'] ) ) {
         $output['log_retention_days'] = absint( $input['log_retention_days'] );
+    }
+
+    if ( isset( $input['usage_profile'] ) ) {
+        $profile  = sanitize_key( $input['usage_profile'] );
+        $allowed  = array( 'standard', 'advanced', 'enterprise' );
+        $output['usage_profile'] = in_array( $profile, $allowed, true ) ? $profile : 'standard';
     }
 
     $offset_keys = array( 'facebook_offset', 'instagram_offset', 'youtube_offset', 'tiktok_offset' );
