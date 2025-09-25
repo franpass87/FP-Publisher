@@ -9,106 +9,144 @@ on:
   release:
     types: [created]
 
+env:
+  PLUGIN_DIR: wp-content/plugins/trello-social-auto-publisher
+  BUILD_ROOT: build
+  DIST_DIR: build/fp-publisher
+  DIST_NAME: fp-publisher-wordpress-plugin
+
+defaults:
+  run:
+    shell: bash
+    working-directory: .
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Extract plugin version
       id: version
       run: |
-        VERSION=$(grep -o "Version:.*" wp-content/plugins/trello-social-auto-publisher/trello-social-auto-publisher.php | sed 's/Version:[[:space:]]*//')
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        set -euo pipefail
+        main_file="${PLUGIN_DIR}/trello-social-auto-publisher.php"
+        VERSION=$(grep -Eo "Version:[[:space:]]*[0-9A-Za-z\.-]+" "$main_file" | sed 's/Version:[[:space:]]*//')
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         echo "Plugin version: $VERSION"
-        
-    - name: Create plugin ZIP
+
+    - name: Prepare build directory
       run: |
-        # Create temporary directory for the plugin
-        mkdir -p fp-publisher-build
-        
-        # Copy only the plugin files
-        cp -r wp-content/plugins/trello-social-auto-publisher/* fp-publisher-build/
-        
-        # Copy root documentation files that might be useful for the plugin
-        cp README.md fp-publisher-build/ 2>/dev/null || true
-        cp OPTIMIZATION_GUIDE.md fp-publisher-build/ 2>/dev/null || true
-        cp SECURITY_IMPROVEMENTS.md fp-publisher-build/ 2>/dev/null || true
-        cp SOCIAL_MEDIA_SETUP.md fp-publisher-build/ 2>/dev/null || true
-        cp ENTERPRISE_FEATURES.md fp-publisher-build/ 2>/dev/null || true
-        cp MENU_STRUCTURE.md fp-publisher-build/ 2>/dev/null || true
-        
-        # Remove any development/build files that shouldn't be in the distribution
-        find fp-publisher-build -name "*.log" -delete
-        find fp-publisher-build -name "*.tmp" -delete
-        find fp-publisher-build -name "*.temp" -delete
-        find fp-publisher-build -name ".DS_Store" -delete
-        find fp-publisher-build -name "Thumbs.db" -delete
-        find fp-publisher-build -name "*.bak" -delete
-        find fp-publisher-build -name "*.swp" -delete
-        find fp-publisher-build -name "*.swo" -delete
-        find fp-publisher-build -name "*~" -delete
-        find fp-publisher-build -name "node_modules" -type d -exec rm -rf {} + 2>/dev/null || true
-        find fp-publisher-build -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
-        find fp-publisher-build -name ".sass-cache" -type d -exec rm -rf {} + 2>/dev/null || true
-        find fp-publisher-build -name "vendor" -type d -exec rm -rf {} + 2>/dev/null || true
-        find fp-publisher-build -name ".vscode" -type d -exec rm -rf {} + 2>/dev/null || true
-        find fp-publisher-build -name ".idea" -type d -exec rm -rf {} + 2>/dev/null || true
-        
-        # Remove any potential cache directories
-        find fp-publisher-build -name "cache" -type d -exec rm -rf {} + 2>/dev/null || true
-        find fp-publisher-build -name "tmp" -type d -exec rm -rf {} + 2>/dev/null || true
-        
-        # Create the ZIP file with version in filename
-        cd fp-publisher-build
-        zip -r ../fp-publisher-wordpress-plugin-v${{ steps.version.outputs.version }}.zip . -x "*.git*" "*.DS_Store" "Thumbs.db"
-        cd ..
-        
-        # Create a generic filename as well for easier access
-        cp fp-publisher-wordpress-plugin-v${{ steps.version.outputs.version }}.zip fp-publisher-wordpress-plugin.zip
-        
-        # Verify ZIP contents
+        set -euo pipefail
+        rm -rf "$BUILD_ROOT"
+        mkdir -p "$DIST_DIR"
+
+    - name: Copy plugin sources
+      run: |
+        set -euo pipefail
+        rsync -av --exclude='.git' "${PLUGIN_DIR}/" "$DIST_DIR/"
+
+    - name: Include documentation
+      run: |
+        set -euo pipefail
+        docs=(
+          README.md
+          OPTIMIZATION_GUIDE.md
+          SECURITY_IMPROVEMENTS.md
+          SOCIAL_MEDIA_SETUP.md
+          ENTERPRISE_FEATURES.md
+          MENU_STRUCTURE.md
+        )
+        for doc in "${docs[@]}"; do
+          if [[ -f "$doc" ]]; then
+            cp "$doc" "$DIST_DIR/"
+          fi
+        done
+
+    - name: Clean distribution directory
+      run: |
+        set -euo pipefail
+        mapfile -t patterns < <(cat <<'EOF'
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+*.bak
+*.swp
+*.swo
+*~
+EOF
+)
+        for pattern in "${patterns[@]}"; do
+          find "$DIST_DIR" -name "$pattern" -delete
+        done
+        directories=(
+          node_modules
+          .git
+          .sass-cache
+          vendor
+          .vscode
+          .idea
+          cache
+          tmp
+        )
+        for dir in "${directories[@]}"; do
+          find "$DIST_DIR" -name "$dir" -type d -exec rm -rf {} + 2>/dev/null || true
+        done
+
+    - name: Create plugin archives
+      run: |
+        set -euo pipefail
+        pushd "$DIST_DIR" >/dev/null
+        zip -r "../${DIST_NAME}-v${{ steps.version.outputs.version }}.zip" . -x "*.git*" "*.DS_Store" "Thumbs.db"
+        popd >/dev/null
+        cp "${BUILD_ROOT}/${DIST_NAME}-v${{ steps.version.outputs.version }}.zip" "${BUILD_ROOT}/${DIST_NAME}.zip"
+
+    - name: Inspect package contents
+      run: |
+        set -euo pipefail
         echo "=== ZIP file contents ==="
-        unzip -l fp-publisher-wordpress-plugin.zip | head -20
-        echo ""
-        echo "=== ZIP file info ==="
-        ls -lh fp-publisher-wordpress-plugin*.zip
-        echo ""
-        echo "=== Verifying WordPress plugin structure ==="
-        if unzip -l fp-publisher-wordpress-plugin.zip | grep -q "trello-social-auto-publisher.php"; then
+        unzip -l "${BUILD_ROOT}/${DIST_NAME}.zip" | head -20
+        echo "\n=== ZIP file info ==="
+        ls -lh "${BUILD_ROOT}/${DIST_NAME}"*.zip
+        echo "\n=== Verifying WordPress plugin structure ==="
+        archive="${BUILD_ROOT}/${DIST_NAME}.zip"
+        if unzip -l "$archive" | grep -q "trello-social-auto-publisher.php"; then
           echo "✅ Main plugin file found"
         else
           echo "❌ Main plugin file missing"
           exit 1
         fi
-        if unzip -l fp-publisher-wordpress-plugin.zip | grep -q "includes/"; then
+        if unzip -l "$archive" | grep -q "includes/"; then
           echo "✅ Includes directory found"
         else
           echo "❌ Includes directory missing"
         fi
-        if unzip -l fp-publisher-wordpress-plugin.zip | grep -q "admin/"; then
+        if unzip -l "$archive" | grep -q "admin/"; then
           echo "✅ Admin directory found"
         else
           echo "❌ Admin directory missing"
         fi
-        
-    - name: Upload plugin ZIP as artifact
+
+    - name: Upload versioned plugin ZIP
       uses: actions/upload-artifact@v4
       with:
-        name: fp-publisher-wordpress-plugin-v${{ steps.version.outputs.version }}
+        name: ${{ env.DIST_NAME }}-v${{ steps.version.outputs.version }}
         path: |
-          fp-publisher-wordpress-plugin*.zip
+          ${{ env.BUILD_ROOT }}/${{ env.DIST_NAME }}-v${{ steps.version.outputs.version }}.zip
+          ${{ env.BUILD_ROOT }}/${{ env.DIST_NAME }}.zip
         retention-days: 30
-        
-    - name: Upload generic plugin ZIP as artifact
+
+    - name: Upload latest plugin ZIP
       uses: actions/upload-artifact@v4
       with:
-        name: fp-publisher-wordpress-plugin-latest
-        path: fp-publisher-wordpress-plugin.zip
+        name: ${{ env.DIST_NAME }}-latest
+        path: ${{ env.BUILD_ROOT }}/${{ env.DIST_NAME }}.zip
         retention-days: 30
-        
+
     - name: Upload to release (if this is a release)
       if: github.event_name == 'release'
       uses: actions/upload-release-asset@v1
@@ -116,6 +154,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./fp-publisher-wordpress-plugin-v${{ steps.version.outputs.version }}.zip
-        asset_name: fp-publisher-wordpress-plugin-v${{ steps.version.outputs.version }}.zip
+        asset_path: ${{ env.BUILD_ROOT }}/${{ env.DIST_NAME }}-v${{ steps.version.outputs.version }}.zip
+        asset_name: ${{ env.DIST_NAME }}-v${{ steps.version.outputs.version }}.zip
         asset_content_type: application/zip
