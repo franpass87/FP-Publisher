@@ -43,6 +43,7 @@ if ( function_exists( 'as_unschedule_all_actions' ) ) {
         'tts_publish_social_post',
         'tts_integration_sync_single',
         'tts_process_channel_job',
+        'tts_fetch_post_metrics',
     );
 
     foreach ( $action_scheduler_hooks as $hook ) {
@@ -120,6 +121,8 @@ $options_to_delete = array(
     'tts_youtube_daily_usage',
     'tts_first_activation',
     'tts_integration_hub_db_version',
+    'tts_analytics_last_processed_id',
+    'tts_analytics_last_run',
 );
 
 foreach ( $options_to_delete as $option_name ) {
