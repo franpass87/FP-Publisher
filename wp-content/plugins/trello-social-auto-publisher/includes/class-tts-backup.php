@@ -60,8 +60,9 @@ class TTS_Backup {
             $backup_data = array(
                 'timestamp' => current_time( 'mysql' ),
                 'type' => $type,
-                'version' => '1.0.1',
+                'version' => '1.1.0',
                 'site_url' => get_site_url(),
+                'meta' => array(),
                 'data' => array()
             );
 
@@ -79,6 +80,8 @@ class TTS_Backup {
                     $backup_data['data'] = $this->get_logs_backup_data();
                     break;
             }
+
+            $backup_data = $this->secure_backup_payload( $backup_data );
 
             $backup_filename = $this->generate_backup_filename( $type );
             $backup_path = $this->get_backup_directory() . $backup_filename;
@@ -280,7 +283,9 @@ class TTS_Backup {
             if ( ! $backup_data ) {
                 throw new Exception( __( 'Invalid backup file format', 'fp-publisher' ) );
             }
-            
+
+            $backup_data = $this->decrypt_backup_payload( $backup_data );
+
             // Perform restore based on type
             switch ( $restore_type ) {
                 case 'full':
@@ -295,7 +300,9 @@ class TTS_Backup {
             }
             
             // Clean up decompressed file
-            unlink( $decompressed_path );
+            if ( file_exists( $decompressed_path ) ) {
+                unlink( $decompressed_path );
+            }
             
             TTS_Logger::log( 'Backup restored successfully: ' . $filename );
             
@@ -461,16 +468,25 @@ class TTS_Backup {
      * Download backup file
      */
     public function download_backup( $filename ) {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Insufficient permissions', 'fp-publisher' ) );
+        }
+
         $backup_path = $this->get_backup_directory() . $filename;
-        
+
         if ( ! file_exists( $backup_path ) ) {
             wp_die( esc_html__( 'Backup file not found', 'fp-publisher' ) );
         }
-        
-        header( 'Content-Type: application/octet-stream' );
+
+        if ( ! is_readable( $backup_path ) ) {
+            wp_die( esc_html__( 'Backup file is not readable', 'fp-publisher' ) );
+        }
+
+        nocache_headers();
+        header( 'Content-Type: application/gzip' );
         header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
         header( 'Content-Length: ' . filesize( $backup_path ) );
-        
+
         readfile( $backup_path );
         exit;
     }
@@ -486,8 +502,10 @@ class TTS_Backup {
      * Get backup directory path
      */
     private function get_backup_directory() {
-        $upload_dir = wp_upload_dir();
-        return $upload_dir['basedir'] . '/tts-backups/';
+        $default_dir = trailingslashit( WP_CONTENT_DIR ) . 'fp-publisher-backups';
+        $backup_dir  = apply_filters( 'tts_backup_directory', $default_dir );
+
+        return trailingslashit( $backup_dir );
     }
 
     /**
@@ -495,18 +513,300 @@ class TTS_Backup {
      */
     private function ensure_backup_directory() {
         $backup_dir = $this->get_backup_directory();
-        
+
         if ( ! file_exists( $backup_dir ) ) {
             wp_mkdir_p( $backup_dir );
-            
-            // Add security files
-            if ( false === file_put_contents( $backup_dir . '.htaccess', 'deny from all' ) ) {
-                error_log( 'TTS Backup: Failed to create .htaccess security file' );
-            }
-            if ( false === file_put_contents( $backup_dir . 'index.php', '<?php // Silence is golden' ) ) {
-                error_log( 'TTS Backup: Failed to create index.php security file' );
+        }
+
+        if ( ! is_dir( $backup_dir ) ) {
+            throw new Exception( __( 'Backup directory is not accessible', 'fp-publisher' ) );
+        }
+
+        if ( ! is_readable( $backup_dir ) || ! wp_is_writable( $backup_dir ) ) {
+            throw new Exception( __( 'Backup directory permissions are insufficient', 'fp-publisher' ) );
+        }
+
+        // Add security files if missing.
+        if ( ! file_exists( $backup_dir . '.htaccess' ) && false === file_put_contents( $backup_dir . '.htaccess', 'deny from all' ) ) {
+            error_log( 'TTS Backup: Failed to create .htaccess security file' );
+        }
+
+        if ( ! file_exists( $backup_dir . 'index.php' ) && false === file_put_contents( $backup_dir . 'index.php', '<?php // Silence is golden' ) ) {
+            error_log( 'TTS Backup: Failed to create index.php security file' );
+        }
+    }
+
+    /**
+     * Apply encryption to sensitive fields and document metadata.
+     *
+     * @param array $backup_data Backup payload.
+     * @return array
+     * @throws Exception When encryption key cannot be resolved.
+     */
+    private function secure_backup_payload( array $backup_data ) {
+        $encryption_key    = $this->get_encryption_key();
+        $key_source        = $this->get_encryption_key_source();
+        $encryption_method = 'AES-256-CBC';
+        $has_encrypted     = false;
+
+        if ( isset( $backup_data['data'] ) ) {
+            $backup_data['data'] = $this->encrypt_sensitive_fields( $backup_data['data'], $encryption_key, $encryption_method, $has_encrypted );
+        }
+
+        $backup_data['meta']['encryption'] = array(
+            'enabled'    => $has_encrypted,
+            'method'     => $has_encrypted ? $encryption_method : 'none',
+            'key_source' => $key_source,
+        );
+
+        return $backup_data;
+    }
+
+    /**
+     * Decrypt sensitive fields from the backup payload.
+     *
+     * @param array $backup_data Backup payload.
+     * @return array
+     * @throws Exception When the encryption key is unavailable or decryption fails.
+     */
+    private function decrypt_backup_payload( array $backup_data ) {
+        if ( empty( $backup_data['meta']['encryption']['enabled'] ) ) {
+            return $backup_data;
+        }
+
+        $encryption_key = $this->get_encryption_key();
+
+        if ( isset( $backup_data['data'] ) ) {
+            $backup_data['data'] = $this->decrypt_sensitive_fields( $backup_data['data'], $encryption_key );
+        }
+
+        return $backup_data;
+    }
+
+    /**
+     * Recursively encrypt sensitive fields within the payload.
+     *
+     * @param mixed  $data               Data subtree.
+     * @param string $encryption_key     Encryption key.
+     * @param string $encryption_method  Encryption method (updated when fallback is used).
+     * @param bool   $has_encrypted      Flag toggled when a value is encrypted.
+     * @return mixed
+     */
+    private function encrypt_sensitive_fields( $data, $encryption_key, &$encryption_method, &$has_encrypted ) {
+        if ( ! is_array( $data ) ) {
+            return $data;
+        }
+
+        if ( isset( $data['meta_key'], $data['meta_value'] ) && $this->is_sensitive_meta_key( $data['meta_key'] ) && is_string( $data['meta_value'] ) && '' !== $data['meta_value'] ) {
+            $data['meta_value'] = $this->encrypt_value( $data['meta_value'], $encryption_key, $encryption_method );
+            $has_encrypted      = true;
+
+            return $data;
+        }
+
+        foreach ( $data as $field => $value ) {
+            if ( is_array( $value ) ) {
+                $data[ $field ] = $this->encrypt_sensitive_fields( $value, $encryption_key, $encryption_method, $has_encrypted );
+            } elseif ( $this->is_sensitive_key( $field ) && is_string( $value ) && '' !== $value ) {
+                $data[ $field ] = $this->encrypt_value( $value, $encryption_key, $encryption_method );
+                $has_encrypted  = true;
             }
         }
+
+        return $data;
+    }
+
+    /**
+     * Recursively decrypt sensitive fields within the payload.
+     *
+     * @param mixed  $data           Data subtree.
+     * @param string $encryption_key Encryption key.
+     * @return mixed
+     */
+    private function decrypt_sensitive_fields( $data, $encryption_key ) {
+        if ( ! is_array( $data ) ) {
+            return $data;
+        }
+
+        if ( isset( $data['meta_key'], $data['meta_value'] ) && $this->is_encrypted_value( $data['meta_value'] ) ) {
+            $data['meta_value'] = $this->decrypt_value( $data['meta_value'], $encryption_key );
+
+            return $data;
+        }
+
+        foreach ( $data as $field => $value ) {
+            if ( is_array( $value ) ) {
+                $data[ $field ] = $this->decrypt_sensitive_fields( $value, $encryption_key );
+            } elseif ( is_string( $value ) && $this->is_encrypted_value( $value ) ) {
+                $data[ $field ] = $this->decrypt_value( $value, $encryption_key );
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Encrypt a scalar value.
+     *
+     * @param string $value              Value to encrypt.
+     * @param string $encryption_key     Encryption key.
+     * @param string $encryption_method  Encryption method (updated when fallback is used).
+     * @return string
+     * @throws Exception When encryption fails.
+     */
+    private function encrypt_value( $value, $encryption_key, &$encryption_method ) {
+        if ( function_exists( 'openssl_encrypt' ) ) {
+            $cipher     = 'aes-256-cbc';
+            $iv_length  = openssl_cipher_iv_length( $cipher );
+            $iv         = openssl_random_pseudo_bytes( $iv_length );
+            $ciphertext = openssl_encrypt( $value, $cipher, hash( 'sha256', $encryption_key, true ), OPENSSL_RAW_DATA, $iv );
+
+            if ( false === $ciphertext ) {
+                throw new Exception( __( 'Failed to encrypt backup data', 'fp-publisher' ) );
+            }
+
+            $encryption_method = 'AES-256-CBC';
+
+            return 'enc:' . base64_encode( $iv ) . ':' . base64_encode( $ciphertext );
+        }
+
+        $encryption_method = 'BASE64';
+
+        return 'b64:' . base64_encode( $value );
+    }
+
+    /**
+     * Decrypt a scalar value.
+     *
+     * @param string $value          Value to decrypt.
+     * @param string $encryption_key Encryption key.
+     * @return string
+     * @throws Exception When decryption fails.
+     */
+    private function decrypt_value( $value, $encryption_key ) {
+        if ( 0 === strpos( $value, 'b64:' ) ) {
+            $decoded = base64_decode( substr( $value, 4 ), true );
+
+            if ( false === $decoded ) {
+                throw new Exception( __( 'Failed to decode obfuscated backup data', 'fp-publisher' ) );
+            }
+
+            return $decoded;
+        }
+
+        if ( 0 === strpos( $value, 'enc:' ) ) {
+            if ( ! function_exists( 'openssl_decrypt' ) ) {
+                throw new Exception( __( 'OpenSSL is required to decrypt backup data', 'fp-publisher' ) );
+            }
+
+            $parts = explode( ':', $value, 3 );
+
+            if ( count( $parts ) !== 3 ) {
+                throw new Exception( __( 'Encrypted backup data is malformed', 'fp-publisher' ) );
+            }
+
+            list( , $iv_encoded, $ciphertext_encoded ) = $parts;
+
+            $iv         = base64_decode( $iv_encoded, true );
+            $ciphertext = base64_decode( $ciphertext_encoded, true );
+
+            if ( false === $iv || false === $ciphertext ) {
+                throw new Exception( __( 'Failed to decode encrypted backup payload', 'fp-publisher' ) );
+            }
+
+            $plaintext = openssl_decrypt( $ciphertext, 'aes-256-cbc', hash( 'sha256', $encryption_key, true ), OPENSSL_RAW_DATA, $iv );
+
+            if ( false === $plaintext ) {
+                throw new Exception( __( 'Unable to decrypt backup payload', 'fp-publisher' ) );
+            }
+
+            return $plaintext;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Determine if the provided value has been encrypted/obfuscated by this system.
+     *
+     * @param mixed $value Value to inspect.
+     * @return bool
+     */
+    private function is_encrypted_value( $value ) {
+        return is_string( $value ) && ( 0 === strpos( $value, 'enc:' ) || 0 === strpos( $value, 'b64:' ) );
+    }
+
+    /**
+     * Determine if a key should be treated as sensitive.
+     *
+     * @param string $key Array key.
+     * @return bool
+     */
+    private function is_sensitive_key( $key ) {
+        return in_array( $key, $this->get_sensitive_keys(), true );
+    }
+
+    /**
+     * Determine if a meta key contains sensitive data.
+     *
+     * @param string $meta_key Meta key name.
+     * @return bool
+     */
+    private function is_sensitive_meta_key( $meta_key ) {
+        $needles = array( 'secret', 'token', 'key' );
+
+        foreach ( $needles as $needle ) {
+            if ( false !== stripos( $meta_key, $needle ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * List of known sensitive option keys.
+     *
+     * @return array
+     */
+    private function get_sensitive_keys() {
+        return array(
+            'tts_facebook_app_secret',
+            'tts_instagram_app_secret',
+            'tts_youtube_client_secret',
+            'tts_youtube_client_id',
+            'tts_tiktok_client_key',
+            'tts_tiktok_client_secret',
+        );
+    }
+
+    /**
+     * Resolve encryption key for backup payloads.
+     *
+     * @return string
+     * @throws Exception When key cannot be resolved.
+     */
+    private function get_encryption_key() {
+        if ( defined( 'AUTH_KEY' ) && AUTH_KEY ) {
+            return AUTH_KEY;
+        }
+
+        $salt = wp_salt( 'auth' );
+
+        if ( ! empty( $salt ) ) {
+            return $salt;
+        }
+
+        throw new Exception( __( 'Unable to resolve encryption key for backups', 'fp-publisher' ) );
+    }
+
+    /**
+     * Describe the source of the encryption key for documentation inside the backup.
+     *
+     * @return string
+     */
+    private function get_encryption_key_source() {
+        return ( defined( 'AUTH_KEY' ) && AUTH_KEY ) ? 'AUTH_KEY' : 'wp_salt(auth)';
     }
 
     /**
