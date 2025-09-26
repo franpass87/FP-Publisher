@@ -1526,4 +1526,9 @@ tts_reset_test_state();
 
 require_once __DIR__ . '/../includes/class-tts-asset-manager.php';
 require_once __DIR__ . '/../includes/class-tts-content-source.php';
+require_once __DIR__ . '/../admin/class-tts-admin-ajax-security.php';
+require_once __DIR__ . '/../admin/class-tts-admin-view-helper.php';
 require_once __DIR__ . '/../admin/class-tts-admin.php';
+require_once __DIR__ . '/../admin/controllers/class-tts-import-export-controller.php';
+require_once __DIR__ . '/../admin/controllers/class-tts-admin-menu-controller.php';
+require_once __DIR__ . '/../admin/controllers/class-tts-ajax-social-settings-controller.php';
