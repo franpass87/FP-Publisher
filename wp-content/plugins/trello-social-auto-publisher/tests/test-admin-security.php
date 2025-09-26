@@ -7,6 +7,12 @@ require_once __DIR__ . '/../includes/class-tts-advanced-utils.php';
 require_once __DIR__ . '/../includes/class-tts-rest.php';
 require_once __DIR__ . '/../admin/class-tts-log-page.php';
 
+function tts_create_import_export_controller() {
+    $security = new TTS_Admin_Ajax_Security( TTS_Admin::get_ajax_action_security_defaults() );
+
+    return new TTS_Import_Export_Controller( $security, new TTS_Admin_View_Helper() );
+}
+
 $tests = array(
     'ajax_export_rejects_invalid_nonce' => function () {
         tts_reset_test_state();
@@ -15,14 +21,14 @@ $tests = array(
             'tts_export_data' => true,
         );
 
-        $admin = new TTS_Admin();
+        $controller = tts_create_import_export_controller();
 
         $_POST    = array(
             'nonce' => 'invalid',
         );
         $_REQUEST = $_POST;
 
-        $admin->ajax_export_data();
+        $controller->ajax_export_data();
 
         tts_assert_equals(
             1,
@@ -46,14 +52,14 @@ $tests = array(
     'ajax_export_requires_capability' => function () {
         tts_reset_test_state();
 
-        $admin = new TTS_Admin();
+        $controller = tts_create_import_export_controller();
 
         $_POST    = array(
             'nonce' => 'nonce-tts_ajax_nonce',
         );
         $_REQUEST = $_POST;
 
-        $admin->ajax_export_data();
+        $controller->ajax_export_data();
 
         tts_assert_equals(
             1,

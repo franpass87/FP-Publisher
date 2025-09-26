@@ -540,7 +540,12 @@ add_action( 'plugins_loaded', function () {
 
     // Load admin files when in the dashboard.
     if ( is_admin() ) {
+        require_once TSAP_PLUGIN_DIR . 'admin/class-tts-admin-ajax-security.php';
+        require_once TSAP_PLUGIN_DIR . 'admin/class-tts-admin-view-helper.php';
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-admin.php';
+        require_once TSAP_PLUGIN_DIR . 'admin/controllers/class-tts-admin-menu-controller.php';
+        require_once TSAP_PLUGIN_DIR . 'admin/controllers/class-tts-ajax-social-settings-controller.php';
+        require_once TSAP_PLUGIN_DIR . 'admin/controllers/class-tts-import-export-controller.php';
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-log-page.php';
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-calendar-page.php';
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-analytics-page.php';
@@ -549,8 +554,38 @@ add_action( 'plugins_loaded', function () {
         require_once TSAP_PLUGIN_DIR . 'admin/class-tts-frequency-dashboard-widget.php';
 
         $admin_services = array(
-            'admin.controller'            => function () {
-                return new TTS_Admin();
+            'admin.ajax_security'         => function () {
+                return new TTS_Admin_Ajax_Security( TTS_Admin::get_ajax_action_security_defaults() );
+            },
+            'admin.view_helper'           => function () {
+                return new TTS_Admin_View_Helper();
+            },
+            'admin.controller'            => function ( $container ) {
+                return new TTS_Admin( $container->get( 'admin.ajax_security' ), $container->get( 'admin.view_helper' ) );
+            },
+            'admin.menu_controller'       => function ( $container ) {
+                $controller = new TTS_Admin_Menu_Controller( $container->get( 'admin.controller' ) );
+                $controller->register_hooks();
+
+                return $controller;
+            },
+            'admin.ajax_social_settings'  => function ( $container ) {
+                $controller = new TTS_Ajax_Social_Settings_Controller(
+                    $container->get( 'admin.controller' ),
+                    $container->get( 'admin.ajax_security' )
+                );
+                $controller->register_hooks();
+
+                return $controller;
+            },
+            'admin.import_export'         => function ( $container ) {
+                $controller = new TTS_Import_Export_Controller(
+                    $container->get( 'admin.ajax_security' ),
+                    $container->get( 'admin.view_helper' )
+                );
+                $controller->register_hooks();
+
+                return $controller;
             },
             'admin.calendar_page'         => function () {
                 return new TTS_Calendar_Page();

@@ -35,11 +35,26 @@ class TTS_Admin {
     private $missing_method_notices = array();
 
     /**
-     * Security requirements for AJAX handlers.
+     * Shared AJAX security helper.
      *
-     * @var array<string, array{nonce_action: string, capabilities: array<int, string>, nonce_field?: string}>
+     * @var TTS_Admin_Ajax_Security
      */
-    private $ajax_action_security = array(
+    private $ajax_security;
+
+    /**
+     * View helper used to render templates when required.
+     *
+     * @var TTS_Admin_View_Helper
+     */
+    private $view_helper;
+
+    /**
+     * Default AJAX security ruleset.
+     *
+     * @return array<string, array{nonce_action: string, capabilities: array<int, string>, nonce_field?: string}>
+     */
+    public static function get_ajax_action_security_defaults() {
+        return array(
         'ajax_get_lists' => array(
             'nonce_action' => 'tts_wizard',
             'capabilities' => array( 'tts_manage_clients' ),
@@ -116,7 +131,8 @@ class TTS_Admin {
             'nonce_action' => 'tts_wizard',
             'capabilities' => array( 'tts_manage_clients' ),
         ),
-    );
+        );
+    }
 
     /**
      * Build the admin URL that opens the custom social post editor.
@@ -162,80 +178,24 @@ class TTS_Admin {
      * @return bool
      */
     private function enforce_ajax_security( $context, array $overrides = array() ) {
-        if ( ! isset( $this->ajax_action_security[ $context ] ) ) {
+        if ( ! $this->ajax_security instanceof TTS_Admin_Ajax_Security ) {
             return true;
         }
 
-        $config       = $this->ajax_action_security[ $context ];
-        $nonce_action = isset( $overrides['nonce_action'] ) ? $overrides['nonce_action'] : $config['nonce_action'];
-        $nonce_field  = isset( $config['nonce_field'] ) ? $config['nonce_field'] : 'nonce';
-
-        if ( ! check_ajax_referer( $nonce_action, $nonce_field, false ) ) {
-            wp_send_json_error(
-                array( 'message' => __( 'Invalid or missing nonce.', 'fp-publisher' ) ),
-                403
-            );
-            return false;
-        }
-
-        $capabilities = array();
-        if ( isset( $config['capabilities'] ) ) {
-            $capabilities = (array) $config['capabilities'];
-        }
-        if ( isset( $overrides['capabilities'] ) ) {
-            $capabilities = array_merge( $capabilities, (array) $overrides['capabilities'] );
-        }
-
-        foreach ( $capabilities as $capability ) {
-            if ( ! current_user_can( $capability ) ) {
-                wp_send_json_error(
-                    array( 'message' => __( 'You do not have permission to perform this action.', 'fp-publisher' ) ),
-                    403
-                );
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Determine the maximum allowed import file size.
-     *
-     * @return int Maximum file size in bytes.
-     */
-    private function get_max_import_file_size() {
-        $upload_limit = wp_convert_hr_to_bytes( ini_get( 'upload_max_filesize' ) );
-        $post_limit   = wp_convert_hr_to_bytes( ini_get( 'post_max_size' ) );
-
-        $limits = array_filter(
-            array(
-                self::DEFAULT_IMPORT_MAX_FILE_SIZE,
-                $upload_limit,
-                $post_limit,
-            ),
-            function ( $value ) {
-                return is_numeric( $value ) && $value > 0;
-            }
-        );
-
-        $limit = ! empty( $limits ) ? min( $limits ) : self::DEFAULT_IMPORT_MAX_FILE_SIZE;
-
-        /**
-         * Filter the maximum allowed import file size.
-         *
-         * @param int $limit Maximum file size in bytes.
-         */
-        $limit = apply_filters( 'tts_import_max_file_size', (int) $limit );
-
-        return max( 1, (int) $limit );
+        return $this->ajax_security->check( $context, $overrides );
     }
 
     /**
      * Hook into WordPress actions.
      */
-    public function __construct() {
-        add_action( 'admin_menu', array( $this, 'register_menu' ) );
+    public function __construct( ?TTS_Admin_Ajax_Security $ajax_security = null, ?TTS_Admin_View_Helper $view_helper = null ) {
+        if ( null === $ajax_security ) {
+            $ajax_security = new TTS_Admin_Ajax_Security( self::get_ajax_action_security_defaults() );
+        }
+
+        $this->ajax_security = $ajax_security;
+        $this->view_helper   = $view_helper ?: new TTS_Admin_View_Helper();
+
         add_action( 'restrict_manage_posts', array( $this, 'add_client_filter' ) );
         add_action( 'restrict_manage_posts', array( $this, 'add_approved_filter' ) );
         add_action( 'pre_get_posts', array( $this, 'filter_posts_by_client' ) );
@@ -249,24 +209,11 @@ class TTS_Admin {
         add_action( 'wp_ajax_tts_refresh_posts', array( $this, 'ajax_refresh_posts' ) );
         add_action( 'wp_ajax_tts_delete_post', array( $this, 'ajax_delete_post' ) );
         add_action( 'wp_ajax_tts_bulk_action', array( $this, 'ajax_bulk_action' ) );
-        add_action( 'wp_ajax_tts_test_connection', array( $this, 'ajax_test_connection' ) );
-        add_action( 'wp_ajax_tts_check_rate_limits', array( $this, 'ajax_check_rate_limits' ) );
         add_action( 'admin_post_tts_create_social_post', array( $this, 'handle_create_social_post' ) );
         add_action( 'admin_post_tts_update_social_post', array( $this, 'handle_update_social_post' ) );
         add_action( 'admin_init', array( $this, 'redirect_social_post_creation' ) );
-        add_action( 'wp_ajax_tts_export_data', array( $this, 'ajax_export_data' ) );
-        add_action( 'wp_ajax_tts_import_data', array( $this, 'ajax_import_data' ) );
         add_action( 'wp_ajax_tts_system_maintenance', array( $this, 'ajax_system_maintenance' ) );
         add_action( 'wp_ajax_tts_generate_report', array( $this, 'ajax_generate_report' ) );
-        add_action( 'wp_ajax_tts_quick_connection_check', array( $this, 'ajax_quick_connection_check' ) );
-        add_action( 'wp_ajax_tts_refresh_health', array( $this, 'ajax_refresh_health' ) );
-        add_action( 'wp_ajax_tts_save_social_settings', array( $this, 'ajax_save_social_settings' ) );
-        add_action( 'wp_ajax_tts_show_export_modal', array( $this, 'ajax_show_export_modal' ) );
-        add_action( 'wp_ajax_tts_show_import_modal', array( $this, 'ajax_show_import_modal' ) );
-        add_action( 'wp_ajax_tts_test_client_connections', array( $this, 'ajax_test_client_connections' ) );
-        add_action( 'wp_ajax_tts_test_single_connection', array( $this, 'ajax_test_single_connection' ) );
-        add_action( 'wp_ajax_tts_validate_trello_credentials', array( $this, 'ajax_validate_trello_credentials' ) );
-        add_action( 'wp_ajax_tts_test_wizard_token', array( $this, 'ajax_test_wizard_token' ) );
         add_filter( 'manage_tts_social_post_posts_columns', array( $this, 'add_approved_column' ) );
         add_action( 'manage_tts_social_post_posts_custom_column', array( $this, 'render_approved_column' ), 10, 2 );
         add_filter( 'bulk_actions-edit-tts_social_post', array( $this, 'register_bulk_actions' ) );
@@ -7903,75 +7850,6 @@ class TTS_Admin {
             'reset_time' => 'Hourly'
         );
     }
-    
-    /**
-     * AJAX handler for data export.
-     */
-    public function ajax_export_data() {
-        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
-            return;
-        }
-
-        $export_options = array(
-            'settings'        => isset( $_POST['export_settings'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_settings'] ) ),
-            'social_apps'     => isset( $_POST['export_social_apps'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_social_apps'] ) ),
-            'clients'         => isset( $_POST['export_clients'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_clients'] ) ),
-            'posts'           => isset( $_POST['export_posts'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_posts'] ) ),
-            'logs'            => isset( $_POST['export_logs'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_logs'] ) ),
-            'analytics'       => isset( $_POST['export_analytics'] ) && 'true' === sanitize_text_field( wp_unslash( $_POST['export_analytics'] ) ),
-            'include_secrets' => isset( $_POST['export_include_secrets'] ) && in_array( sanitize_text_field( wp_unslash( $_POST['export_include_secrets'] ) ), array( 'true', 'on', '1' ), true ),
-        );
-
-        $result = TTS_Advanced_Utils::export_data( $export_options );
-
-        if ( $result['success'] ) {
-            $filename   = 'tts-export-' . date( 'Y-m-d-H-i-s' ) . '.json';
-            $upload_dir = wp_upload_dir();
-
-            if ( ! empty( $upload_dir['error'] ) ) {
-                error_log( 'TTS_Admin: Export failed - ' . $upload_dir['error'] );
-
-                return wp_send_json_error( array( 'message' => __( 'Failed to access the upload directory. Please try again later.', 'fp-publisher' ) ), 500 );
-            }
-
-            $file_path = trailingslashit( $upload_dir['path'] ) . $filename;
-            $encoded_data = isset( $result['encoded'] ) ? $result['encoded'] : wp_json_encode( $result['data'], JSON_PRETTY_PRINT );
-
-            if ( ! is_string( $encoded_data ) || '' === $encoded_data ) {
-                error_log( 'TTS_Admin: Export encoding returned an invalid payload for ' . $file_path );
-
-                return wp_send_json_error( array( 'message' => __( 'Failed to encode the export package.', 'fp-publisher' ) ), 500 );
-            }
-
-            $file_written = file_put_contents( $file_path, $encoded_data );
-
-            if ( false === $file_written ) {
-                error_log( 'TTS_Admin: Failed to write export file to ' . $file_path );
-
-                return wp_send_json_error( array( 'message' => __( 'Failed to write the export file. Please check file permissions and try again.', 'fp-publisher' ) ), 500 );
-            }
-
-            return wp_send_json_success(
-                array(
-                    'message'      => __( 'Export completed successfully', 'fp-publisher' ),
-                    'download_url' => trailingslashit( $upload_dir['url'] ) . $filename,
-                    'file_size'    => $result['file_size'],
-                )
-            );
-        }
-
-        $error_message = isset( $result['error'] ) ? sanitize_text_field( $result['error'] ) : __( 'Export failed due to an unexpected error.', 'fp-publisher' );
-
-        if ( isset( $result['error_code'] ) ) {
-            error_log( 'TTS_Admin: Export error [' . $result['error_code'] . '] ' . $error_message );
-        }
-
-        return wp_send_json_error( array( 'message' => $error_message ), 500 );
-    }
-    
-    /**
-     * AJAX handler for data import.
-     */
     public function ajax_import_data() {
         if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
             return;
@@ -8203,78 +8081,6 @@ class TTS_Admin {
             )
         );
     }
-    
-    /**
-     * AJAX handler for showing export modal.
-     */
-    public function ajax_show_export_modal() {
-        if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
-            return;
-        }
-
-        ob_start();
-        ?>
-        <div class="tts-modal-content">
-            <h2><?php esc_html_e( 'Export Data', 'fp-publisher' ); ?></h2>
-            <form id="tts-export-form" class="tts-ajax-form" data-ajax-action="tts_export_data">
-                <input type="hidden" name="nonce" value="<?php echo esc_attr( wp_create_nonce( 'tts_ajax_nonce' ) ); ?>">
-                <div class="tts-export-options">
-                    <p class="description">
-                        <?php esc_html_e( 'Sensitive credentials are excluded unless you explicitly include them below.', 'fp-publisher' ); ?>
-                    </p>
-                    <label>
-                        <input type="checkbox" name="export_settings" checked>
-                        <?php esc_html_e( 'Plugin Settings', 'fp-publisher' ); ?>
-                    </label>
-                    <label>
-                        <input type="checkbox" name="export_social_apps" checked>
-                        <?php esc_html_e( 'Social Media Configurations', 'fp-publisher' ); ?>
-                    </label>
-                    <label>
-                        <input type="checkbox" name="export_clients" checked>
-                        <?php esc_html_e( 'Clients', 'fp-publisher' ); ?>
-                    </label>
-                    <label>
-                        <input type="checkbox" name="export_posts">
-                        <?php esc_html_e( 'Social Posts (last 100)', 'fp-publisher' ); ?>
-                    </label>
-                    <label>
-                        <input type="checkbox" name="export_logs">
-                        <?php esc_html_e( 'Recent Logs (last 30 days)', 'fp-publisher' ); ?>
-                    </label>
-                    <label>
-                        <input type="checkbox" name="export_analytics">
-                        <?php esc_html_e( 'Analytics Data', 'fp-publisher' ); ?>
-                    </label>
-                    <label class="tts-export-include-secrets">
-                        <input type="checkbox" name="export_include_secrets">
-                        <?php esc_html_e( 'Include secrets (app/client secrets, tokens)', 'fp-publisher' ); ?>
-                        <span class="description"><?php esc_html_e( 'Only enable this on secure systems. Without this option the export will mark secrets as [REDACTED].', 'fp-publisher' ); ?></span>
-                    </label>
-                </div>
-                <div class="tts-modal-actions">
-                    <button type="submit" class="tts-btn primary">
-                        <?php esc_html_e( 'Export', 'fp-publisher' ); ?>
-                    </button>
-                    <button type="button" class="tts-btn secondary tts-modal-close">
-                        <?php esc_html_e( 'Cancel', 'fp-publisher' ); ?>
-                    </button>
-                </div>
-            </form>
-        </div>
-        <?php
-        $modal_html = ob_get_clean();
-
-        return wp_send_json_success(
-            array(
-                'modal_html' => $modal_html,
-            )
-        );
-    }
-    
-    /**
-     * AJAX handler for showing import modal.
-     */
     public function ajax_show_import_modal() {
         if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
             return;
