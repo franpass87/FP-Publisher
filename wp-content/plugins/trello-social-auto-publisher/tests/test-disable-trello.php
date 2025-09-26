@@ -133,7 +133,7 @@ $tests = array(
         $GLOBALS['tts_test_options']['tts_trello_enabled'] = 0;
 
         $admin = new TTS_Admin();
-        $admin->enqueue_wizard_assets( 'fp-publisher-clienti_page_fp-publisher-client-wizard' );
+        $admin->enqueue_wizard_assets( 'fp-publisher_page_fp-publisher-client-wizard' );
 
         tts_assert_true( isset( $GLOBALS['tts_localized_scripts']['tts-wizard']['ttsWizard'] ), 'Wizard localization data should be set.' );
         $localized = $GLOBALS['tts_localized_scripts']['tts-wizard']['ttsWizard'];

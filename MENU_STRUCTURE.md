@@ -15,72 +15,49 @@ Il plugin Social Auto Publisher utilizza una struttura di menu consolidata per m
 
 All plugin functionality is now organized under a single main menu item called "Social Auto Publisher" with the following submenus:
 
+### Blueprint centralizzato
+
+La gerarchia del menu, le quick actions della dashboard e le card degli hub sono generate da un unico blueprint (`TTS_Admin::get_navigation_blueprint()`), filtrabile tramite l’hook `tts_admin_navigation_blueprint`. Ciò garantisce che permessi, slug e destinazioni rimangano sincronizzati tra menu, navigazione rapida e pagine hub. Quando un operatore non possiede le capability richieste, la card dell’hub resta visibile con stato bloccato e messaggio esplicito, così da chiarire quali strumenti richiedono privilegi superiori.
+
 #### 1. Dashboard (Main Page)
 - **Purpose**: Overview of plugin status and quick access to all features
 - **Features**:
   - Statistics cards showing total posts, active clients, scheduled posts, and posts published today
   - Recent social posts table with status and details
-  - Quick action buttons for easy navigation to other sections
+  - Quick action buttons with direct access to the Configurazione, Produzione and Monitoraggio hubs, now filtered by the current
+    user capabilities so each operator vede solo le scorciatoie realmente utilizzabili
+  - Le quick action ereditano automaticamente gli stessi permessi delle rispettive pagine del menu e possono essere estese tramite il filtro `tts_dashboard_quick_actions`
   - Responsive design with modern styling
 
-#### 2. Clienti (Clients)
-- **Purpose**: Manage and view all configured clients
-- **Features**:
-  - List of all clients with direct links to their social posts
-  - Client status overview
+#### 2. Macro-sezione "Configurazione"
+- **Purpose**: Centralize onboarding and setup workflows
+- **Hub dedicato**: **Centro Configurazione** raccoglie card operative verso tutti gli strumenti di setup e mostra note rapide su ciascuna attività. Le card non accessibili evidenziano il permesso richiesto.
+- **Includes**:
+  - **Clienti**: elenco completo dei clienti configurati con stato e scorciatoie operative
+  - **Client Wizard**: procedura guidata passo-passo per creare nuovi clienti, collegare Trello e mappare le liste
+  - **Quickstart Packages**: libreria di preset pronti per importare template e mapping
+  - **Social Connections**: gestione delle connessioni alle piattaforme (Facebook, Instagram, YouTube, TikTok)
+  - **Test Connections**: diagnostica rapida delle integrazioni social
+  - **General Settings**: impostazioni di base del plugin
+  - **Help & Onboarding**: documentazione integrata e materiali di training
 
-#### 3. Client Wizard
-- **Purpose**: Step-by-step client configuration
-- **Features**:
-  - Multi-step wizard for setting up new clients
-  - Trello integration configuration
-  - Social media platform connections (Facebook, Instagram, YouTube, TikTok)
-  - List mapping configuration
+#### 3. Macro-sezione "Produzione"
+- **Purpose**: Gestire l'operatività quotidiana della pubblicazione
+- **Hub dedicato**: **Centro Produzione** fornisce una vista compatta degli strumenti editoriali e delle risorse per il team, con link diretti a guida calendario e template briefing. Le card non accessibili mostrano un’icona lucchetto e l’autorizzazione necessaria.
+- **Includes**:
+  - **Social Post**: elenco completo con filtri per cliente, stato di approvazione e azioni massive
+  - **Calendario**: vista mensile dei contenuti programmati con dettagli su canale e orario
+  - **Content Manager**: strumenti editoriali avanzati per organizzare le bozze
+  - **Publishing Status**: pannello di controllo sulle frequenze e sul carico pubblicazioni
+  - **AI & Advanced Suite**: automazioni e funzionalità assistite da AI
 
-#### 4. Social Post
-- **Purpose**: Manage all social media posts
-- **Features**:
-  - Comprehensive list of all social posts
-  - Filtering by client and approval status
-  - Post status tracking (scheduled, published, etc.)
-  - Bulk actions for approval/revocation
-  - Direct publishing capability
-
-#### 5. Calendario (Calendar)
-- **Purpose**: Visual calendar view of scheduled posts
-- **Features**:
-  - Monthly calendar view
-  - Posts organized by date with time information
-  - Channel information for each post
-  - Navigation between months
-  - Post count summary
-  - Improved styling with better visual organization
-
-#### 6. Analytics
-- **Purpose**: Performance metrics and data visualization
-- **Features**:
-  - Summary statistics (total interactions, active channels, top channel, date range)
-  - Interactive filtering by channel and date range
-  - Chart visualization of engagement data
-  - CSV export functionality
-  - Responsive design
-
-#### 7. Stato (Health Status)
-- **Purpose**: System health monitoring
-- **Features**:
-  - Overall health percentage with visual indicator
-  - Token validation for all clients
-  - System checks (Trello webhooks, Action Scheduler)
-  - WordPress requirements verification
-  - Color-coded status indicators (green for OK, red for errors, orange for warnings)
-
-#### 8. Log
-- **Purpose**: System logs and debugging information
-- **Features**:
-  - Filterable log entries by channel and status
-  - Detailed logging information
-  - Log deletion capabilities
-  - Pagination for large log sets
+#### 4. Macro-sezione "Monitoraggio"
+- **Purpose**: Analizzare performance e salute del sistema
+- **Hub dedicato**: **Centro Monitoraggio** raggruppa analytics, salute del sistema e log con card descrittive, offrendo anche scorciatoie ad audit e test connessioni. Anche qui le card rispettano i permessi e indicano quando è necessario un ruolo con privilegi maggiori.
+- **Includes**:
+  - **Analytics**: metriche aggregate, filtri interattivi e export CSV
+  - **Stato**: controllo salute con validazione token, webhooks e requisiti WordPress
+  - **Log**: storico eventi con filtri per canale/stato e strumenti di manutenzione
 
 ## Benefits of the New Structure
 

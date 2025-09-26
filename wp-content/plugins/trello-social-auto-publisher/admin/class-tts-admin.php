@@ -275,28 +275,453 @@ class TTS_Admin {
     }
 
     /**
+     * Describe the grouped admin navigation once and reuse it across menu, hubs and quick actions.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function get_navigation_blueprint() {
+        static $blueprint = null;
+
+        if ( null !== $blueprint ) {
+            return $blueprint;
+        }
+
+        $blueprint = array(
+            'dashboard' => array(
+                'label' => __( 'Dashboard', 'fp-publisher' ),
+                'hub'   => array(
+                    'title'      => __( 'Dashboard', 'fp-publisher' ),
+                    'slug'       => 'fp-publisher-main',
+                    'callback'   => 'render_dashboard_page',
+                    'capability' => 'manage_options',
+                    'page_title' => __( 'FP Publisher Dashboard', 'fp-publisher' ),
+                    'primary'    => true,
+                ),
+                'items' => array(),
+            ),
+            'configuration' => array(
+                'label' => __( 'Configurazione', 'fp-publisher' ),
+                'hub'   => array(
+                    'title'       => __( 'Centro Configurazione', 'fp-publisher' ),
+                    'description' => __( 'Organizza clienti, collega i canali social e definisci le impostazioni di base prima di iniziare a pubblicare.', 'fp-publisher' ),
+                    'class'       => 'tts-hub--configuration',
+                    'slug'        => 'fp-publisher-configuration-hub',
+                    'callback'    => 'render_configuration_hub_page',
+                    'capability'  => 'tts_manage_clients',
+                    'page_title'  => __( 'Centro Configurazione', 'fp-publisher' ),
+                    'primary'     => true,
+                    'footer'      => array(
+                        'title'       => __( 'Hai bisogno di ulteriore supporto?', 'fp-publisher' ),
+                        'description' => __( 'Consulta la knowledge base o contatta il team per ottenere assistenza sull’onboarding.', 'fp-publisher' ),
+                        'links'       => array(
+                            array(
+                                'label' => __( 'Apri documentazione', 'fp-publisher' ),
+                                'url'   => admin_url( 'admin.php?page=fp-publisher-help' ),
+                            ),
+                            array(
+                                'label' => __( 'Contatta il supporto', 'fp-publisher' ),
+                                'url'   => 'mailto:info@francescopasseri.com',
+                            ),
+                        ),
+                    ),
+                    'quick_action' => array(
+                        'title'       => __( 'Apri Configurazione', 'fp-publisher' ),
+                        'description' => __( 'Gestisci clienti, connessioni e impostazioni', 'fp-publisher' ),
+                        'icon'        => 'dashicons-admin-generic',
+                        'color'       => '#135e96',
+                        'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
+                    ),
+                ),
+                'items' => array(
+                    array(
+                        'title'      => __( 'Client Overview', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-clienti',
+                        'callback'   => 'render_clients_page',
+                        'capability' => 'tts_manage_clients',
+                        'card'       => array(
+                            'description' => __( 'Rivedi tutti i clienti attivi, lo stato di collegamento e accedi ai loro contenuti.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-groups',
+                            'meta'        => array(
+                                __( 'Shortcut a contenuti e modifiche rapide', 'fp-publisher' ),
+                            ),
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'Client Wizard', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-client-wizard',
+                        'callback'   => 'tts_render_client_wizard',
+                        'capability' => 'tts_manage_clients',
+                        'card'       => array(
+                            'description' => __( 'Configura un nuovo cliente con checklist guidata e mapping Trello.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-admin-users',
+                            'meta'        => array(
+                                __( 'Verifica token e liste Trello durante il setup', 'fp-publisher' ),
+                            ),
+                        ),
+                        'quick_action' => array(
+                            'title'       => __( 'Client Wizard', 'fp-publisher' ),
+                            'description' => __( 'Set up a new social media client', 'fp-publisher' ),
+                            'icon'        => 'dashicons-plus',
+                            'color'       => '#6366f1',
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'Quickstart Packages', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-quickstart',
+                        'callback'   => 'render_quickstart_packages_page',
+                        'capability' => 'tts_manage_clients',
+                        'card'       => array(
+                            'description' => __( 'Importa preset con automazioni, template social e mapping già pronti.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-category',
+                        ),
+                        'quick_action' => array(
+                            'title'       => __( 'Quickstart Packages', 'fp-publisher' ),
+                            'description' => __( 'Import preset templates and mappings', 'fp-publisher' ),
+                            'icon'        => 'dashicons-portfolio',
+                            'color'       => '#0f172a',
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'Social Connections', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-social-connections',
+                        'callback'   => 'render_social_connections_page',
+                        'capability' => 'tts_manage_integrations',
+                        'card'       => array(
+                            'description' => __( 'Gestisci account collegati, rinnova token e abilita nuovi canali.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-admin-links',
+                            'meta'        => array(
+                                __( 'Supporto per Facebook, Instagram, YouTube e TikTok', 'fp-publisher' ),
+                            ),
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'Test Connections', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-test-connections',
+                        'callback'   => 'render_connection_test_page',
+                        'capability' => 'tts_manage_integrations',
+                        'card'       => array(
+                            'description' => __( 'Esegui verifiche rapide su webhook, permessi e limiti API.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-controls-repeat',
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'General Settings', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-settings',
+                        'callback'   => 'render_settings_page',
+                        'capability' => 'manage_options',
+                        'card'       => array(
+                            'description' => __( 'Definisci preferenze globali di branding, pianificazione e profilo d’uso.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-admin-settings',
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'Help & Onboarding', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-help',
+                        'callback'   => 'render_help_page',
+                        'capability' => 'manage_options',
+                        'card'       => array(
+                            'description' => __( 'Accedi a guide passo-passo, checklist e materiali di formazione.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-sos',
+                        ),
+                    ),
+                ),
+            ),
+            'production' => array(
+                'label' => __( 'Produzione', 'fp-publisher' ),
+                'hub'   => array(
+                    'title'       => __( 'Centro Produzione', 'fp-publisher' ),
+                    'description' => __( 'Coordina il lavoro quotidiano del team editoriale e controlla lo stato di avanzamento dei contenuti.', 'fp-publisher' ),
+                    'class'       => 'tts-hub--production',
+                    'slug'        => 'fp-publisher-production-hub',
+                    'callback'    => 'render_production_hub_page',
+                    'capability'  => 'tts_read_social_posts',
+                    'page_title'  => __( 'Centro Produzione', 'fp-publisher' ),
+                    'primary'     => true,
+                    'footer'      => array(
+                        'title'       => __( 'Risorse per il team editoriale', 'fp-publisher' ),
+                        'description' => __( 'Allinea il team con guide operative e scorciatoie per la collaborazione quotidiana.', 'fp-publisher' ),
+                        'links'       => array(
+                            array(
+                                'label' => __( 'Apri guida al calendario', 'fp-publisher' ),
+                                'url'   => admin_url( 'admin.php?page=fp-publisher-help#calendar' ),
+                            ),
+                            array(
+                                'label' => __( 'Template briefing', 'fp-publisher' ),
+                                'url'   => admin_url( 'admin.php?page=fp-publisher-quickstart' ),
+                            ),
+                        ),
+                    ),
+                    'quick_action' => array(
+                        'title'       => __( 'Vai alla Produzione', 'fp-publisher' ),
+                        'description' => __( 'Accedi a post, calendario e strumenti operativi', 'fp-publisher' ),
+                        'icon'        => 'dashicons-megaphone',
+                        'color'       => '#f56e28',
+                        'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
+                    ),
+                ),
+                'items' => array(
+                    array(
+                        'title'      => __( 'Social Posts', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-social-posts',
+                        'callback'   => 'render_social_posts_page',
+                        'capability' => 'tts_read_social_posts',
+                        'card'       => array(
+                            'description' => __( 'Gestisci la coda editoriale, approva post e monitora gli stati di pubblicazione.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-megaphone',
+                            'meta'        => array(
+                                __( 'Filtri per cliente, stato e canale', 'fp-publisher' ),
+                            ),
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'Calendar', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-calendar',
+                        'callback'   => 'render_calendar_page',
+                        'capability' => 'tts_read_social_posts',
+                        'card'       => array(
+                            'description' => __( 'Visualizza i contenuti programmati in una vista calendario condivisa.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-calendar-alt',
+                        ),
+                        'quick_action' => array(
+                            'title'       => __( 'View Calendar', 'fp-publisher' ),
+                            'description' => __( 'See scheduled posts in calendar view', 'fp-publisher' ),
+                            'icon'        => 'dashicons-calendar',
+                            'color'       => '#2563eb',
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'Content Manager', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-content',
+                        'callback'   => 'render_content_management_page',
+                        'capability' => 'tts_edit_social_posts',
+                        'card'       => array(
+                            'description' => __( 'Organizza bozze, asset e flussi di revisione con strumenti avanzati.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-index-card',
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'Publishing Status', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-frequency-status',
+                        'callback'   => 'render_frequency_status_page',
+                        'capability' => 'tts_read_social_posts',
+                        'card'       => array(
+                            'description' => __( 'Controlla frequenze, backlog e KPI di pianificazione per cliente.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-chart-bar',
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'AI & Advanced Suite', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-ai-features',
+                        'callback'   => 'render_ai_features_page',
+                        'capability' => 'tts_edit_social_posts',
+                        'card'       => array(
+                            'description' => __( 'Sfrutta automazioni assistite e workflow enterprise per accelerare la produzione.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-art',
+                        ),
+                    ),
+                ),
+            ),
+            'monitoring' => array(
+                'label' => __( 'Monitoraggio', 'fp-publisher' ),
+                'hub'   => array(
+                    'title'       => __( 'Centro Monitoraggio', 'fp-publisher' ),
+                    'description' => __( 'Analizza performance, stato dell’infrastruttura e storico delle attività per mantenere il sistema sotto controllo.', 'fp-publisher' ),
+                    'class'       => 'tts-hub--monitoring',
+                    'slug'        => 'fp-publisher-monitoring-hub',
+                    'callback'    => 'render_monitoring_hub_page',
+                    'capability'  => 'tts_view_reports',
+                    'page_title'  => __( 'Centro Monitoraggio', 'fp-publisher' ),
+                    'primary'     => true,
+                    'footer'      => array(
+                        'title'       => __( 'Diagnostica e conformità', 'fp-publisher' ),
+                        'description' => __( 'Integra i log con flussi esterni o scarica report dettagliati per audit periodici.', 'fp-publisher' ),
+                        'links'       => array(
+                            array(
+                                'label' => __( 'Scarica ultimo audit', 'fp-publisher' ),
+                                'url'   => admin_url( 'admin.php?page=fp-publisher-log&tts_export=audit' ),
+                            ),
+                            array(
+                                'label' => __( 'Controllo connessioni', 'fp-publisher' ),
+                                'url'   => admin_url( 'admin.php?page=fp-publisher-test-connections' ),
+                            ),
+                        ),
+                    ),
+                    'quick_action' => array(
+                        'title'       => __( 'Controlla Monitoraggio', 'fp-publisher' ),
+                        'description' => __( 'Consulta analytics, salute di sistema e log', 'fp-publisher' ),
+                        'icon'        => 'dashicons-visibility',
+                        'color'       => '#00a32a',
+                        'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
+                    ),
+                ),
+                'items' => array(
+                    array(
+                        'title'      => __( 'Analytics', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-analytics',
+                        'callback'   => 'render_analytics_page',
+                        'capability' => 'tts_view_reports',
+                        'card'       => array(
+                            'description' => __( 'Raccogli metriche aggregate, applica filtri avanzati ed esporta i report.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-chart-pie',
+                            'meta'        => array(
+                                __( 'Esportazione CSV e confronti per cliente', 'fp-publisher' ),
+                            ),
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'System Health', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-health',
+                        'callback'   => 'render_health_page',
+                        'capability' => 'tts_manage_health',
+                        'card'       => array(
+                            'description' => __( 'Verifica token, webhook, cron e requisiti WordPress in un unico pannello.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-shield',
+                        ),
+                        'quick_action' => array(
+                            'title'       => __( 'Check Health Status', 'fp-publisher' ),
+                            'description' => __( 'Monitor system health and tokens', 'fp-publisher' ),
+                            'icon'        => 'dashicons-heart',
+                            'color'       => '#7c3aed',
+                        ),
+                    ),
+                    array(
+                        'title'      => __( 'Activity Log', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-log',
+                        'callback'   => 'render_log_page',
+                        'capability' => 'tts_manage_system',
+                        'card'       => array(
+                            'description' => __( 'Consulta lo storico eventi, analizza errori e scarica pacchetti di audit.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-list-view',
+                        ),
+                        'quick_action' => array(
+                            'title'       => __( 'Audit & Logs', 'fp-publisher' ),
+                            'description' => __( 'Controlla log, audit trail e backup', 'fp-publisher' ),
+                            'icon'        => 'dashicons-shield-alt',
+                            'color'       => '#0f172a',
+                            'profiles'    => array( 'enterprise' ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+
+        /**
+         * Allow third parties to adjust the navigation blueprint before it is consumed.
+         *
+         * @param array<string, array<string, mixed>> $blueprint Navigation blueprint.
+         */
+        $blueprint = apply_filters( 'tts_admin_navigation_blueprint', $blueprint );
+
+        return $blueprint;
+    }
+
+    /**
+     * Return the dashboard page slug defined in the navigation blueprint.
+     *
+     * @return string
+     */
+    private function get_dashboard_page_slug() {
+        $blueprint = $this->get_navigation_blueprint();
+
+        if ( isset( $blueprint['dashboard']['hub']['slug'] ) ) {
+            return (string) $blueprint['dashboard']['hub']['slug'];
+        }
+
+        return 'fp-publisher-main';
+    }
+
+    /**
+     * Build the WordPress admin hook name for a given slug.
+     *
+     * @param string $slug        Admin page slug.
+     * @param bool   $is_top_level Whether the hook should represent the top-level menu.
+     *
+     * @return string
+     */
+    private function build_admin_hook_from_slug( $slug, $is_top_level = false ) {
+        $slug = (string) $slug;
+
+        if ( $is_top_level ) {
+            return 'toplevel_page_' . $slug;
+        }
+
+        return 'fp-publisher_page_' . $slug;
+    }
+
+    /**
+     * Collect all admin page hooks registered through the navigation blueprint.
+     *
+     * @return array<int, string>
+     */
+    private function get_registered_admin_page_hooks() {
+        static $hooks = null;
+
+        if ( null !== $hooks ) {
+            return $hooks;
+        }
+
+        $hooks          = array();
+        $dashboard_slug = $this->get_dashboard_page_slug();
+
+        $hooks[] = $this->build_admin_hook_from_slug( $dashboard_slug, true );
+        $hooks[] = $this->build_admin_hook_from_slug( $dashboard_slug );
+
+        $blueprint = $this->get_navigation_blueprint();
+
+        foreach ( $blueprint as $section ) {
+            $definitions = array();
+
+            if ( isset( $section['hub'] ) && is_array( $section['hub'] ) ) {
+                $definitions[] = $section['hub'];
+            }
+
+            if ( ! empty( $section['items'] ) && is_array( $section['items'] ) ) {
+                foreach ( $section['items'] as $item_definition ) {
+                    if ( is_array( $item_definition ) ) {
+                        $definitions[] = $item_definition;
+                    }
+                }
+            }
+
+            foreach ( $definitions as $definition ) {
+                if ( empty( $definition['slug'] ) ) {
+                    continue;
+                }
+
+                $hooks[] = $this->build_admin_hook_from_slug( $definition['slug'] );
+            }
+        }
+
+        $hooks = array_values( array_unique( $hooks ) );
+
+        return $hooks;
+    }
+
+    /**
      * Register plugin menu pages.
      */
     public function register_menu() {
-        // Verify that all required methods exist before registering menus
-        $required_methods = array(
-            'render_dashboard_page',
-            'render_content_management_page', 
-            'render_clients_page',
-            'tts_render_client_wizard',
-            'render_social_posts_page',
-            'render_connection_test_page',
-            'render_settings_page',
-            'render_social_connections_page',
-            'render_help_page',
-            'render_calendar_page',
-            'render_analytics_page',
-            'render_health_page',
-            'render_log_page',
-            'render_ai_features_page',
-            'render_frequency_status_page'
-        );
-        
+        $blueprint = $this->get_navigation_blueprint();
+
+        $required_methods = array();
+
+        foreach ( $blueprint as $section ) {
+            if ( isset( $section['hub']['callback'] ) ) {
+                $required_methods[] = $section['hub']['callback'];
+            }
+
+            if ( empty( $section['items'] ) || ! is_array( $section['items'] ) ) {
+                continue;
+            }
+
+            foreach ( $section['items'] as $item ) {
+                if ( isset( $item['callback'] ) ) {
+                    $required_methods[] = $item['callback'];
+                }
+            }
+        }
+
+        $required_methods  = array_unique( array_filter( $required_methods ) );
         $available_methods = array();
 
         foreach ( $required_methods as $method ) {
@@ -315,14 +740,20 @@ class TTS_Admin {
             }
         }
 
+        $dashboard_hub      = isset( $blueprint['dashboard']['hub'] ) ? $blueprint['dashboard']['hub'] : array();
+        $dashboard_slug     = $this->get_dashboard_page_slug();
+        $dashboard_callback = isset( $dashboard_hub['callback'] ) ? $dashboard_hub['callback'] : 'render_dashboard_page';
+        $dashboard_cap      = isset( $dashboard_hub['capability'] ) ? $dashboard_hub['capability'] : 'manage_options';
+        $dashboard_page     = isset( $dashboard_hub['page_title'] ) ? $dashboard_hub['page_title'] : __( 'FP Publisher Dashboard', 'fp-publisher' );
+
         $fp_publisher_title = __( 'FP Publisher', 'fp-publisher' );
-        if ( $this->can_register_menu_callback( 'render_dashboard_page', 'fp-publisher-main', $fp_publisher_title, $available_methods ) ) {
+        if ( $this->can_register_menu_callback( $dashboard_callback, $dashboard_slug, $fp_publisher_title, $available_methods ) ) {
             add_menu_page(
+                $dashboard_page,
                 $fp_publisher_title,
-                $fp_publisher_title,
-                'manage_options',
-                'fp-publisher-main',
-                array( $this, 'render_dashboard_page' ),
+                $dashboard_cap,
+                $dashboard_slug,
+                array( $this, $dashboard_callback ),
                 'dashicons-share-alt',
                 25
             );
@@ -336,7 +767,7 @@ class TTS_Admin {
             }
 
             add_submenu_page(
-                'fp-publisher-main',
+                $dashboard_slug,
                 $item['page_title'],
                 $item['menu_title'],
                 $item['capability'],
@@ -347,178 +778,115 @@ class TTS_Admin {
     }
 
     /**
+     * Convert a blueprint definition into a menu item structure.
+     *
+     * @param string               $group_label Section label.
+     * @param array<string, mixed> $definition  Item definition.
+     * @param bool                 $is_primary  Whether the entry should appear as a standalone label.
+     *
+     * @return array<string, string>|null
+     */
+    private function build_menu_item_from_definition( $group_label, array $definition, $is_primary = false ) {
+        $title    = isset( $definition['title'] ) ? (string) $definition['title'] : '';
+        $slug     = isset( $definition['slug'] ) ? (string) $definition['slug'] : '';
+        $callback = isset( $definition['callback'] ) ? (string) $definition['callback'] : '';
+
+        if ( '' === $title || '' === $slug || '' === $callback ) {
+            return null;
+        }
+
+        $capability = isset( $definition['capability'] ) ? (string) $definition['capability'] : 'manage_options';
+
+        $menu_title = isset( $definition['menu_title'] )
+            ? (string) $definition['menu_title']
+            : ( $is_primary
+                ? $title
+                : sprintf(
+                    /* translators: 1: Section name. 2: Menu label. */
+                    __( '%1$s · %2$s', 'fp-publisher' ),
+                    $group_label,
+                    $title
+                )
+            );
+
+        $page_title = isset( $definition['page_title'] )
+            ? (string) $definition['page_title']
+            : sprintf(
+                /* translators: 1: Section name. 2: Page title. */
+                __( '%1$s — %2$s', 'fp-publisher' ),
+                $group_label,
+                $title
+            );
+
+        return array(
+            'menu_title' => $menu_title,
+            'page_title' => $page_title,
+            'slug'       => $slug,
+            'callback'   => $callback,
+            'capability' => $capability,
+        );
+    }
+
+    /**
      * Return the structured menu items for the admin navigation.
      *
      * @return array<int, array<string, string>>
      */
     private function get_admin_menu_items() {
-        $groups = array(
-            array(
-                'label' => __( 'Overview', 'fp-publisher' ),
-                'items' => array(
-                    array(
-                        'title'      => __( 'Dashboard', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-main',
-                        'callback'   => 'render_dashboard_page',
-                        'capability' => 'manage_options',
-                        'page_title' => __( 'FP Publisher Dashboard', 'fp-publisher' ),
-                        'primary'    => true,
-                    ),
-                ),
-            ),
-            array(
-                'label' => __( 'Publishing', 'fp-publisher' ),
-                'items' => array(
-                    array(
-                        'title'    => __( 'Social Posts', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-social-posts',
-                        'callback' => 'render_social_posts_page',
-                    ),
-                    array(
-                        'title'    => __( 'Calendar', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-calendar',
-                        'callback' => 'render_calendar_page',
-                    ),
-                    array(
-                        'title'    => __( 'Content Manager', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-content',
-                        'callback' => 'render_content_management_page',
-                    ),
-                    array(
-                        'title'    => __( 'Publishing Status', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-frequency-status',
-                        'callback' => 'render_frequency_status_page',
-                    ),
-                ),
-            ),
-            array(
-                'label' => __( 'Clients', 'fp-publisher' ),
-                'items' => array(
-                    array(
-                        'title'    => __( 'Client Overview', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-clienti',
-                        'callback' => 'render_clients_page',
-                    ),
-                    array(
-                        'title'    => __( 'Add New Client', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-client-wizard',
-                        'callback' => 'tts_render_client_wizard',
-                    ),
-                    array(
-                        'title'    => __( 'Quickstart Packages', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-quickstart',
-                        'callback' => 'render_quickstart_packages_page',
-                    ),
-                ),
-            ),
-            array(
-                'label' => __( 'Integrations', 'fp-publisher' ),
-                'items' => array(
-                    array(
-                        'title'    => __( 'Social Connections', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-social-connections',
-                        'callback' => 'render_social_connections_page',
-                    ),
-                    array(
-                        'title'    => __( 'Test Connections', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-test-connections',
-                        'callback' => 'render_connection_test_page',
-                    ),
-                ),
-            ),
-            array(
-                'label' => __( 'Insights', 'fp-publisher' ),
-                'items' => array(
-                    array(
-                        'title'    => __( 'Analytics', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-analytics',
-                        'callback' => 'render_analytics_page',
-                    ),
-                    array(
-                        'title'    => __( 'System Health', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-health',
-                        'callback' => 'render_health_page',
-                    ),
-                    array(
-                        'title'    => __( 'Activity Log', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-log',
-                        'callback' => 'render_log_page',
-                    ),
-                ),
-            ),
-            array(
-                'label' => __( 'Automation', 'fp-publisher' ),
-                'items' => array(
-                    array(
-                        'title'    => __( 'AI & Advanced Suite', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-ai-features',
-                        'callback' => 'render_ai_features_page',
-                    ),
-                ),
-            ),
-            array(
-                'label' => __( 'Support & Settings', 'fp-publisher' ),
-                'items' => array(
-                    array(
-                        'title'    => __( 'General Settings', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-settings',
-                        'callback' => 'render_settings_page',
-                    ),
-                    array(
-                        'title'    => __( 'Help & Onboarding', 'fp-publisher' ),
-                        'slug'     => 'fp-publisher-help',
-                        'callback' => 'render_help_page',
-                    ),
-                ),
-            ),
-        );
+        $blueprint = $this->get_navigation_blueprint();
+        $items     = array();
 
-        $items = array();
+        foreach ( $blueprint as $section ) {
+            $group_label = isset( $section['label'] ) ? (string) $section['label'] : '';
 
-        foreach ( $groups as $group ) {
-            if ( empty( $group['items'] ) ) {
+            if ( isset( $section['hub'] ) ) {
+                $menu_item = $this->build_menu_item_from_definition( $group_label, $section['hub'], ! empty( $section['hub']['primary'] ) );
+                if ( null !== $menu_item ) {
+                    $items[] = $menu_item;
+                }
+            }
+
+            if ( empty( $section['items'] ) || ! is_array( $section['items'] ) ) {
                 continue;
             }
 
-            $group_label = isset( $group['label'] ) ? $group['label'] : '';
-
-            foreach ( $group['items'] as $item ) {
-                $title      = isset( $item['title'] ) ? $item['title'] : '';
-                $slug       = isset( $item['slug'] ) ? $item['slug'] : '';
-                $callback   = isset( $item['callback'] ) ? $item['callback'] : '';
-                $capability = isset( $item['capability'] ) ? $item['capability'] : 'manage_options';
-
-                if ( '' === $slug || '' === $callback ) {
-                    continue;
+            foreach ( $section['items'] as $item_definition ) {
+                $menu_item = $this->build_menu_item_from_definition( $group_label, $item_definition, ! empty( $item_definition['primary'] ) );
+                if ( null !== $menu_item ) {
+                    $items[] = $menu_item;
                 }
-
-                $menu_title = ! empty( $item['primary'] )
-                    ? $title
-                    : sprintf(
-                        /* translators: 1: Section name. 2: Menu label. */
-                        __( '%1$s · %2$s', 'fp-publisher' ),
-                        $group_label,
-                        $title
-                    );
-
-                $page_title = isset( $item['page_title'] ) ? $item['page_title'] : sprintf(
-                    /* translators: 1: Section name. 2: Page title. */
-                    __( '%1$s — %2$s', 'fp-publisher' ),
-                    $group_label,
-                    $title
-                );
-
-                $items[] = array(
-                    'menu_title' => $menu_title,
-                    'page_title' => $page_title,
-                    'slug'       => $slug,
-                    'callback'   => $callback,
-                    'capability' => $capability,
-                );
             }
         }
 
         return $items;
+    }
+
+    /**
+     * Map menu slugs to the capability required to access them.
+     *
+     * @return array<string, string>
+     */
+    private function get_admin_menu_capability_map() {
+        static $cache = null;
+
+        if ( null !== $cache ) {
+            return $cache;
+        }
+
+        $capabilities = array();
+
+        foreach ( $this->get_admin_menu_items() as $item ) {
+            if ( empty( $item['slug'] ) ) {
+                continue;
+            }
+
+            $capability = isset( $item['capability'] ) ? $item['capability'] : 'manage_options';
+            $capabilities[ $item['slug'] ] = $capability;
+        }
+
+        $cache = $capabilities;
+
+        return $cache;
     }
 
     /**
@@ -916,26 +1284,7 @@ class TTS_Admin {
      */
     public function enqueue_dashboard_assets( $hook ) {
         // Optimized hook checking - only load on FP Publisher pages
-        $fp_publisher_pages = array(
-            'toplevel_page_fp-publisher-main',
-            'toplevel_page_fp-publisher-clienti',
-            'fp-publisher_page_fp-publisher-main',
-            'fp-publisher_page_fp-publisher-ai-features',
-            'fp-publisher_page_fp-publisher-analytics',
-            'fp-publisher_page_fp-publisher-calendar',
-            'fp-publisher_page_fp-publisher-content',
-            'fp-publisher_page_fp-publisher-frequency-status',
-            'fp-publisher_page_fp-publisher-health',
-            'fp-publisher_page_fp-publisher-help',
-            'fp-publisher_page_fp-publisher-log',
-            'fp-publisher_page_fp-publisher-settings',
-            'fp-publisher_page_fp-publisher-social-connections',
-            'fp-publisher_page_fp-publisher-test-connections',
-            'fp-publisher-clienti_page_fp-publisher-clienti',
-            'fp-publisher-clienti_page_fp-publisher-client-wizard',
-            'fp-publisher-clienti_page_fp-publisher-quickstart',
-            'fp-publisher-clienti_page_fp-publisher-social-posts'
-        );
+        $fp_publisher_pages = $this->get_registered_admin_page_hooks();
 
         if ( ! in_array( $hook, $fp_publisher_pages, true ) ) {
             return;
@@ -983,11 +1332,29 @@ class TTS_Admin {
      * @param string $hook Current admin page hook.
      */
     private function enqueue_page_specific_assets( $hook ) {
+        $dashboard_hooks = array(
+            $this->build_admin_hook_from_slug( $this->get_dashboard_page_slug(), true ),
+            $this->build_admin_hook_from_slug( $this->get_dashboard_page_slug() ),
+        );
+
+        if ( in_array( $hook, $dashboard_hooks, true ) ) {
+            $this->enqueue_dashboard_specific_assets();
+        }
+
+        $blueprint = $this->get_navigation_blueprint();
+        $hub_hooks = array();
+
+        foreach ( array( 'configuration', 'production', 'monitoring' ) as $section_key ) {
+            if ( isset( $blueprint[ $section_key ]['hub']['slug'] ) ) {
+                $hub_hooks[] = $this->build_admin_hook_from_slug( $blueprint[ $section_key ]['hub']['slug'] );
+            }
+        }
+
+        if ( in_array( $hook, $hub_hooks, true ) ) {
+            $this->enqueue_shared_admin_page_assets();
+        }
+
         switch ( $hook ) {
-            case 'toplevel_page_fp-publisher-main':
-            case 'fp-publisher_page_fp-publisher-main':
-                $this->enqueue_dashboard_specific_assets();
-                break;
             case 'fp-publisher_page_fp-publisher-calendar':
                 $this->enqueue_calendar_assets();
                 break;
@@ -997,7 +1364,7 @@ class TTS_Admin {
             case 'fp-publisher_page_fp-publisher-social-connections':
                 $this->enqueue_social_connections_assets();
                 break;
-            case 'fp-publisher-clienti_page_fp-publisher-client-wizard':
+            case 'fp-publisher_page_fp-publisher-client-wizard':
                 // Wizard assets are handled separately to avoid duplication
                 break;
             case 'fp-publisher_page_fp-publisher-health':
@@ -1007,21 +1374,21 @@ class TTS_Admin {
                 $this->enqueue_ai_features_assets();
                 break;
             case 'fp-publisher_page_fp-publisher-log':
-                $this->enqueue_shared_admin_page_assets();
-                break;
-            case 'fp-publisher-clienti_page_fp-publisher-social-posts':
-                $this->enqueue_shared_admin_page_assets();
-                $this->enqueue_social_post_editor_assets();
-                break;
+            case 'fp-publisher_page_fp-publisher-quickstart':
+            case 'fp-publisher_page_fp-publisher-social-posts':
             case 'fp-publisher_page_fp-publisher-settings':
             case 'fp-publisher_page_fp-publisher-test-connections':
             case 'fp-publisher_page_fp-publisher-help':
             case 'fp-publisher_page_fp-publisher-frequency-status':
                 $this->enqueue_shared_admin_page_assets();
+
+                if ( 'fp-publisher_page_fp-publisher-social-posts' === $hook ) {
+                    $this->enqueue_social_post_editor_assets();
+                }
                 break;
         }
 
-        if ( in_array( $hook, array( 'fp-publisher-clienti_page_fp-publisher-clienti', 'fp-publisher_page_fp-publisher-content' ), true ) ) {
+        if ( in_array( $hook, array( 'fp-publisher_page_fp-publisher-clienti', 'fp-publisher_page_fp-publisher-content' ), true ) ) {
             $this->enqueue_shared_admin_page_assets();
         }
     }
@@ -1201,7 +1568,7 @@ class TTS_Admin {
      * @param string $hook Current admin page hook.
      */
     public function enqueue_wizard_assets( $hook ) {
-        if ( 'fp-publisher-clienti_page_fp-publisher-client-wizard' !== $hook ) {
+        if ( 'fp-publisher_page_fp-publisher-client-wizard' !== $hook ) {
             return;
         }
 
@@ -2420,90 +2787,438 @@ class TTS_Admin {
         echo '<h2>' . esc_html__( 'Quick Actions', 'fp-publisher' ) . '</h2>';
         echo '<div class="tts-quick-actions">';
 
-        $actions = array(
-            array(
-                'title'       => __( 'Add New Client', 'fp-publisher' ),
-                'description' => __( 'Set up a new social media client', 'fp-publisher' ),
-                'url'         => admin_url( 'admin.php?page=fp-publisher-client-wizard' ),
-                'icon'        => 'dashicons-plus',
-                'color'       => '#135e96',
-                'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
-            ),
-            array(
-                'title'       => __( 'View Calendar', 'fp-publisher' ),
-                'description' => __( 'See scheduled posts in calendar view', 'fp-publisher' ),
-                'url'         => admin_url( 'admin.php?page=fp-publisher-calendar' ),
-                'icon'        => 'dashicons-calendar',
-                'color'       => '#f56e28',
-                'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
-            ),
-            array(
-                'title'       => __( 'Check Health Status', 'fp-publisher' ),
-                'description' => __( 'Monitor system health and tokens', 'fp-publisher' ),
-                'url'         => admin_url( 'admin.php?page=fp-publisher-health' ),
-                'icon'        => 'dashicons-heart',
-                'color'       => '#00a32a',
-                'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
-            ),
-            array(
-                'title'       => __( 'Quickstart Packages', 'fp-publisher' ),
-                'description' => __( 'Import preset templates and mappings', 'fp-publisher' ),
-                'url'         => admin_url( 'admin.php?page=fp-publisher-quickstart' ),
-                'icon'        => 'dashicons-portfolio',
-                'color'       => '#6366f1',
-                'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
-            ),
-            array(
-                'title'       => __( 'View Analytics', 'fp-publisher' ),
-                'description' => __( 'Analyze performance and engagement', 'fp-publisher' ),
-                'url'         => admin_url( 'admin.php?page=fp-publisher-analytics' ),
-                'icon'        => 'dashicons-chart-area',
-                'color'       => '#7c3aed',
-                'profiles'    => array( 'advanced', 'enterprise' ),
-            ),
-            array(
-                'title'       => __( 'Manage Posts', 'fp-publisher' ),
-                'description' => __( 'View and manage all social posts', 'fp-publisher' ),
-                'url'         => admin_url( 'admin.php?page=fp-publisher-social-posts' ),
-                'icon'        => 'dashicons-admin-post',
-                'color'       => '#2563eb',
-                'profiles'    => array( 'advanced', 'enterprise' ),
-            ),
-            array(
-                'title'       => __( 'Audit & Logs', 'fp-publisher' ),
-                'description' => __( 'Controlla log, audit trail e backup', 'fp-publisher' ),
-                'url'         => admin_url( 'admin.php?page=fp-publisher-log' ),
-                'icon'        => 'dashicons-shield-alt',
-                'color'       => '#0f172a',
-                'profiles'    => array( 'enterprise' ),
-            ),
-        );
+        $visible_actions = $this->get_dashboard_quick_actions( $profile );
 
-        $visible_actions = array_filter(
-            $actions,
-            function ( $action ) use ( $profile ) {
-                if ( empty( $action['profiles'] ) ) {
-                    return true;
-                }
-                return in_array( $profile, $action['profiles'], true );
+        if ( empty( $visible_actions ) ) {
+            echo '<div class="notice notice-info" style="margin: 0;">';
+            echo '<p>' . esc_html__( 'Non sono disponibili azioni rapide con i permessi correnti.', 'fp-publisher' ) . '</p>';
+            echo '</div>';
+        } else {
+            foreach ( $visible_actions as $action ) {
+                echo '<a href="' . esc_url( $action['url'] ) . '" class="tts-quick-action tts-tooltip" style="border-left: 4px solid ' . esc_attr( $action['color'] ) . ';">';
+                echo '<div style="display: flex; align-items: center;">';
+                echo '<span class="dashicons ' . esc_attr( $action['icon'] ) . '" style="color: ' . esc_attr( $action['color'] ) . '; margin-right: 12px; font-size: 20px;"></span>';
+                echo '<div>';
+                echo '<div style="font-weight: 600; margin-bottom: 2px;">' . esc_html( $action['title'] ) . '</div>';
+                echo '<div style="font-size: 12px; color: #666;">' . esc_html( $action['description'] ) . '</div>';
+                echo '</div>';
+                echo '</div>';
+                echo '<span class="tts-tooltiptext">' . esc_html( $action['description'] ) . '</span>';
+                echo '</a>';
             }
-        );
-
-        foreach ( $visible_actions as $action ) {
-            echo '<a href="' . esc_url( $action['url'] ) . '" class="tts-quick-action tts-tooltip" style="border-left: 4px solid ' . esc_attr( $action['color'] ) . ';">';
-            echo '<div style="display: flex; align-items: center;">';
-            echo '<span class="dashicons ' . esc_attr( $action['icon'] ) . '" style="color: ' . esc_attr( $action['color'] ) . '; margin-right: 12px; font-size: 20px;"></span>';
-            echo '<div>';
-            echo '<div style="font-weight: 600; margin-bottom: 2px;">' . esc_html( $action['title'] ) . '</div>';
-            echo '<div style="font-size: 12px; color: #666;">' . esc_html( $action['description'] ) . '</div>';
-            echo '</div>';
-            echo '</div>';
-            echo '<span class="tts-tooltiptext">' . esc_html( $action['description'] ) . '</span>';
-            echo '</a>';
         }
 
         echo '</div>';
         echo '</div>';
+    }
+
+    /**
+     * Transform a blueprint definition into a quick action configuration.
+     *
+     * @param array<string, mixed> $definition     Navigation definition.
+     * @param array<string, string> $capability_map Map of slug to capability.
+     * @return array<string, mixed>|null
+     */
+    private function build_quick_action_from_definition( array $definition, array $capability_map ) {
+        if ( empty( $definition['quick_action'] ) || empty( $definition['slug'] ) ) {
+            return null;
+        }
+
+        $quick_action = $definition['quick_action'];
+
+        $title = isset( $quick_action['title'] )
+            ? (string) $quick_action['title']
+            : ( isset( $definition['title'] ) ? (string) $definition['title'] : '' );
+
+        if ( '' === $title ) {
+            return null;
+        }
+
+        $capability = '';
+        if ( array_key_exists( 'capability', $quick_action ) ) {
+            $capability = (string) $quick_action['capability'];
+        } elseif ( isset( $definition['capability'] ) ) {
+            $capability = (string) $definition['capability'];
+        } elseif ( isset( $capability_map[ $definition['slug'] ] ) ) {
+            $capability = (string) $capability_map[ $definition['slug'] ];
+        }
+
+        return array(
+            'title'       => $title,
+            'description' => isset( $quick_action['description'] ) ? (string) $quick_action['description'] : '',
+            'slug'        => (string) $definition['slug'],
+            'icon'        => isset( $quick_action['icon'] ) ? (string) $quick_action['icon'] : 'dashicons-admin-generic',
+            'color'       => isset( $quick_action['color'] ) ? (string) $quick_action['color'] : '#0f172a',
+            'profiles'    => isset( $quick_action['profiles'] ) ? (array) $quick_action['profiles'] : array( 'standard', 'advanced', 'enterprise' ),
+            'capability'  => $capability,
+            'url'         => admin_url( 'admin.php?page=' . $definition['slug'] ),
+        );
+    }
+
+    /**
+     * Return the list of quick actions visible on the dashboard for the given profile.
+     *
+     * @param string $profile Active usage profile.
+     * @return array<int, array<string, mixed>>
+     */
+    private function get_dashboard_quick_actions( $profile ) {
+        $profile = sanitize_key( $profile );
+
+        if ( ! in_array( $profile, array( 'standard', 'advanced', 'enterprise' ), true ) ) {
+            $profile = 'standard';
+        }
+
+        $capability_map = $this->get_admin_menu_capability_map();
+        $blueprint      = $this->get_navigation_blueprint();
+        $actions        = array();
+
+        foreach ( $blueprint as $section ) {
+            if ( isset( $section['hub'] ) ) {
+                $action = $this->build_quick_action_from_definition( $section['hub'], $capability_map );
+                if ( null !== $action ) {
+                    $actions[] = $action;
+                }
+            }
+
+            if ( empty( $section['items'] ) || ! is_array( $section['items'] ) ) {
+                continue;
+            }
+
+            foreach ( $section['items'] as $item ) {
+                $action = $this->build_quick_action_from_definition( $item, $capability_map );
+                if ( null !== $action ) {
+                    $actions[] = $action;
+                }
+            }
+        }
+
+        /**
+         * Allow plugins to customize the dashboard quick actions before filtering.
+         *
+         * @param array<int, array<string, mixed>> $actions Quick action definitions.
+         * @param string                           $profile Active usage profile.
+         */
+        $actions = apply_filters( 'tts_dashboard_quick_actions', $actions, $profile );
+
+        $visible_actions = array_filter(
+            $actions,
+            function ( $action ) use ( $profile ) {
+                if ( empty( $action['url'] ) ) {
+                    return false;
+                }
+
+                if ( ! empty( $action['profiles'] ) && ! in_array( $profile, (array) $action['profiles'], true ) ) {
+                    return false;
+                }
+
+                if ( ! empty( $action['capability'] ) && ! current_user_can( $action['capability'] ) ) {
+                    return false;
+                }
+
+                return true;
+            }
+        );
+
+        return array_values( $visible_actions );
+    }
+
+
+    /**
+     * Render a hub page with navigational cards for grouped features.
+     *
+     * @param array<string, mixed> $config Rendering configuration.
+     */
+    private function render_hub_page( array $config ) {
+        $title       = isset( $config['title'] ) ? (string) $config['title'] : '';
+        $description = isset( $config['description'] ) ? (string) $config['description'] : '';
+        $class       = isset( $config['class'] ) ? (string) $config['class'] : '';
+        $cards       = isset( $config['cards'] ) && is_array( $config['cards'] ) ? $config['cards'] : array();
+        $footer      = isset( $config['footer'] ) ? (array) $config['footer'] : array();
+
+        echo '<div class="wrap tts-hub ' . esc_attr( $class ) . '">';
+        echo '<h1>' . esc_html( $title ) . '</h1>';
+
+        if ( '' !== $description ) {
+            echo '<p class="description">' . esc_html( $description ) . '</p>';
+        }
+
+        $normalized_cards = array();
+
+        foreach ( $cards as $card ) {
+            $capability = isset( $card['capability'] ) ? (string) $card['capability'] : '';
+            $card['capability'] = $capability;
+            $card['accessible'] = ( '' === $capability || current_user_can( $capability ) );
+
+            $normalized_cards[] = $card;
+        }
+
+        $accessible_cards = array_filter(
+            $normalized_cards,
+            function ( $card ) {
+                return ! empty( $card['accessible'] );
+            }
+        );
+
+        $restricted_cards = array_filter(
+            $normalized_cards,
+            function ( $card ) {
+                return empty( $card['accessible'] );
+            }
+        );
+
+        if ( empty( $normalized_cards ) ) {
+            echo '<div class="notice notice-info"><p>' . esc_html__( 'Nessuna card è stata configurata per questo hub.', 'fp-publisher' ) . '</p></div>';
+            echo '</div>';
+            return;
+        }
+
+        if ( empty( $accessible_cards ) ) {
+            echo '<div class="notice notice-warning"><p>' . esc_html__( 'Tutti gli strumenti di questa sezione richiedono permessi aggiuntivi. Contatta un amministratore per ottenere l’accesso.', 'fp-publisher' ) . '</p></div>';
+        }
+
+        echo '<div class="tts-hub-grid">';
+
+        foreach ( $accessible_cards as $card ) {
+            $icon             = isset( $card['icon'] ) ? (string) $card['icon'] : 'dashicons-admin-generic';
+            $title_text       = isset( $card['title'] ) ? (string) $card['title'] : '';
+            $card_description = isset( $card['description'] ) ? (string) $card['description'] : '';
+            $url              = isset( $card['url'] ) ? (string) $card['url'] : '';
+            $meta             = isset( $card['meta'] ) && is_array( $card['meta'] ) ? $card['meta'] : array();
+
+            echo '<a class="tts-hub-card" href="' . esc_url( $url ) . '">';
+            echo '<span class="dashicons ' . esc_attr( $icon ) . '"></span>';
+            echo '<div class="tts-hub-card__content">';
+            echo '<h2>' . esc_html( $title_text ) . '</h2>';
+            if ( '' !== $card_description ) {
+                echo '<p>' . esc_html( $card_description ) . '</p>';
+            }
+
+            if ( ! empty( $meta ) ) {
+                echo '<ul class="tts-hub-card__meta">';
+                foreach ( $meta as $meta_item ) {
+                    echo '<li>' . esc_html( $meta_item ) . '</li>';
+                }
+                echo '</ul>';
+            }
+
+            echo '</div>';
+            echo '<span class="tts-hub-card__cta" aria-hidden="true">&rarr;</span>';
+            echo '</a>';
+        }
+
+        foreach ( $restricted_cards as $card ) {
+            $icon             = isset( $card['icon'] ) ? (string) $card['icon'] : 'dashicons-admin-generic';
+            $title_text       = isset( $card['title'] ) ? (string) $card['title'] : '';
+            $card_description = isset( $card['description'] ) ? (string) $card['description'] : '';
+            $meta             = isset( $card['meta'] ) && is_array( $card['meta'] ) ? $card['meta'] : array();
+            $capability       = isset( $card['capability'] ) ? (string) $card['capability'] : '';
+
+            echo '<div class="tts-hub-card tts-hub-card--locked" aria-disabled="true">';
+            echo '<span class="dashicons ' . esc_attr( $icon ) . '"></span>';
+            echo '<div class="tts-hub-card__content">';
+            echo '<h2>' . esc_html( $title_text ) . '</h2>';
+            if ( '' !== $card_description ) {
+                echo '<p>' . esc_html( $card_description ) . '</p>';
+            }
+
+            if ( ! empty( $meta ) ) {
+                echo '<ul class="tts-hub-card__meta">';
+                foreach ( $meta as $meta_item ) {
+                    echo '<li>' . esc_html( $meta_item ) . '</li>';
+                }
+                echo '</ul>';
+            }
+
+            $lock_message = __( 'Richiede permessi aggiuntivi per essere utilizzato.', 'fp-publisher' );
+            if ( '' !== $capability ) {
+                $lock_message = sprintf(
+                    /* translators: %s is the capability name required to access the hub card. */
+                    __( 'Richiede il permesso "%s".', 'fp-publisher' ),
+                    $capability
+                );
+            }
+
+            echo '<p class="tts-hub-card__lock"><span class="dashicons dashicons-lock" aria-hidden="true"></span>' . esc_html( $lock_message ) . '</p>';
+
+            echo '</div>';
+            echo '<span class="tts-hub-card__cta" aria-hidden="true"><span class="dashicons dashicons-lock"></span></span>';
+            echo '</div>';
+        }
+
+        echo '</div>';
+
+        if ( ! empty( $footer ) ) {
+            echo '<div class="tts-hub-footer">';
+            if ( ! empty( $footer['title'] ) ) {
+                echo '<h2>' . esc_html( $footer['title'] ) . '</h2>';
+            }
+
+            if ( ! empty( $footer['links'] ) && is_array( $footer['links'] ) ) {
+                echo '<div class="tts-hub-footer__links">';
+                foreach ( $footer['links'] as $link ) {
+                    $label = isset( $link['label'] ) ? (string) $link['label'] : '';
+                    $url   = isset( $link['url'] ) ? (string) $link['url'] : '';
+                    if ( '' === $label || '' === $url ) {
+                        continue;
+                    }
+                    echo '<a class="button button-secondary" href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a>';
+                }
+                echo '</div>';
+            }
+
+            if ( ! empty( $footer['description'] ) ) {
+                echo '<p>' . esc_html( $footer['description'] ) . '</p>';
+            }
+            echo '</div>';
+        }
+
+        echo '</div>';
+
+        static $styles_printed = false;
+
+        if ( $styles_printed ) {
+            return;
+        }
+
+        $styles_printed = true;
+
+        echo '<style>'
+            . '.tts-hub{max-width:1180px;}'
+            . '.tts-hub .description{max-width:760px;}'
+            . '.tts-hub-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:24px;}'
+            . '.tts-hub-card{display:flex;flex-direction:row;gap:16px;align-items:flex-start;background:#fff;border:1px solid #dcd'
+            . 'cde;border-radius:8px;padding:20px;text-decoration:none;color:#1d2327;box-shadow:0 1px 2px rgb(0 0 0 / 5%);transitio'
+            . 'n:box-shadow .2s ease,transform .2s ease;}'
+            . '.tts-hub-card:hover{box-shadow:0 8px 16px rgb(30 41 59 / 15%);transform:translateY(-2px);}'
+            . '.tts-hub-card .dashicons{font-size:28px;width:28px;height:28px;color:#2271b1;}'
+            . '.tts-hub-card__content h2{font-size:16px;margin:0 0 6px;}'
+            . '.tts-hub-card__content p{margin:0;font-size:13px;color:#50575e;}'
+            . '.tts-hub-card__meta{margin:12px 0 0;padding-left:18px;color:#2c3338;font-size:12px;}'
+            . '.tts-hub-card__cta{margin-left:auto;font-size:24px;color:#2271b1;align-self:center;}'
+            . '.tts-hub-card--locked{cursor:not-allowed;opacity:0.65;border-style:dashed;background:#f6f7f7;box-shadow:none;}'
+            . '.tts-hub-card--locked .dashicons{color:#a7aaad;}'
+            . '.tts-hub-card--locked .tts-hub-card__cta{color:#a7aaad;}'
+            . '.tts-hub-card__lock{margin:12px 0 0;font-size:12px;color:#646970;display:flex;align-items:center;gap:6px;}'
+            . '.tts-hub-card__lock .dashicons{font-size:16px;width:16px;height:16px;}'
+            . '.tts-hub-footer{margin-top:32px;padding:20px;border:1px solid #dcdcde;border-radius:8px;background:#f6f7f7;}'
+            . '.tts-hub-footer__links{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;}'
+            . '</style>';
+    }
+
+    /**
+     * Build the render configuration for a hub section based on the navigation blueprint.
+     *
+     * @param string $section_key Blueprint section identifier.
+     * @return array<string, mixed>
+     */
+    private function get_hub_render_config_from_blueprint( $section_key ) {
+        $blueprint       = $this->get_navigation_blueprint();
+        $capability_map  = $this->get_admin_menu_capability_map();
+
+        if ( empty( $blueprint[ $section_key ] ) ) {
+            return array(
+                'title'       => '',
+                'description' => '',
+                'class'       => '',
+                'cards'       => array(),
+            );
+        }
+
+        $section = $blueprint[ $section_key ];
+        $hub     = isset( $section['hub'] ) ? $section['hub'] : array();
+        $cards   = array();
+
+        if ( ! empty( $section['items'] ) && is_array( $section['items'] ) ) {
+            foreach ( $section['items'] as $item ) {
+                if ( empty( $item['card'] ) || empty( $item['slug'] ) ) {
+                    continue;
+                }
+
+                $card = $item['card'];
+
+                $capability = '';
+                if ( array_key_exists( 'capability', $card ) ) {
+                    $capability = (string) $card['capability'];
+                } elseif ( isset( $item['capability'] ) ) {
+                    $capability = (string) $item['capability'];
+                } elseif ( isset( $capability_map[ $item['slug'] ] ) ) {
+                    $capability = (string) $capability_map[ $item['slug'] ];
+                }
+
+                if ( '' === $capability && ! array_key_exists( 'capability', $card ) && ! isset( $item['capability'] ) ) {
+                    $capability = 'manage_options';
+                }
+
+                $cards[] = array(
+                    'title'       => isset( $card['title'] ) ? (string) $card['title'] : ( isset( $item['title'] ) ? (string) $item['title'] : '' ),
+                    'description' => isset( $card['description'] ) ? (string) $card['description'] : '',
+                    'url'         => admin_url( 'admin.php?page=' . $item['slug'] ),
+                    'icon'        => isset( $card['icon'] ) ? (string) $card['icon'] : 'dashicons-admin-generic',
+                    'capability'  => $capability,
+                    'meta'        => isset( $card['meta'] ) ? (array) $card['meta'] : array(),
+                );
+            }
+        }
+
+        if ( ! empty( $hub['extra_cards'] ) && is_array( $hub['extra_cards'] ) ) {
+            foreach ( $hub['extra_cards'] as $extra_card ) {
+                if ( empty( $extra_card['title'] ) || empty( $extra_card['url'] ) ) {
+                    continue;
+                }
+
+                $capability = '';
+                if ( array_key_exists( 'capability', $extra_card ) ) {
+                    $capability = (string) $extra_card['capability'];
+                }
+
+                if ( '' === $capability && ! array_key_exists( 'capability', $extra_card ) ) {
+                    $capability = 'manage_options';
+                }
+
+                $cards[] = array(
+                    'title'       => (string) $extra_card['title'],
+                    'description' => isset( $extra_card['description'] ) ? (string) $extra_card['description'] : '',
+                    'url'         => (string) $extra_card['url'],
+                    'icon'        => isset( $extra_card['icon'] ) ? (string) $extra_card['icon'] : 'dashicons-admin-generic',
+                    'capability'  => $capability,
+                    'meta'        => isset( $extra_card['meta'] ) ? (array) $extra_card['meta'] : array(),
+                );
+            }
+        }
+
+        $config = array(
+            'title'       => isset( $hub['title'] ) ? (string) $hub['title'] : ( isset( $section['label'] ) ? (string) $section['label'] : '' ),
+            'description' => isset( $hub['description'] ) ? (string) $hub['description'] : '',
+            'class'       => isset( $hub['class'] ) ? (string) $hub['class'] : '',
+            'cards'       => $cards,
+        );
+
+        if ( ! empty( $hub['footer'] ) ) {
+            $config['footer'] = $hub['footer'];
+        }
+
+        return $config;
+    }
+
+    /**
+     * Render the configuration hub page.
+     */
+    public function render_configuration_hub_page() {
+        $this->render_hub_page( $this->get_hub_render_config_from_blueprint( 'configuration' ) );
+    }
+
+    /**
+     * Render the production hub page.
+     */
+    public function render_production_hub_page() {
+        $this->render_hub_page( $this->get_hub_render_config_from_blueprint( 'production' ) );
+    }
+
+    /**
+     * Render the monitoring hub page.
+     */
+    public function render_monitoring_hub_page() {
+        $this->render_hub_page( $this->get_hub_render_config_from_blueprint( 'monitoring' ) );
     }
 
 
