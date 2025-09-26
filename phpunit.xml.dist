@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.6/phpunit.xsd"
+    bootstrap="wp-content/plugins/trello-social-auto-publisher/tests/phpunit/bootstrap.php"
+    colors="true"
+    stopOnFailure="false"
+    cacheResultFile=".phpunit.result.cache"
+>
+    <testsuites>
+        <testsuite name="fp-publisher">
+            <directory suffix="Test.php">wp-content/plugins/trello-social-auto-publisher/tests/phpunit</directory>
+        </testsuite>
+    </testsuites>
+
+    <coverage processUncoveredFiles="false">
+        <include>
+            <directory suffix=".php">wp-content/plugins/trello-social-auto-publisher</directory>
+        </include>
+        <exclude>
+            <directory>wp-content/plugins/trello-social-auto-publisher/tests</directory>
+            <directory>vendor</directory>
+            <directory>dist</directory>
+        </exclude>
+        <report>
+            <text outputFile="docs/coverage/coverage.txt" showOnlySummary="true"/>
+            <clover outputFile="docs/coverage/coverage.xml"/>
+        </report>
+    </coverage>
+
+    <php>
+        <ini name="error_reporting" value="-1"/>
+        <env name="TSAP_RUNNING_PHPUNIT" value="1"/>
+    </php>
+</phpunit>

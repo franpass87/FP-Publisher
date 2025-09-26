@@ -5,7 +5,7 @@
 ## Overview
 
 Versione introdotta: **1.0.0**  
-Ultimo aggiornamento documentazione: **1.0.1**
+Ultimo aggiornamento documentazione: **1.1.0**
 
 Il plugin Social Auto Publisher utilizza una struttura di menu consolidata per migliorare navigazione, performance e accessibilità. Questa pagina integra le note di rilascio presenti nel [CHANGELOG](CHANGELOG.md) e descrive in dettaglio ogni voce del menu amministratore.
 

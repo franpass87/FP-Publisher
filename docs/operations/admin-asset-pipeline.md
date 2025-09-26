@@ -3,7 +3,7 @@
 *Author: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
 
 Minimum plugin version: **1.0.0**  
-Documentation refresh: **1.0.1**
+Documentation refresh: **1.1.0**
 
 This plugin now ships with a reproducible build pipeline for the files under `admin/js/` and `admin/css/`. The goal of the tooling is to ensure that
 optimized bundles (with cache-busting fingerprints) are produced in `admin/dist/` and that PHP only ever enqueues the compiled assets.

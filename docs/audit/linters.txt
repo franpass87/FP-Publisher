@@ -1,0 +1,28 @@
+# Linters Phase Report (Phase 2)
+
+## Tooling Setup
+- Added Composer dev dependencies for WordPress Coding Standards (PHPCS) and PHPStan with the WordPress extension to enforce coding and static analysis rules across the plugin.
+- Introduced project-level configuration files:
+  - `phpcs.xml.dist` targets the plugin directory with WordPress Core + Extra rules while excluding assets, dist, vendor, and fixtures.
+  - `phpstan.neon.dist` analyses the plugin at level 5 using WordPress stubs and the plugin test bootstrap for context.
+- Exposed convenience Composer scripts for `lint`, `lint:phpcs`, `lint:phpcs-fix`, and `lint:phpstan` with elevated PHP memory limits for large runs.
+
+## PHPCS Results
+- Initial run surfaced **48,121 errors** and **3,097 warnings** across 85 files; the majority were indentation (spaces vs. tabs) and array formatting violations, especially inside `admin/class-tts-admin.php` and legacy service classes.【e11dce†L1-L46】
+- Automated fixes via `composer lint:phpcs-fix` resolved **48,747 violations** in 84 files, leaving one legacy file (`admin/class-tts-admin.php`) requiring manual cleanup; the follow-up run still reports **11,146 errors** and **982 warnings** concentrated in that file and a handful of complex services/tests.【3f59e0†L1-L47】【c384b4†L1-L71】
+- Outstanding issues include massive indentation debt in the admin UI controller, inconsistent escaping patterns, discouraged functions (e.g., `base64_decode`), translator comment gaps, and WordPress-specific compliance gaps noted for later phases.
+
+## PHPStan Results
+- Static analysis (level 5) completes with **284 errors** across admin controllers, REST endpoints, services, publishers, and tests.【b78e07†L1-L200】
+- Key error clusters:
+  - WordPress API usage mismatches (incorrect parameter counts for `wp_remote_get`, `wp_nonce_field`, `wp_insert_post`, etc.).
+  - Access to undefined properties or methods on WP table classes and service singletons.
+  - Unreachable code paths, always-true conditions, and ternaries requiring logic review.
+  - Type contract violations (e.g., publishers returning `WP_Error` instead of declared strings, void methods returning values).
+  - Test doubles missing required shape or referencing undefined helper classes.
+- These findings guide targeted refactors in subsequent security, performance, and refactoring phases.
+
+## Next Actions
+- Plan manual remediation for the remaining high-volume PHPCS issues in `admin/class-tts-admin.php` and associated service files, prioritizing security-sensitive areas.
+- Address PHPStan findings by tightening WordPress API usage, adding capability checks, and improving type safety before proceeding to security hardening.
+- Integrate lint commands into CI during Phase 8 once codebase quality is stabilized.

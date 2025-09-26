@@ -1,0 +1,17 @@
+{
+  "current_phase": 10,
+  "completed": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "last_commit": "docs: finalize release collateral and package",
+  "notes": "Phase 10 documentation & release: refreshed README with download/testing instructions, expanded the 1.1.0 changelog, wrote UPGRADE.md, recorded the phase log, and generated the dist/fp-publisher-1.1.0.zip package with checksum."
+}

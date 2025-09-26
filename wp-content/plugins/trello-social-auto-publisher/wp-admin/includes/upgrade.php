@@ -1,4 +1,4 @@
 <?php
 function dbDelta( $sql ) {
-    return true;
+	return true;
 }

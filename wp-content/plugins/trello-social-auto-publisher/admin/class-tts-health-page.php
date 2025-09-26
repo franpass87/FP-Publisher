@@ -6,7 +6,7 @@
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+	exit;
 }
 
 /**
@@ -14,213 +14,225 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class TTS_Health_Page {
 
-    /**
-     * Initialize the health page.
-     */
-    public function __construct() {
-        add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-    }
+	/**
+	 * Initialize the health page.
+	 */
+	public function __construct() {
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+	}
 
-    /**
-     * Enqueue health page assets.
-     *
-     * @param string $hook Current admin page hook.
-     */
-    public function enqueue_assets( $hook ) {
-        if ( 'fp-publisher_page_fp-publisher-health' !== $hook ) {
-            return;
-        }
+	/**
+	 * Enqueue health page assets.
+	 *
+	 * @param string $hook Current admin page hook.
+	 */
+	public function enqueue_assets( $hook ) {
+		if ( 'fp-publisher_page_fp-publisher-health' !== $hook ) {
+			return;
+		}
 
-        wp_enqueue_style(
-            'tts-health',
-            plugin_dir_url( __FILE__ ) . 'css/tts-health.css',
-            array(),
-            '1.0'
-        );
-    }
+		wp_enqueue_style(
+			'tts-health',
+			plugin_dir_url( __FILE__ ) . 'css/tts-health.css',
+			array(),
+			'1.0'
+		);
+	}
 
-    /**
-     * Remove the health menu registration method since it's handled by TTS_Admin.
-     */
+	/**
+	 * Remove the health menu registration method since it's handled by TTS_Admin.
+	 */
 
-    /**
-     * Render the health status page.
-     */
-    public function render_page() {
-        echo '<div class="wrap">';
-        echo '<h1>' . esc_html__( 'Stato Sistema', 'fp-publisher' ) . '</h1>';
+	/**
+	 * Render the health status page.
+	 */
+	public function render_page() {
+		echo '<div class="wrap">';
+		echo '<h1>' . esc_html__( 'Stato Sistema', 'fp-publisher' ) . '</h1>';
 
-        // Overall health status
-        echo '<div class="tts-health-overview">';
-        echo '<h2>' . esc_html__( 'Stato Generale', 'fp-publisher' ) . '</h2>';
-        $this->render_general_health();
-        echo '</div>';
+		// Overall health status
+		echo '<div class="tts-health-overview">';
+		echo '<h2>' . esc_html__( 'Stato Generale', 'fp-publisher' ) . '</h2>';
+		$this->render_general_health();
+		echo '</div>';
 
-        // Token checks.
-        echo '<div class="tts-health-section">';
-        echo '<h2>' . esc_html__( 'Token', 'fp-publisher' ) . '</h2>';
-        $clients = get_posts(
-            array(
-                'post_type'      => 'tts_client',
-                'post_status'    => 'any',
-                'posts_per_page' => -1,
-                'fields'         => 'ids',
-            )
-        );
-        if ( $clients ) {
-            echo '<div class="tts-health-grid">';
-            foreach ( $clients as $client_id ) {
-                $result = TTS_Client::check_token( $client_id );
-                $title  = get_the_title( $client_id );
-                echo '<div class="tts-health-card">';
-                echo '<h3>' . esc_html( $title ) . '</h3>';
-                if ( is_wp_error( $result ) || ! $result ) {
-                    $message = is_wp_error( $result ) ? $result->get_error_message() : __( 'Errore', 'fp-publisher' );
-                    echo '<div class="tts-status-error"><span class="dashicons dashicons-warning"></span>' . esc_html( $message ) . '</div>';
-                } else {
-                    echo '<div class="tts-status-ok"><span class="dashicons dashicons-yes"></span>' . esc_html__( 'Token valido', 'fp-publisher' ) . '</div>';
-                }
-                echo '</div>';
-            }
-            echo '</div>';
-        } else {
-            echo '<p>' . esc_html__( 'Nessun client configurato.', 'fp-publisher' ) . '</p>';
-        }
-        echo '</div>';
+		// Token checks.
+		echo '<div class="tts-health-section">';
+		echo '<h2>' . esc_html__( 'Token', 'fp-publisher' ) . '</h2>';
+		$clients = get_posts(
+			array(
+				'post_type'      => 'tts_client',
+				'post_status'    => 'any',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+			)
+		);
+		if ( $clients ) {
+			echo '<div class="tts-health-grid">';
+			foreach ( $clients as $client_id ) {
+				$result = TTS_Client::check_token( $client_id );
+				$title  = get_the_title( $client_id );
+				echo '<div class="tts-health-card">';
+				echo '<h3>' . esc_html( $title ) . '</h3>';
+				if ( is_wp_error( $result ) || ! $result ) {
+					$message = is_wp_error( $result ) ? $result->get_error_message() : __( 'Errore', 'fp-publisher' );
+					echo '<div class="tts-status-error"><span class="dashicons dashicons-warning"></span>' . esc_html( $message ) . '</div>';
+				} else {
+					echo '<div class="tts-status-ok"><span class="dashicons dashicons-yes"></span>' . esc_html__( 'Token valido', 'fp-publisher' ) . '</div>';
+				}
+				echo '</div>';
+			}
+			echo '</div>';
+		} else {
+			echo '<p>' . esc_html__( 'Nessun client configurato.', 'fp-publisher' ) . '</p>';
+		}
+		echo '</div>';
 
-        // System checks
-        echo '<div class="tts-health-section">';
-        echo '<h2>' . esc_html__( 'Controlli Sistema', 'fp-publisher' ) . '</h2>';
-        echo '<div class="tts-health-grid">';
-        
-        // Trello webhook check.
-        echo '<div class="tts-health-card">';
-        echo '<h3>' . esc_html__( 'Webhook Trello', 'fp-publisher' ) . '</h3>';
-        $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
-        if ( $trello_enabled ) {
-            $webhook = TTS_Webhook::check_connection();
-            if ( is_wp_error( $webhook ) || ! $webhook ) {
-                $message = is_wp_error( $webhook ) ? $webhook->get_error_message() : __( 'Errore', 'fp-publisher' );
-                echo '<div class="tts-status-error"><span class="dashicons dashicons-warning"></span>' . esc_html( $message ) . '</div>';
-            } else {
-                echo '<div class="tts-status-ok"><span class="dashicons dashicons-yes"></span>' . esc_html__( 'Connessione attiva', 'fp-publisher' ) . '</div>';
-            }
-        } else {
-            echo '<div class="tts-status-warning"><span class="dashicons dashicons-minus"></span>' . esc_html__( 'Integrazione Trello disabilitata', 'fp-publisher' ) . '</div>';
-        }
-        echo '</div>';
+		// System checks
+		echo '<div class="tts-health-section">';
+		echo '<h2>' . esc_html__( 'Controlli Sistema', 'fp-publisher' ) . '</h2>';
+		echo '<div class="tts-health-grid">';
 
-        // Action Scheduler queue check.
-        echo '<div class="tts-health-card">';
-        echo '<h3>' . esc_html__( 'Action Scheduler', 'fp-publisher' ) . '</h3>';
-        if ( is_callable( array( 'TTS_Scheduler', 'check_queue' ) ) ) {
-            $queue = TTS_Scheduler::check_queue();
-        } else {
-            $queue = new WP_Error( 'missing_method', __( 'Metodo check_queue non disponibile.', 'fp-publisher' ) );
-        }
-        if ( is_wp_error( $queue ) || ! $queue ) {
-            $message = is_wp_error( $queue ) ? $queue->get_error_message() : __( 'Errore', 'fp-publisher' );
-            echo '<div class="tts-status-error"><span class="dashicons dashicons-warning"></span>' . esc_html( $message ) . '</div>';
-        } else {
-            echo '<div class="tts-status-ok"><span class="dashicons dashicons-yes"></span>' . esc_html( $queue ) . '</div>';
-        }
-        echo '</div>';
+		// Trello webhook check.
+		echo '<div class="tts-health-card">';
+		echo '<h3>' . esc_html__( 'Webhook Trello', 'fp-publisher' ) . '</h3>';
+		$trello_enabled = (bool) tsap_get_option( 'tts_trello_enabled', 1 );
+		if ( $trello_enabled ) {
+			$webhook = TTS_Webhook::check_connection();
+			if ( is_wp_error( $webhook ) || ! $webhook ) {
+				$message = is_wp_error( $webhook ) ? $webhook->get_error_message() : __( 'Errore', 'fp-publisher' );
+				echo '<div class="tts-status-error"><span class="dashicons dashicons-warning"></span>' . esc_html( $message ) . '</div>';
+			} else {
+				echo '<div class="tts-status-ok"><span class="dashicons dashicons-yes"></span>' . esc_html__( 'Connessione attiva', 'fp-publisher' ) . '</div>';
+			}
+		} else {
+			echo '<div class="tts-status-warning"><span class="dashicons dashicons-minus"></span>' . esc_html__( 'Integrazione Trello disabilitata', 'fp-publisher' ) . '</div>';
+		}
+		echo '</div>';
 
-        // WordPress requirements
-        echo '<div class="tts-health-card">';
-        echo '<h3>' . esc_html__( 'Requisiti WordPress', 'fp-publisher' ) . '</h3>';
-        $this->render_wp_requirements();
-        echo '</div>';
+		// Action Scheduler queue check.
+		echo '<div class="tts-health-card">';
+		echo '<h3>' . esc_html__( 'Action Scheduler', 'fp-publisher' ) . '</h3>';
+		if ( is_callable( array( 'TTS_Scheduler', 'check_queue' ) ) ) {
+			$queue = TTS_Scheduler::check_queue();
+		} else {
+			$queue = new WP_Error( 'missing_method', __( 'Metodo check_queue non disponibile.', 'fp-publisher' ) );
+		}
+		if ( is_wp_error( $queue ) || ! $queue ) {
+			$message = is_wp_error( $queue ) ? $queue->get_error_message() : __( 'Errore', 'fp-publisher' );
+			echo '<div class="tts-status-error"><span class="dashicons dashicons-warning"></span>' . esc_html( $message ) . '</div>';
+		} else {
+			echo '<div class="tts-status-ok"><span class="dashicons dashicons-yes"></span>' . esc_html( $queue ) . '</div>';
+		}
+		echo '</div>';
 
-        echo '</div>';
-        echo '</div>';
+		// WordPress requirements
+		echo '<div class="tts-health-card">';
+		echo '<h3>' . esc_html__( 'Requisiti WordPress', 'fp-publisher' ) . '</h3>';
+		$this->render_wp_requirements();
+		echo '</div>';
 
-        echo '</div>';
-    }
+		echo '</div>';
+		echo '</div>';
 
-    /**
-     * Render general health overview
-     */
-    private function render_general_health() {
-        $issues = 0;
-        $total_checks = 0;
-        $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
-        
-        // Count issues from all checks
-        $clients = get_posts(array('post_type' => 'tts_client', 'posts_per_page' => -1, 'fields' => 'ids'));
-        foreach ($clients as $client_id) {
-            $total_checks++;
-            $result = TTS_Client::check_token($client_id);
-            if (is_wp_error($result) || !$result) $issues++;
-        }
-        
-        if ( $trello_enabled ) {
-            $total_checks++; // Webhook check
-            $webhook = TTS_Webhook::check_connection();
-            if (is_wp_error($webhook) || !$webhook) $issues++;
-        }
-        
-        $total_checks++; // Scheduler check
-        if (is_callable(array('TTS_Scheduler', 'check_queue'))) {
-            $queue = TTS_Scheduler::check_queue();
-            if (is_wp_error($queue) || !$queue) $issues++;
-        } else {
-            $issues++;
-        }
-        
-        $health_percentage = $total_checks > 0 ? round((($total_checks - $issues) / $total_checks) * 100) : 100;
-        
-        echo '<div class="tts-health-meter">';
-        echo '<div class="tts-health-circle">';
-        echo '<span class="tts-health-percentage">' . $health_percentage . '%</span>';
-        echo '</div>';
-        echo '<div class="tts-health-description">';
-        if ($issues === 0) {
-            echo '<div class="tts-status-ok"><span class="dashicons dashicons-yes"></span>' . esc_html__('Tutti i sistemi funzionano correttamente', 'fp-publisher') . '</div>';
-        } else {
-            echo '<div class="tts-status-warning"><span class="dashicons dashicons-warning"></span>' . sprintf(esc_html__('%d problemi rilevati su %d controlli', 'fp-publisher'), $issues, $total_checks) . '</div>';
-        }
-        echo '</div>';
-        echo '</div>';
-    }
+		echo '</div>';
+	}
 
-    /**
-     * Render WordPress requirements check
-     */
-    private function render_wp_requirements() {
-        $requirements = array(
-            array(
-                'name' => __('WordPress Version', 'fp-publisher'),
-                'current' => get_bloginfo('version'),
-                'required' => '5.0',
-                'check' => version_compare(get_bloginfo('version'), '5.0', '>=')
-            ),
-            array(
-                'name' => __('PHP Version', 'fp-publisher'),
-                'current' => PHP_VERSION,
-                'required' => '7.4',
-                'check' => version_compare(PHP_VERSION, '7.4', '>=')
-            ),
-            array(
-                'name' => __('cURL Extension', 'fp-publisher'),
-                'current' => extension_loaded('curl') ? __('Enabled', 'fp-publisher') : __('Disabled', 'fp-publisher'),
-                'required' => __('Required', 'fp-publisher'),
-                'check' => extension_loaded('curl')
-            )
-        );
+	/**
+	 * Render general health overview
+	 */
+	private function render_general_health() {
+		$issues         = 0;
+		$total_checks   = 0;
+		$trello_enabled = (bool) tsap_get_option( 'tts_trello_enabled', 1 );
 
-        echo '<div class="tts-requirements-list">';
-        foreach ($requirements as $req) {
-            echo '<div class="tts-requirement-item">';
-            echo '<span class="req-name">' . esc_html($req['name']) . '</span>';
-            echo '<span class="req-current">' . esc_html($req['current']) . '</span>';
-            if ($req['check']) {
-                echo '<span class="dashicons dashicons-yes req-status-ok"></span>';
-            } else {
-                echo '<span class="dashicons dashicons-no req-status-error"></span>';
-            }
-            echo '</div>';
-        }
-        echo '</div>';
-    }
+		// Count issues from all checks
+		$clients = get_posts(
+			array(
+				'post_type'      => 'tts_client',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+			)
+		);
+		foreach ( $clients as $client_id ) {
+			++$total_checks;
+			$result = TTS_Client::check_token( $client_id );
+			if ( is_wp_error( $result ) || ! $result ) {
+				++$issues;
+			}
+		}
+
+		if ( $trello_enabled ) {
+			++$total_checks; // Webhook check
+			$webhook = TTS_Webhook::check_connection();
+			if ( is_wp_error( $webhook ) || ! $webhook ) {
+				++$issues;
+			}
+		}
+
+		++$total_checks; // Scheduler check
+		if ( is_callable( array( 'TTS_Scheduler', 'check_queue' ) ) ) {
+			$queue = TTS_Scheduler::check_queue();
+			if ( is_wp_error( $queue ) || ! $queue ) {
+				++$issues;
+			}
+		} else {
+			++$issues;
+		}
+
+		$health_percentage = $total_checks > 0 ? round( ( ( $total_checks - $issues ) / $total_checks ) * 100 ) : 100;
+
+		echo '<div class="tts-health-meter">';
+		echo '<div class="tts-health-circle">';
+		echo '<span class="tts-health-percentage">' . $health_percentage . '%</span>';
+		echo '</div>';
+		echo '<div class="tts-health-description">';
+		if ( $issues === 0 ) {
+			echo '<div class="tts-status-ok"><span class="dashicons dashicons-yes"></span>' . esc_html__( 'Tutti i sistemi funzionano correttamente', 'fp-publisher' ) . '</div>';
+		} else {
+			echo '<div class="tts-status-warning"><span class="dashicons dashicons-warning"></span>' . sprintf( esc_html__( '%1$d problemi rilevati su %2$d controlli', 'fp-publisher' ), $issues, $total_checks ) . '</div>';
+		}
+		echo '</div>';
+		echo '</div>';
+	}
+
+	/**
+	 * Render WordPress requirements check
+	 */
+	private function render_wp_requirements() {
+		$requirements = array(
+			array(
+				'name'     => __( 'WordPress Version', 'fp-publisher' ),
+				'current'  => get_bloginfo( 'version' ),
+				'required' => '5.0',
+				'check'    => version_compare( get_bloginfo( 'version' ), '5.0', '>=' ),
+			),
+			array(
+				'name'     => __( 'PHP Version', 'fp-publisher' ),
+				'current'  => PHP_VERSION,
+				'required' => '7.4',
+				'check'    => version_compare( PHP_VERSION, '7.4', '>=' ),
+			),
+			array(
+				'name'     => __( 'cURL Extension', 'fp-publisher' ),
+				'current'  => extension_loaded( 'curl' ) ? __( 'Enabled', 'fp-publisher' ) : __( 'Disabled', 'fp-publisher' ),
+				'required' => __( 'Required', 'fp-publisher' ),
+				'check'    => extension_loaded( 'curl' ),
+			),
+		);
+
+		echo '<div class="tts-requirements-list">';
+		foreach ( $requirements as $req ) {
+			echo '<div class="tts-requirement-item">';
+			echo '<span class="req-name">' . esc_html( $req['name'] ) . '</span>';
+			echo '<span class="req-current">' . esc_html( $req['current'] ) . '</span>';
+			if ( $req['check'] ) {
+				echo '<span class="dashicons dashicons-yes req-status-ok"></span>';
+			} else {
+				echo '<span class="dashicons dashicons-no req-status-error"></span>';
+			}
+			echo '</div>';
+		}
+		echo '</div>';
+	}
 }
