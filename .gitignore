@@ -8,6 +8,7 @@ wp-content/debug.log
 
 # Plugin specific
 *.log
+!docs/audit/*.log
 *.tmp
 *.temp
 
@@ -32,14 +33,17 @@ Thumbs.db
 
 # Build artifacts
 dist/
-!wp-content/plugins/trello-social-auto-publisher/admin/dist/
-!wp-content/plugins/trello-social-auto-publisher/admin/dist/**
+*.zip
 build/
 compiled/
 
 # Composer
 vendor/
-composer.lock
+
+# Static analysis cache
+.phpstan-cache/
+.phpunit.cache/
+.phpunit.result.cache
 
 # Environment files
 .env
@@ -48,7 +52,6 @@ composer.lock
 
 # Backup files
 *.sql
-*.zip
 *.tar.gz
 
 # Cache files

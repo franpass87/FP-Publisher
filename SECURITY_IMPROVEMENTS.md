@@ -3,7 +3,7 @@
 *Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
 
 Versioni interessate: **0.9.0 → 1.0.0**  
-Ultimo aggiornamento documentazione: **1.0.1**
+Ultimo aggiornamento documentazione: **1.1.0**
 
 Questa guida riassume l'audit di sicurezza che ha permesso di consolidare il rilascio 1.0.0. I riferimenti incrociati con il [CHANGELOG](CHANGELOG.md) e con il [README](README.md) permettono di contestualizzare gli interventi rispetto all'evoluzione del plugin.
 

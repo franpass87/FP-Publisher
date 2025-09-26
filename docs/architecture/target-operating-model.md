@@ -3,7 +3,7 @@
 *Author: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
 
 Applies to plugin version: **1.0.0** and above  
-Documentation refresh: **1.0.1**
+Documentation refresh: **1.1.0**
 
 The FP Publisher plugin is organized into four modular capabilities that cooperate through explicit contracts.
 Each capability is driven by a dedicated PHP interface and exchanges typed value objects so the modules remain

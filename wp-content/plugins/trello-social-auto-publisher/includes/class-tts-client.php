@@ -6,7 +6,7 @@
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+	exit;
 }
 
 /**
@@ -14,898 +14,922 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class TTS_Client {
 
-    /**
-     * Hook into WordPress actions.
-     */
-    public function __construct() {
-        add_action( 'init', array( $this, 'register_post_type' ) );
-        add_action( 'add_meta_boxes_tts_client', array( $this, 'add_credentials_metabox' ) );
-        add_action( 'save_post_tts_client', array( $this, 'save_credentials_metabox' ), 10, 2 );
-        add_action( 'admin_post_tts_oauth_facebook', array( $this, 'handle_oauth_facebook' ) );
-        add_action( 'admin_post_tts_oauth_instagram', array( $this, 'handle_oauth_instagram' ) );
-        add_action( 'admin_post_tts_oauth_youtube', array( $this, 'handle_oauth_youtube' ) );
-        add_action( 'admin_post_tts_oauth_tiktok', array( $this, 'handle_oauth_tiktok' ) );
-    }
-
-    /**
-     * Register the tts_client post type.
-     */
-    public function register_post_type() {
-        $labels = array(
-            'name'          => __( 'Clients', 'fp-publisher' ),
-            'singular_name' => __( 'Client', 'fp-publisher' ),
-            'add_new_item'  => __( 'Add New Client', 'fp-publisher' ),
-            'edit_item'     => __( 'Edit Client', 'fp-publisher' ),
-        );
-
-        $args = array(
-            'labels'          => $labels,
-            'public'          => false,
-            'show_ui'         => true,
-            'show_in_menu'    => true,
-            'supports'        => array( 'title' ),
-            'capability_type' => 'post',
-            'map_meta_cap'    => true,
-        );
-
-        register_post_type( 'tts_client', $args );
-    }
-
-    /**
-     * Add the credentials meta box.
-     */
-    public function add_credentials_metabox() {
-        add_meta_box(
-            'tts_client_credentials',
-            __( 'Client Credentials', 'fp-publisher' ),
-            array( $this, 'render_credentials_metabox' ),
-            'tts_client'
-        );
-    }
-
-    /**
-     * Render the credentials meta box fields.
-     *
-     * @param WP_Post $post Current post object.
-     */
-    public function render_credentials_metabox( $post ) {
-        wp_nonce_field( 'tts_client_credentials', 'tts_client_nonce' );
-
-        $trello_key    = get_post_meta( $post->ID, '_tts_trello_key', true );
-        $trello_token  = get_post_meta( $post->ID, '_tts_trello_token', true );
-        $trello_secret   = get_post_meta( $post->ID, '_tts_trello_secret', true );
-        $board_ids       = get_post_meta( $post->ID, '_tts_trello_boards', true );
-        $published_list  = get_post_meta( $post->ID, '_tts_trello_published_list', true );
-        $fb_token        = get_post_meta( $post->ID, '_tts_fb_token', true );
-        $ig_token        = get_post_meta( $post->ID, '_tts_ig_token', true );
-        $yt_token        = get_post_meta( $post->ID, '_tts_yt_token', true );
-        $tt_token        = get_post_meta( $post->ID, '_tts_tt_token', true );
-        $fb_hashtags     = get_post_meta( $post->ID, '_tts_default_hashtags_facebook', true );
-        $ig_hashtags     = get_post_meta( $post->ID, '_tts_default_hashtags_instagram', true );
-        $yt_hashtags     = get_post_meta( $post->ID, '_tts_default_hashtags_youtube', true );
-        $tt_hashtags     = get_post_meta( $post->ID, '_tts_default_hashtags_tiktok', true );
-        $blog_settings   = get_post_meta( $post->ID, '_tts_blog_settings', true );
-        $trello_map      = get_post_meta( $post->ID, '_tts_trello_map', true );
-        $publish_freq    = get_post_meta( $post->ID, '_tts_publishing_frequency', true );
-
-        if ( ! is_array( $trello_map ) ) {
-            $trello_map = array();
-        }
-        if ( ! is_array( $board_ids ) ) {
-            $board_ids = array();
-        }
-        if ( ! is_array( $publish_freq ) ) {
-            $publish_freq = array();
-        }
-
-        echo '<p><label for="tts_trello_key">' . esc_html__( 'Trello API Key', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="tts_trello_key" name="tts_trello_key" value="' . esc_attr( $trello_key ) . '" class="widefat" /></p>';
-
-        echo '<p><label for="tts_trello_token">' . esc_html__( 'Trello API Token', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="tts_trello_token" name="tts_trello_token" value="' . esc_attr( $trello_token ) . '" class="widefat" /></p>';
-
-        echo '<p><label for="tts_trello_secret">' . esc_html__( 'Trello API Secret', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="tts_trello_secret" name="tts_trello_secret" value="' . esc_attr( $trello_secret ) . '" class="widefat" /></p>';
-
-        ?>
-        <div id="tts_trello_boards">
-            <?php
-            $index = 0;
-            foreach ( $board_ids as $board ) :
-                ?>
-                <p class="tts-trello-board-row">
-                    <input type="text" name="tts_trello_boards[<?php echo $index; ?>]" value="<?php echo esc_attr( $board ); ?>" placeholder="<?php esc_attr_e( 'Trello Board ID', 'fp-publisher' ); ?>" />
-                </p>
-                <?php
-                $index++;
-            endforeach;
-            ?>
-            <p class="tts-trello-board-row">
-                <input type="text" name="tts_trello_boards[<?php echo $index; ?>]" placeholder="<?php esc_attr_e( 'Trello Board ID', 'fp-publisher' ); ?>" />
-            </p>
-        </div>
-        <p><button type="button" class="button" id="add-tts-trello-board"><?php esc_html_e( 'Add Board', 'fp-publisher' ); ?></button></p>
-        <script type="text/javascript">
-        jQuery(document).ready(function($){
-            $('#add-tts-trello-board').on('click', function(e){
-                e.preventDefault();
-                var index = $('#tts_trello_boards .tts-trello-board-row').length;
-                var safeIndex = String(parseInt(index, 10));
-                var row = '<p class="tts-trello-board-row"><input type="text" name="tts_trello_boards[' + safeIndex + ']" placeholder="<?php echo esc_js( __( 'Trello Board ID', 'fp-publisher' ) ); ?>" /></p>';
-                $('#tts_trello_boards').append(row);
-            });
-        });
-        </script>
-        <?php
-
-        echo '<p><label for="tts_trello_published_list">' . esc_html__( 'Trello Published List ID', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="tts_trello_published_list" name="tts_trello_published_list" value="' . esc_attr( $published_list ) . '" class="widefat" /></p>';
-
-        echo '<p><label for="tts_fb_token">' . esc_html__( 'Facebook Access Token', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="tts_fb_token" name="tts_fb_token" value="' . esc_attr( $fb_token ) . '" class="widefat" /></p>';
-        echo '<p><label for="tts_default_hashtags_facebook">' . esc_html__( 'Facebook Default Hashtags', 'fp-publisher' ) . '</label>';
-        echo '<textarea id="tts_default_hashtags_facebook" name="tts_default_hashtags_facebook" class="widefat" rows="3">' . esc_textarea( $fb_hashtags ) . '</textarea></p>';
-
-        echo '<p><label for="tts_ig_token">' . esc_html__( 'Instagram Access Token', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="tts_ig_token" name="tts_ig_token" value="' . esc_attr( $ig_token ) . '" class="widefat" /></p>';
-        echo '<p><label for="tts_default_hashtags_instagram">' . esc_html__( 'Instagram Default Hashtags', 'fp-publisher' ) . '</label>';
-        echo '<textarea id="tts_default_hashtags_instagram" name="tts_default_hashtags_instagram" class="widefat" rows="3">' . esc_textarea( $ig_hashtags ) . '</textarea></p>';
-
-        echo '<p><label for="tts_yt_token">' . esc_html__( 'YouTube Access Token', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="tts_yt_token" name="tts_yt_token" value="' . esc_attr( $yt_token ) . '" class="widefat" /></p>';
-        echo '<p><label for="tts_default_hashtags_youtube">' . esc_html__( 'YouTube Default Hashtags', 'fp-publisher' ) . '</label>';
-        echo '<textarea id="tts_default_hashtags_youtube" name="tts_default_hashtags_youtube" class="widefat" rows="3">' . esc_textarea( $yt_hashtags ) . '</textarea></p>';
-
-        echo '<p><label for="tts_tt_token">' . esc_html__( 'TikTok Access Token', 'fp-publisher' ) . '</label>';
-        echo '<input type="text" id="tts_tt_token" name="tts_tt_token" value="' . esc_attr( $tt_token ) . '" class="widefat" /></p>';
-        echo '<p><label for="tts_default_hashtags_tiktok">' . esc_html__( 'TikTok Default Hashtags', 'fp-publisher' ) . '</label>';
-        echo '<textarea id="tts_default_hashtags_tiktok" name="tts_default_hashtags_tiktok" class="widefat" rows="3">' . esc_textarea( $tt_hashtags ) . '</textarea></p>';
-
-        echo '<h3>' . esc_html__( 'Blog Publishing Settings', 'fp-publisher' ) . '</h3>';
-        echo '<p><label for="tts_blog_settings">' . esc_html__( 'Blog Settings', 'fp-publisher' ) . '</label>';
-        echo '<textarea id="tts_blog_settings" name="tts_blog_settings" class="widefat" rows="4" placeholder="post_type:post|post_status:draft|author_id:1|category_id:1|language:it|keywords:keyword1:url1|keyword2:url2">' . esc_textarea( $blog_settings ) . '</textarea>';
-        echo '<small>' . esc_html__( 'Format: post_type:post|post_status:draft|author_id:1|category_id:1|language:it|keywords:keyword1:url1|keyword2:url2', 'fp-publisher' ) . '</small></p>';
-
-        echo '<h3>' . esc_html__( 'Trello List Mapping', 'fp-publisher' ) . '</h3>';
-        echo '<p>' . esc_html__( 'Map Trello lists to social channels. Supported channels: facebook, instagram, youtube, tiktok, blog', 'fp-publisher' ) . '</p>';
-
-        ?>
-        <div id="tts_trello_map">
-            <?php
-            $index = 0;
-            foreach ( $trello_map as $row ) :
-                $id_list = isset( $row['idList'] ) ? esc_attr( $row['idList'] ) : '';
-                $social  = isset( $row['canale_social'] ) ? esc_attr( $row['canale_social'] ) : '';
-                ?>
-                <p class="tts-trello-map-row">
-                    <input type="text" name="tts_trello_map[<?php echo $index; ?>][idList]" value="<?php echo $id_list; ?>" placeholder="<?php esc_attr_e( 'Trello List ID', 'fp-publisher' ); ?>" />
-                    <input type="text" name="tts_trello_map[<?php echo $index; ?>][canale_social]" value="<?php echo $social; ?>" placeholder="<?php esc_attr_e( 'Canale Social', 'fp-publisher' ); ?>" />
-                </p>
-                <?php
-                $index++;
-            endforeach;
-            ?>
-            <p class="tts-trello-map-row">
-                <input type="text" name="tts_trello_map[<?php echo $index; ?>][idList]" placeholder="<?php esc_attr_e( 'Trello List ID', 'fp-publisher' ); ?>" />
-                <input type="text" name="tts_trello_map[<?php echo $index; ?>][canale_social]" placeholder="<?php esc_attr_e( 'Canale Social', 'fp-publisher' ); ?>" />
-            </p>
-        </div>
-        <p><button type="button" class="button" id="add-tts-trello-map"><?php esc_html_e( 'Add Mapping', 'fp-publisher' ); ?></button></p>
-        <script type="text/javascript">
-        jQuery(document).ready(function($){
-            $('#add-tts-trello-map').on('click', function(e){
-                e.preventDefault();
-                var index = $('#tts_trello_map .tts-trello-map-row').length;
-                var safeIndex = String(parseInt(index, 10));
-                var row = '<p class="tts-trello-map-row">' +
-                    '<input type="text" name="tts_trello_map[' + safeIndex + '][idList]" placeholder="<?php echo esc_js( __( 'Trello List ID', 'fp-publisher' ) ); ?>" />' +
-                    '<input type="text" name="tts_trello_map[' + safeIndex + '][canale_social]" placeholder="<?php echo esc_js( __( 'Canale Social', 'fp-publisher' ) ); ?>" />' +
-                '</p>';
-                $('#tts_trello_map').append(row);
-            });
-        });
-        </script>
-        
-        <h3><?php esc_html_e( 'Publishing Frequency Settings', 'fp-publisher' ); ?></h3>
-        <p><?php esc_html_e( 'Configure how often content should be published for this client on each channel.', 'fp-publisher' ); ?></p>
-        
-        <?php
-        $channels = array(
-            'facebook' => 'Facebook',
-            'instagram' => 'Instagram', 
-            'youtube' => 'YouTube',
-            'tiktok' => 'TikTok',
-            'blog' => 'Blog'
-        );
-        
-        $periods = array(
-            'daily' => __( 'Daily', 'fp-publisher' ),
-            'weekly' => __( 'Weekly', 'fp-publisher' ),
-            'monthly' => __( 'Monthly', 'fp-publisher' )
-        );
-        ?>
-        
-        <div id="tts_publishing_frequency">
-            <?php foreach ( $channels as $channel_key => $channel_name ) : 
-                $frequency = isset( $publish_freq[$channel_key] ) ? $publish_freq[$channel_key] : array('count' => '', 'period' => 'weekly');
-            ?>
-                <p class="tts-frequency-row">
-                    <label><strong><?php echo esc_html( $channel_name ); ?>:</strong></label><br>
-                    <input type="number" 
-                           name="tts_publishing_frequency[<?php echo esc_attr( $channel_key ); ?>][count]" 
-                           value="<?php echo esc_attr( $frequency['count'] ); ?>" 
-                           min="0" 
-                           max="100"
-                           style="width: 60px;" 
-                           placeholder="0" />
-                    <select name="tts_publishing_frequency[<?php echo esc_attr( $channel_key ); ?>][period]">
-                        <?php foreach ( $periods as $period_key => $period_label ) : ?>
-                            <option value="<?php echo esc_attr( $period_key ); ?>" 
-                                    <?php selected( $frequency['period'], $period_key ); ?>>
-                                <?php echo esc_html( $period_label ); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <small style="color: #666; margin-left: 10px;">
-                        <?php esc_html_e( 'Leave count empty or 0 to disable frequency tracking for this channel', 'fp-publisher' ); ?>
-                    </small>
-                </p>
-            <?php endforeach; ?>
-        </div>
-        
-        <h4><?php esc_html_e( 'Alert Settings', 'fp-publisher' ); ?></h4>
-        <?php
-        $alert_days = get_post_meta( $post->ID, '_tts_alert_days_ahead', true );
-        $alert_days = $alert_days ? $alert_days : 3;
-        ?>
-        <p>
-            <label for="tts_alert_days_ahead"><?php esc_html_e( 'Days ahead to alert for content needs:', 'fp-publisher' ); ?></label>
-            <input type="number" 
-                   id="tts_alert_days_ahead" 
-                   name="tts_alert_days_ahead" 
-                   value="<?php echo esc_attr( $alert_days ); ?>" 
-                   min="1" 
-                   max="30" 
-                   style="width: 60px;" />
-            <small style="color: #666; margin-left: 10px;">
-                <?php esc_html_e( 'Send alerts this many days before content is needed', 'fp-publisher' ); ?>
-            </small>
-        </p>
-        <?php
-    }
-
-    /**
-     * Save credentials meta box data.
-     *
-     * @param int     $post_id Post ID.
-     * @param WP_Post $post    Post object.
-     */
-    public function save_credentials_metabox( $post_id, $post ) {
-        if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
-            return;
-        }
-        if ( ! isset( $_POST['tts_client_nonce'] ) || ! wp_verify_nonce( $_POST['tts_client_nonce'], 'tts_client_credentials' ) ) {
-            return;
-        }
-        if ( ! current_user_can( 'edit_post', $post_id ) ) {
-            return;
-        }
-
-        $fields = array(
-            'tts_trello_key'    => '_tts_trello_key',
-            'tts_trello_token'  => '_tts_trello_token',
-            'tts_trello_secret' => '_tts_trello_secret',
-            'tts_trello_published_list' => '_tts_trello_published_list',
-            'tts_fb_token'      => '_tts_fb_token',
-            'tts_ig_token'      => '_tts_ig_token',
-            'tts_yt_token'      => '_tts_yt_token',
-            'tts_tt_token'      => '_tts_tt_token',
-        );
-
-        foreach ( $fields as $field => $meta_key ) {
-            if ( isset( $_POST[ $field ] ) && '' !== $_POST[ $field ] ) {
-                update_post_meta( $post_id, $meta_key, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
-            } else {
-                delete_post_meta( $post_id, $meta_key );
-            }
-        }
-
-        $hashtag_fields = array(
-            'tts_default_hashtags_facebook'  => '_tts_default_hashtags_facebook',
-            'tts_default_hashtags_instagram' => '_tts_default_hashtags_instagram',
-            'tts_default_hashtags_youtube'   => '_tts_default_hashtags_youtube',
-            'tts_default_hashtags_tiktok'    => '_tts_default_hashtags_tiktok',
-        );
-
-        foreach ( $hashtag_fields as $field => $meta_key ) {
-            if ( isset( $_POST[ $field ] ) && '' !== $_POST[ $field ] ) {
-                update_post_meta( $post_id, $meta_key, sanitize_textarea_field( wp_unslash( $_POST[ $field ] ) ) );
-            } else {
-                delete_post_meta( $post_id, $meta_key );
-            }
-        }
-
-        // Save blog settings
-        if ( isset( $_POST['tts_blog_settings'] ) && '' !== $_POST['tts_blog_settings'] ) {
-            update_post_meta( $post_id, '_tts_blog_settings', sanitize_textarea_field( wp_unslash( $_POST['tts_blog_settings'] ) ) );
-        } else {
-            delete_post_meta( $post_id, '_tts_blog_settings' );
-        }
-
-        if ( isset( $_POST['tts_trello_boards'] ) && is_array( $_POST['tts_trello_boards'] ) ) {
-            $boards = array();
-            foreach ( wp_unslash( $_POST['tts_trello_boards'] ) as $board ) {
-                $board = sanitize_text_field( $board );
-                if ( '' !== $board ) {
-                    $boards[] = $board;
-                }
-            }
-            if ( ! empty( $boards ) ) {
-                update_post_meta( $post_id, '_tts_trello_boards', $boards );
-            } else {
-                delete_post_meta( $post_id, '_tts_trello_boards' );
-            }
-        } else {
-            delete_post_meta( $post_id, '_tts_trello_boards' );
-        }
-
-        // Cleanup old single board meta if present.
-        delete_post_meta( $post_id, '_tts_trello_board' );
-
-        if ( isset( $_POST['tts_trello_map'] ) && is_array( $_POST['tts_trello_map'] ) ) {
-            $map = array();
-            foreach ( wp_unslash( $_POST['tts_trello_map'] ) as $row ) {
-                if ( empty( $row['idList'] ) || empty( $row['canale_social'] ) ) {
-                    continue;
-                }
-                $map[] = array(
-                    'idList'        => sanitize_text_field( $row['idList'] ),
-                    'canale_social' => sanitize_text_field( $row['canale_social'] ),
-                );
-            }
-            if ( ! empty( $map ) ) {
-                update_post_meta( $post_id, '_tts_trello_map', $map );
-            } else {
-                delete_post_meta( $post_id, '_tts_trello_map' );
-            }
-        } else {
-            delete_post_meta( $post_id, '_tts_trello_map' );
-        }
-
-        // Save publishing frequency settings
-        if ( isset( $_POST['tts_publishing_frequency'] ) && is_array( $_POST['tts_publishing_frequency'] ) ) {
-            $frequency_settings = array();
-            foreach ( wp_unslash( $_POST['tts_publishing_frequency'] ) as $channel => $freq_data ) {
-                if ( ! empty( $freq_data['count'] ) && is_numeric( $freq_data['count'] ) && intval( $freq_data['count'] ) > 0 ) {
-                    $frequency_settings[ sanitize_text_field( $channel ) ] = array(
-                        'count' => intval( $freq_data['count'] ),
-                        'period' => sanitize_text_field( $freq_data['period'] )
-                    );
-                }
-            }
-            if ( ! empty( $frequency_settings ) ) {
-                update_post_meta( $post_id, '_tts_publishing_frequency', $frequency_settings );
-            } else {
-                delete_post_meta( $post_id, '_tts_publishing_frequency' );
-            }
-        } else {
-            delete_post_meta( $post_id, '_tts_publishing_frequency' );
-        }
-
-        // Save alert days ahead setting
-        if ( isset( $_POST['tts_alert_days_ahead'] ) && is_numeric( $_POST['tts_alert_days_ahead'] ) ) {
-            $alert_days = intval( $_POST['tts_alert_days_ahead'] );
-            if ( $alert_days > 0 && $alert_days <= 30 ) {
-                update_post_meta( $post_id, '_tts_alert_days_ahead', $alert_days );
-            } else {
-                delete_post_meta( $post_id, '_tts_alert_days_ahead' );
-            }
-        } else {
-            delete_post_meta( $post_id, '_tts_alert_days_ahead' );
-        }
-    }
-
-    /**
-     * Check the validity of the saved social tokens for a client.
-     *
-     * @param int $client_id Client post ID.
-     * @return bool|WP_Error True when at least one token is valid, WP_Error otherwise.
-     */
-    public static function check_token( $client_id ) {
-        $client_id = absint( $client_id );
-
-        if ( ! $client_id ) {
-            return new WP_Error( 'invalid_client', __( 'ID client non valido.', 'fp-publisher' ) );
-        }
-
-        if ( 'tts_client' !== get_post_type( $client_id ) ) {
-            return new WP_Error( 'invalid_client', __( 'Il post indicato non è un client valido.', 'fp-publisher' ) );
-        }
-
-        $channels = array(
-            'facebook'  => array(
-                'meta'  => '_tts_fb_token',
-                'label' => __( 'Facebook', 'fp-publisher' ),
-            ),
-            'instagram' => array(
-                'meta'  => '_tts_ig_token',
-                'label' => __( 'Instagram', 'fp-publisher' ),
-            ),
-            'youtube'   => array(
-                'meta'  => '_tts_yt_token',
-                'label' => __( 'YouTube', 'fp-publisher' ),
-            ),
-            'tiktok'    => array(
-                'meta'  => '_tts_tt_token',
-                'label' => __( 'TikTok', 'fp-publisher' ),
-            ),
-        );
-
-        $valid_tokens   = array();
-        $missing_tokens = array();
-        $errors         = array();
-        $token_found    = false;
-
-        foreach ( $channels as $channel => $data ) {
-            $token = get_post_meta( $client_id, $data['meta'], true );
-
-            if ( empty( $token ) ) {
-                $missing_tokens[] = $data['label'];
-                continue;
-            }
-
-            $token_found = true;
-
-            $validation = self::validate_channel_token( $channel, $token );
-
-            if ( is_wp_error( $validation ) ) {
-                $errors[] = $validation->get_error_message();
-                continue;
-            }
-
-            if ( true === $validation ) {
-                $valid_tokens[] = $data['label'];
-            }
-        }
-
-        if ( ! empty( $valid_tokens ) ) {
-            return true;
-        }
-
-        $messages = array();
-
-        if ( ! empty( $errors ) ) {
-            $messages[] = implode( ' ', array_unique( $errors ) );
-        }
-
-        if ( ! $token_found ) {
-            if ( ! empty( $missing_tokens ) ) {
-                $messages[] = sprintf(
-                    /* translators: %s: comma separated list of channels. */
-                    __( 'Token mancanti per: %s.', 'fp-publisher' ),
-                    implode( ', ', $missing_tokens )
-                );
-            } else {
-                $messages[] = __( 'Nessun token configurato per questo client.', 'fp-publisher' );
-            }
-
-            return new WP_Error( 'missing_tokens', implode( ' ', $messages ) );
-        }
-
-        if ( ! empty( $missing_tokens ) ) {
-            $messages[] = sprintf(
-                /* translators: %s: comma separated list of channels. */
-                __( 'Token mancanti per: %s.', 'fp-publisher' ),
-                implode( ', ', $missing_tokens )
-            );
-        }
-
-        if ( empty( $messages ) ) {
-            $messages[] = __( 'Impossibile verificare i token del client.', 'fp-publisher' );
-        }
-
-        return new WP_Error( 'invalid_tokens', implode( ' ', $messages ) );
-    }
-
-    /**
-     * Validate a single token by channel.
-     *
-     * @param string $channel Channel slug.
-     * @param string $token   Access token value.
-     * @return bool|WP_Error True when valid, WP_Error otherwise.
-     */
-    protected static function validate_channel_token( $channel, $token ) {
-        switch ( $channel ) {
-            case 'facebook':
-                return self::validate_facebook_token( $token );
-            case 'instagram':
-                return self::validate_instagram_token( $token );
-            case 'youtube':
-                return self::validate_youtube_token( $token );
-            case 'tiktok':
-                return self::validate_tiktok_token( $token );
-        }
-
-        return true;
-    }
-
-    /**
-     * Validate a Facebook token.
-     *
-     * @param string $token Access token.
-     * @return bool|WP_Error
-     */
-    protected static function validate_facebook_token( $token ) {
-        $url = add_query_arg(
-            array(
-                'fields'       => 'id',
-                'access_token' => $token,
-            ),
-            'https://graph.facebook.com/v18.0/me'
-        );
-
-        $response = wp_remote_get(
-            $url,
-            array(
-                'timeout' => 5,
-            )
-        );
-
-        if ( is_wp_error( $response ) ) {
-            return new WP_Error(
-                'fb_request_failed',
-                sprintf(
-                    __( 'Facebook: %s', 'fp-publisher' ),
-                    $response->get_error_message()
-                )
-            );
-        }
-
-        $code = wp_remote_retrieve_response_code( $response );
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-        if ( 200 !== $code || empty( $body['id'] ) ) {
-            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'token non valido.', 'fp-publisher' );
-
-            return new WP_Error(
-                'fb_invalid_token',
-                sprintf(
-                    __( 'Facebook: %s', 'fp-publisher' ),
-                    $message
-                )
-            );
-        }
-
-        return true;
-    }
-
-    /**
-     * Validate an Instagram token.
-     *
-     * @param string $token Access token.
-     * @return bool|WP_Error
-     */
-    protected static function validate_instagram_token( $token ) {
-        $url = add_query_arg(
-            array(
-                'fields'       => 'id',
-                'access_token' => $token,
-            ),
-            'https://graph.instagram.com/me'
-        );
-
-        $response = wp_remote_get(
-            $url,
-            array(
-                'timeout' => 5,
-            )
-        );
-
-        if ( is_wp_error( $response ) ) {
-            return new WP_Error(
-                'ig_request_failed',
-                sprintf(
-                    __( 'Instagram: %s', 'fp-publisher' ),
-                    $response->get_error_message()
-                )
-            );
-        }
-
-        $code = wp_remote_retrieve_response_code( $response );
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-        if ( 200 !== $code || empty( $body['id'] ) ) {
-            $message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'token non valido.', 'fp-publisher' );
-
-            return new WP_Error(
-                'ig_invalid_token',
-                sprintf(
-                    __( 'Instagram: %s', 'fp-publisher' ),
-                    $message
-                )
-            );
-        }
-
-        return true;
-    }
-
-    /**
-     * Validate a YouTube token.
-     *
-     * @param string $token Access token.
-     * @return bool|WP_Error
-     */
-    protected static function validate_youtube_token( $token ) {
-        $url = add_query_arg(
-            array(
-                'access_token' => $token,
-            ),
-            'https://oauth2.googleapis.com/tokeninfo'
-        );
-
-        $response = wp_remote_get(
-            $url,
-            array(
-                'timeout' => 5,
-            )
-        );
-
-        if ( is_wp_error( $response ) ) {
-            return new WP_Error(
-                'yt_request_failed',
-                sprintf(
-                    __( 'YouTube: %s', 'fp-publisher' ),
-                    $response->get_error_message()
-                )
-            );
-        }
-
-        $code = wp_remote_retrieve_response_code( $response );
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-        if ( 200 !== $code ) {
-            $message = '';
-            if ( isset( $body['error_description'] ) ) {
-                $message = $body['error_description'];
-            } elseif ( isset( $body['error'] ) ) {
-                $message = $body['error'];
-            } else {
-                $message = __( 'token non valido.', 'fp-publisher' );
-            }
-
-            return new WP_Error(
-                'yt_invalid_token',
-                sprintf(
-                    __( 'YouTube: %s', 'fp-publisher' ),
-                    $message
-                )
-            );
-        }
-
-        return true;
-    }
-
-    /**
-     * Validate a TikTok token.
-     *
-     * @param string $token Access token.
-     * @return bool|WP_Error
-     */
-    protected static function validate_tiktok_token( $token ) {
-        if ( empty( $token ) ) {
-            return new WP_Error( 'tt_invalid_token', __( 'TikTok: token non valido.', 'fp-publisher' ) );
-        }
-
-        // No lightweight public endpoint is available for validation without additional credentials.
-        // Assume the token is valid when present to avoid unnecessary failures.
-        return true;
-    }
-
-    /**
-     * Generic handler for OAuth callbacks.
-     *
-     * @param string $channel Social channel slug.
-     */
-    protected function handle_oauth( $channel ) {
-        $state   = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
-        $code    = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
-        $step    = isset( $_GET['step'] ) ? absint( $_GET['step'] ) : 2;
-        $client  = isset( $_GET['client_id'] ) ? absint( $_GET['client_id'] ) : 0;
-        $state_key = 'tts_oauth_state_' . sanitize_key( $channel );
-        $expected_state = '';
-        $user_id = get_current_user_id();
-
-        if ( $user_id ) {
-            $stored_state = get_user_meta( $user_id, $state_key, true );
-
-            if ( is_string( $stored_state ) && '' !== $stored_state ) {
-                $expected_state = $stored_state;
-            }
-
-            delete_user_meta( $user_id, $state_key );
-        }
-
-        if ( '' === $expected_state && '' !== $state ) {
-            $transient_key = $state_key . '_' . $state;
-            $stored_state  = get_transient( $transient_key );
-
-            if ( is_string( $stored_state ) && '' !== $stored_state ) {
-                $expected_state = $stored_state;
-            }
-
-            delete_transient( $transient_key );
-        }
-
-        $state_matches = ( '' !== $state && '' !== $expected_state );
-
-        if ( $state_matches ) {
-            if ( function_exists( 'hash_equals' ) ) {
-                $state_matches = hash_equals( $expected_state, $state );
-            } else {
-                $state_matches = ( $expected_state === $state );
-            }
-        }
-
-        if ( empty( $code ) || ! $state_matches ) {
-            wp_die( esc_html__( 'OAuth verification failed.', 'fp-publisher' ) );
-        }
-
-        // Exchange code for token
-        $token = $this->exchange_code_for_token( $channel, $code );
-        
-        if ( ! $token ) {
-            wp_die( esc_html__( 'Failed to obtain access token.', 'fp-publisher' ) );
-        }
-
-        if ( $client ) {
-            $meta_key = '';
-            switch ( $channel ) {
-                case 'facebook':
-                    $meta_key = '_tts_fb_token';
-                    break;
-                case 'instagram':
-                    $meta_key = '_tts_ig_token';
-                    break;
-                case 'youtube':
-                    $meta_key = '_tts_yt_token';
-                    break;
-                case 'tiktok':
-                    $meta_key = '_tts_tt_token';
-                    break;
-            }
-            if ( $meta_key ) {
-                update_post_meta( $client, $meta_key, $token );
-            }
-        } else {
-            set_transient( 'tts_oauth_' . $channel . '_token', $token, 15 * MINUTE_IN_SECONDS );
-        }
-
-        wp_safe_redirect( add_query_arg( array( 'page' => 'fp-publisher-client-wizard', 'step' => $step ), admin_url( 'admin.php' ) ) );
-        exit;
-    }
-
-    /**
-     * Exchange authorization code for access token.
-     *
-     * @param string $channel Social platform.
-     * @param string $code Authorization code.
-     * @return string|false Access token or false on failure.
-     */
-    private function exchange_code_for_token( $channel, $code ) {
-        $settings = get_option( 'tts_social_apps', array() );
-        $platform_settings = isset( $settings[$channel] ) ? $settings[$channel] : array();
-        $redirect_uri = admin_url( 'admin-post.php?action=tts_oauth_' . $channel );
-
-        switch ( $channel ) {
-            case 'facebook':
-                if ( empty( $platform_settings['app_id'] ) || empty( $platform_settings['app_secret'] ) ) {
-                    return false;
-                }
-                
-                $response = wp_remote_post( 'https://graph.facebook.com/v18.0/oauth/access_token', array(
-                    'body' => array(
-                        'client_id' => $platform_settings['app_id'],
-                        'client_secret' => $platform_settings['app_secret'],
-                        'redirect_uri' => $redirect_uri,
-                        'code' => $code
-                    )
-                ) );
-                
-                if ( is_wp_error( $response ) ) {
-                    return false;
-                }
-                
-                $body = json_decode( wp_remote_retrieve_body( $response ), true );
-                return isset( $body['access_token'] ) ? $body['access_token'] : false;
-
-            case 'instagram':
-                if ( empty( $platform_settings['app_id'] ) || empty( $platform_settings['app_secret'] ) ) {
-                    return false;
-                }
-                
-                $response = wp_remote_post( 'https://api.instagram.com/oauth/access_token', array(
-                    'body' => array(
-                        'client_id' => $platform_settings['app_id'],
-                        'client_secret' => $platform_settings['app_secret'],
-                        'redirect_uri' => $redirect_uri,
-                        'code' => $code,
-                        'grant_type' => 'authorization_code'
-                    )
-                ) );
-                
-                if ( is_wp_error( $response ) ) {
-                    return false;
-                }
-                
-                $body = json_decode( wp_remote_retrieve_body( $response ), true );
-                return isset( $body['access_token'] ) ? $body['access_token'] : false;
-
-            case 'youtube':
-                if ( empty( $platform_settings['client_id'] ) || empty( $platform_settings['client_secret'] ) ) {
-                    return false;
-                }
-                
-                $response = wp_remote_post( 'https://oauth2.googleapis.com/token', array(
-                    'body' => array(
-                        'client_id' => $platform_settings['client_id'],
-                        'client_secret' => $platform_settings['client_secret'],
-                        'redirect_uri' => $redirect_uri,
-                        'code' => $code,
-                        'grant_type' => 'authorization_code'
-                    )
-                ) );
-                
-                if ( is_wp_error( $response ) ) {
-                    return false;
-                }
-                
-                $body = json_decode( wp_remote_retrieve_body( $response ), true );
-                return isset( $body['access_token'] ) ? $body['access_token'] : false;
-
-            case 'tiktok':
-                if ( empty( $platform_settings['client_key'] ) || empty( $platform_settings['client_secret'] ) ) {
-                    return false;
-                }
-                
-                $response = wp_remote_post( 'https://open-api.tiktok.com/oauth/access_token/', array(
-                    'body' => array(
-                        'client_key' => $platform_settings['client_key'],
-                        'client_secret' => $platform_settings['client_secret'],
-                        'redirect_uri' => $redirect_uri,
-                        'code' => $code,
-                        'grant_type' => 'authorization_code'
-                    )
-                ) );
-                
-                if ( is_wp_error( $response ) ) {
-                    return false;
-                }
-                
-                $body = json_decode( wp_remote_retrieve_body( $response ), true );
-                return isset( $body['data']['access_token'] ) ? $body['data']['access_token'] : false;
-        }
-
-        return false;
-    }
-
-    /**
-     * Specific OAuth handlers.
-     */
-    public function handle_oauth_facebook() {
-        $this->handle_oauth( 'facebook' );
-    }
-
-    public function handle_oauth_instagram() {
-        $this->handle_oauth( 'instagram' );
-    }
-
-    public function handle_oauth_youtube() {
-        $this->handle_oauth( 'youtube' );
-    }
-
-    public function handle_oauth_tiktok() {
-        $this->handle_oauth( 'tiktok' );
-    }
+	/**
+	 * Hook into WordPress actions.
+	 */
+	public function __construct() {
+		add_action( 'init', array( $this, 'register_post_type' ) );
+		add_action( 'add_meta_boxes_tts_client', array( $this, 'add_credentials_metabox' ) );
+		add_action( 'save_post_tts_client', array( $this, 'save_credentials_metabox' ), 10, 2 );
+		add_action( 'admin_post_tts_oauth_facebook', array( $this, 'handle_oauth_facebook' ) );
+		add_action( 'admin_post_tts_oauth_instagram', array( $this, 'handle_oauth_instagram' ) );
+		add_action( 'admin_post_tts_oauth_youtube', array( $this, 'handle_oauth_youtube' ) );
+		add_action( 'admin_post_tts_oauth_tiktok', array( $this, 'handle_oauth_tiktok' ) );
+	}
+
+	/**
+	 * Register the tts_client post type.
+	 */
+	public function register_post_type() {
+		$labels = array(
+			'name'          => __( 'Clients', 'fp-publisher' ),
+			'singular_name' => __( 'Client', 'fp-publisher' ),
+			'add_new_item'  => __( 'Add New Client', 'fp-publisher' ),
+			'edit_item'     => __( 'Edit Client', 'fp-publisher' ),
+		);
+
+		$args = array(
+			'labels'          => $labels,
+			'public'          => false,
+			'show_ui'         => true,
+			'show_in_menu'    => true,
+			'supports'        => array( 'title' ),
+			'capability_type' => 'post',
+			'map_meta_cap'    => true,
+		);
+
+		register_post_type( 'tts_client', $args );
+	}
+
+	/**
+	 * Add the credentials meta box.
+	 */
+	public function add_credentials_metabox() {
+		add_meta_box(
+			'tts_client_credentials',
+			__( 'Client Credentials', 'fp-publisher' ),
+			array( $this, 'render_credentials_metabox' ),
+			'tts_client'
+		);
+	}
+
+	/**
+	 * Render the credentials meta box fields.
+	 *
+	 * @param WP_Post $post Current post object.
+	 */
+	public function render_credentials_metabox( $post ) {
+		wp_nonce_field( 'tts_client_credentials', 'tts_client_nonce' );
+
+		$trello_key     = get_post_meta( $post->ID, '_tts_trello_key', true );
+		$trello_token   = get_post_meta( $post->ID, '_tts_trello_token', true );
+		$trello_secret  = get_post_meta( $post->ID, '_tts_trello_secret', true );
+		$board_ids      = get_post_meta( $post->ID, '_tts_trello_boards', true );
+		$published_list = get_post_meta( $post->ID, '_tts_trello_published_list', true );
+		$fb_token       = get_post_meta( $post->ID, '_tts_fb_token', true );
+		$ig_token       = get_post_meta( $post->ID, '_tts_ig_token', true );
+		$yt_token       = get_post_meta( $post->ID, '_tts_yt_token', true );
+		$tt_token       = get_post_meta( $post->ID, '_tts_tt_token', true );
+		$fb_hashtags    = get_post_meta( $post->ID, '_tts_default_hashtags_facebook', true );
+		$ig_hashtags    = get_post_meta( $post->ID, '_tts_default_hashtags_instagram', true );
+		$yt_hashtags    = get_post_meta( $post->ID, '_tts_default_hashtags_youtube', true );
+		$tt_hashtags    = get_post_meta( $post->ID, '_tts_default_hashtags_tiktok', true );
+		$blog_settings  = get_post_meta( $post->ID, '_tts_blog_settings', true );
+		$trello_map     = get_post_meta( $post->ID, '_tts_trello_map', true );
+		$publish_freq   = get_post_meta( $post->ID, '_tts_publishing_frequency', true );
+
+		if ( ! is_array( $trello_map ) ) {
+			$trello_map = array();
+		}
+		if ( ! is_array( $board_ids ) ) {
+			$board_ids = array();
+		}
+		if ( ! is_array( $publish_freq ) ) {
+			$publish_freq = array();
+		}
+
+		echo '<p><label for="tts_trello_key">' . esc_html__( 'Trello API Key', 'fp-publisher' ) . '</label>';
+		echo '<input type="text" id="tts_trello_key" name="tts_trello_key" value="' . esc_attr( $trello_key ) . '" class="widefat" /></p>';
+
+		echo '<p><label for="tts_trello_token">' . esc_html__( 'Trello API Token', 'fp-publisher' ) . '</label>';
+		echo '<input type="text" id="tts_trello_token" name="tts_trello_token" value="' . esc_attr( $trello_token ) . '" class="widefat" /></p>';
+
+		echo '<p><label for="tts_trello_secret">' . esc_html__( 'Trello API Secret', 'fp-publisher' ) . '</label>';
+		echo '<input type="text" id="tts_trello_secret" name="tts_trello_secret" value="' . esc_attr( $trello_secret ) . '" class="widefat" /></p>';
+
+		?>
+		<div id="tts_trello_boards">
+			<?php
+			$index = 0;
+			foreach ( $board_ids as $board ) :
+				?>
+				<p class="tts-trello-board-row">
+					<input type="text" name="tts_trello_boards[<?php echo $index; ?>]" value="<?php echo esc_attr( $board ); ?>" placeholder="<?php esc_attr_e( 'Trello Board ID', 'fp-publisher' ); ?>" />
+				</p>
+				<?php
+				++$index;
+			endforeach;
+			?>
+			<p class="tts-trello-board-row">
+				<input type="text" name="tts_trello_boards[<?php echo $index; ?>]" placeholder="<?php esc_attr_e( 'Trello Board ID', 'fp-publisher' ); ?>" />
+			</p>
+		</div>
+		<p><button type="button" class="button" id="add-tts-trello-board"><?php esc_html_e( 'Add Board', 'fp-publisher' ); ?></button></p>
+		<script type="text/javascript">
+		jQuery(document).ready(function($){
+			$('#add-tts-trello-board').on('click', function(e){
+				e.preventDefault();
+				var index = $('#tts_trello_boards .tts-trello-board-row').length;
+				var safeIndex = String(parseInt(index, 10));
+				var row = '<p class="tts-trello-board-row"><input type="text" name="tts_trello_boards[' + safeIndex + ']" placeholder="<?php echo esc_js( __( 'Trello Board ID', 'fp-publisher' ) ); ?>" /></p>';
+				$('#tts_trello_boards').append(row);
+			});
+		});
+		</script>
+		<?php
+
+		echo '<p><label for="tts_trello_published_list">' . esc_html__( 'Trello Published List ID', 'fp-publisher' ) . '</label>';
+		echo '<input type="text" id="tts_trello_published_list" name="tts_trello_published_list" value="' . esc_attr( $published_list ) . '" class="widefat" /></p>';
+
+		echo '<p><label for="tts_fb_token">' . esc_html__( 'Facebook Access Token', 'fp-publisher' ) . '</label>';
+		echo '<input type="text" id="tts_fb_token" name="tts_fb_token" value="' . esc_attr( $fb_token ) . '" class="widefat" /></p>';
+		echo '<p><label for="tts_default_hashtags_facebook">' . esc_html__( 'Facebook Default Hashtags', 'fp-publisher' ) . '</label>';
+		echo '<textarea id="tts_default_hashtags_facebook" name="tts_default_hashtags_facebook" class="widefat" rows="3">' . esc_textarea( $fb_hashtags ) . '</textarea></p>';
+
+		echo '<p><label for="tts_ig_token">' . esc_html__( 'Instagram Access Token', 'fp-publisher' ) . '</label>';
+		echo '<input type="text" id="tts_ig_token" name="tts_ig_token" value="' . esc_attr( $ig_token ) . '" class="widefat" /></p>';
+		echo '<p><label for="tts_default_hashtags_instagram">' . esc_html__( 'Instagram Default Hashtags', 'fp-publisher' ) . '</label>';
+		echo '<textarea id="tts_default_hashtags_instagram" name="tts_default_hashtags_instagram" class="widefat" rows="3">' . esc_textarea( $ig_hashtags ) . '</textarea></p>';
+
+		echo '<p><label for="tts_yt_token">' . esc_html__( 'YouTube Access Token', 'fp-publisher' ) . '</label>';
+		echo '<input type="text" id="tts_yt_token" name="tts_yt_token" value="' . esc_attr( $yt_token ) . '" class="widefat" /></p>';
+		echo '<p><label for="tts_default_hashtags_youtube">' . esc_html__( 'YouTube Default Hashtags', 'fp-publisher' ) . '</label>';
+		echo '<textarea id="tts_default_hashtags_youtube" name="tts_default_hashtags_youtube" class="widefat" rows="3">' . esc_textarea( $yt_hashtags ) . '</textarea></p>';
+
+		echo '<p><label for="tts_tt_token">' . esc_html__( 'TikTok Access Token', 'fp-publisher' ) . '</label>';
+		echo '<input type="text" id="tts_tt_token" name="tts_tt_token" value="' . esc_attr( $tt_token ) . '" class="widefat" /></p>';
+		echo '<p><label for="tts_default_hashtags_tiktok">' . esc_html__( 'TikTok Default Hashtags', 'fp-publisher' ) . '</label>';
+		echo '<textarea id="tts_default_hashtags_tiktok" name="tts_default_hashtags_tiktok" class="widefat" rows="3">' . esc_textarea( $tt_hashtags ) . '</textarea></p>';
+
+		echo '<h3>' . esc_html__( 'Blog Publishing Settings', 'fp-publisher' ) . '</h3>';
+		echo '<p><label for="tts_blog_settings">' . esc_html__( 'Blog Settings', 'fp-publisher' ) . '</label>';
+		echo '<textarea id="tts_blog_settings" name="tts_blog_settings" class="widefat" rows="4" placeholder="post_type:post|post_status:draft|author_id:1|category_id:1|language:it|keywords:keyword1:url1|keyword2:url2">' . esc_textarea( $blog_settings ) . '</textarea>';
+		echo '<small>' . esc_html__( 'Format: post_type:post|post_status:draft|author_id:1|category_id:1|language:it|keywords:keyword1:url1|keyword2:url2', 'fp-publisher' ) . '</small></p>';
+
+		echo '<h3>' . esc_html__( 'Trello List Mapping', 'fp-publisher' ) . '</h3>';
+		echo '<p>' . esc_html__( 'Map Trello lists to social channels. Supported channels: facebook, instagram, youtube, tiktok, blog', 'fp-publisher' ) . '</p>';
+
+		?>
+		<div id="tts_trello_map">
+			<?php
+			$index = 0;
+			foreach ( $trello_map as $row ) :
+				$id_list = isset( $row['idList'] ) ? esc_attr( $row['idList'] ) : '';
+				$social  = isset( $row['canale_social'] ) ? esc_attr( $row['canale_social'] ) : '';
+				?>
+				<p class="tts-trello-map-row">
+					<input type="text" name="tts_trello_map[<?php echo $index; ?>][idList]" value="<?php echo $id_list; ?>" placeholder="<?php esc_attr_e( 'Trello List ID', 'fp-publisher' ); ?>" />
+					<input type="text" name="tts_trello_map[<?php echo $index; ?>][canale_social]" value="<?php echo $social; ?>" placeholder="<?php esc_attr_e( 'Canale Social', 'fp-publisher' ); ?>" />
+				</p>
+				<?php
+				++$index;
+			endforeach;
+			?>
+			<p class="tts-trello-map-row">
+				<input type="text" name="tts_trello_map[<?php echo $index; ?>][idList]" placeholder="<?php esc_attr_e( 'Trello List ID', 'fp-publisher' ); ?>" />
+				<input type="text" name="tts_trello_map[<?php echo $index; ?>][canale_social]" placeholder="<?php esc_attr_e( 'Canale Social', 'fp-publisher' ); ?>" />
+			</p>
+		</div>
+		<p><button type="button" class="button" id="add-tts-trello-map"><?php esc_html_e( 'Add Mapping', 'fp-publisher' ); ?></button></p>
+		<script type="text/javascript">
+		jQuery(document).ready(function($){
+			$('#add-tts-trello-map').on('click', function(e){
+				e.preventDefault();
+				var index = $('#tts_trello_map .tts-trello-map-row').length;
+				var safeIndex = String(parseInt(index, 10));
+				var row = '<p class="tts-trello-map-row">' +
+					'<input type="text" name="tts_trello_map[' + safeIndex + '][idList]" placeholder="<?php echo esc_js( __( 'Trello List ID', 'fp-publisher' ) ); ?>" />' +
+					'<input type="text" name="tts_trello_map[' + safeIndex + '][canale_social]" placeholder="<?php echo esc_js( __( 'Canale Social', 'fp-publisher' ) ); ?>" />' +
+				'</p>';
+				$('#tts_trello_map').append(row);
+			});
+		});
+		</script>
+		
+		<h3><?php esc_html_e( 'Publishing Frequency Settings', 'fp-publisher' ); ?></h3>
+		<p><?php esc_html_e( 'Configure how often content should be published for this client on each channel.', 'fp-publisher' ); ?></p>
+		
+		<?php
+		$channels = array(
+			'facebook'  => 'Facebook',
+			'instagram' => 'Instagram',
+			'youtube'   => 'YouTube',
+			'tiktok'    => 'TikTok',
+			'blog'      => 'Blog',
+		);
+
+		$periods = array(
+			'daily'   => __( 'Daily', 'fp-publisher' ),
+			'weekly'  => __( 'Weekly', 'fp-publisher' ),
+			'monthly' => __( 'Monthly', 'fp-publisher' ),
+		);
+		?>
+		
+		<div id="tts_publishing_frequency">
+			<?php
+			foreach ( $channels as $channel_key => $channel_name ) :
+				$frequency = isset( $publish_freq[ $channel_key ] ) ? $publish_freq[ $channel_key ] : array(
+					'count'  => '',
+					'period' => 'weekly',
+				);
+				?>
+				<p class="tts-frequency-row">
+					<label><strong><?php echo esc_html( $channel_name ); ?>:</strong></label><br>
+					<input type="number" 
+							name="tts_publishing_frequency[<?php echo esc_attr( $channel_key ); ?>][count]" 
+							value="<?php echo esc_attr( $frequency['count'] ); ?>" 
+							min="0" 
+							max="100"
+							style="width: 60px;" 
+							placeholder="0" />
+					<select name="tts_publishing_frequency[<?php echo esc_attr( $channel_key ); ?>][period]">
+						<?php foreach ( $periods as $period_key => $period_label ) : ?>
+							<option value="<?php echo esc_attr( $period_key ); ?>" 
+									<?php selected( $frequency['period'], $period_key ); ?>>
+								<?php echo esc_html( $period_label ); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+					<small style="color: #666; margin-left: 10px;">
+						<?php esc_html_e( 'Leave count empty or 0 to disable frequency tracking for this channel', 'fp-publisher' ); ?>
+					</small>
+				</p>
+			<?php endforeach; ?>
+		</div>
+		
+		<h4><?php esc_html_e( 'Alert Settings', 'fp-publisher' ); ?></h4>
+		<?php
+		$alert_days = get_post_meta( $post->ID, '_tts_alert_days_ahead', true );
+		$alert_days = $alert_days ? $alert_days : 3;
+		?>
+		<p>
+			<label for="tts_alert_days_ahead"><?php esc_html_e( 'Days ahead to alert for content needs:', 'fp-publisher' ); ?></label>
+			<input type="number" 
+					id="tts_alert_days_ahead" 
+					name="tts_alert_days_ahead" 
+					value="<?php echo esc_attr( $alert_days ); ?>" 
+					min="1" 
+					max="30" 
+					style="width: 60px;" />
+			<small style="color: #666; margin-left: 10px;">
+				<?php esc_html_e( 'Send alerts this many days before content is needed', 'fp-publisher' ); ?>
+			</small>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Save credentials meta box data.
+	 *
+	 * @param int     $post_id Post ID.
+	 * @param WP_Post $post    Post object.
+	 */
+	public function save_credentials_metabox( $post_id, $post ) {
+		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+			return;
+		}
+		if ( ! isset( $_POST['tts_client_nonce'] ) || ! wp_verify_nonce( $_POST['tts_client_nonce'], 'tts_client_credentials' ) ) {
+			return;
+		}
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return;
+		}
+
+		$fields = array(
+			'tts_trello_key'            => '_tts_trello_key',
+			'tts_trello_token'          => '_tts_trello_token',
+			'tts_trello_secret'         => '_tts_trello_secret',
+			'tts_trello_published_list' => '_tts_trello_published_list',
+			'tts_fb_token'              => '_tts_fb_token',
+			'tts_ig_token'              => '_tts_ig_token',
+			'tts_yt_token'              => '_tts_yt_token',
+			'tts_tt_token'              => '_tts_tt_token',
+		);
+
+		foreach ( $fields as $field => $meta_key ) {
+			if ( isset( $_POST[ $field ] ) && '' !== $_POST[ $field ] ) {
+				update_post_meta( $post_id, $meta_key, sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) );
+			} else {
+				delete_post_meta( $post_id, $meta_key );
+			}
+		}
+
+		$hashtag_fields = array(
+			'tts_default_hashtags_facebook'  => '_tts_default_hashtags_facebook',
+			'tts_default_hashtags_instagram' => '_tts_default_hashtags_instagram',
+			'tts_default_hashtags_youtube'   => '_tts_default_hashtags_youtube',
+			'tts_default_hashtags_tiktok'    => '_tts_default_hashtags_tiktok',
+		);
+
+		foreach ( $hashtag_fields as $field => $meta_key ) {
+			if ( isset( $_POST[ $field ] ) && '' !== $_POST[ $field ] ) {
+				update_post_meta( $post_id, $meta_key, sanitize_textarea_field( wp_unslash( $_POST[ $field ] ) ) );
+			} else {
+				delete_post_meta( $post_id, $meta_key );
+			}
+		}
+
+		// Save blog settings
+		if ( isset( $_POST['tts_blog_settings'] ) && '' !== $_POST['tts_blog_settings'] ) {
+			update_post_meta( $post_id, '_tts_blog_settings', sanitize_textarea_field( wp_unslash( $_POST['tts_blog_settings'] ) ) );
+		} else {
+			delete_post_meta( $post_id, '_tts_blog_settings' );
+		}
+
+		if ( isset( $_POST['tts_trello_boards'] ) && is_array( $_POST['tts_trello_boards'] ) ) {
+			$boards = array();
+			foreach ( wp_unslash( $_POST['tts_trello_boards'] ) as $board ) {
+				$board = sanitize_text_field( $board );
+				if ( '' !== $board ) {
+					$boards[] = $board;
+				}
+			}
+			if ( ! empty( $boards ) ) {
+				update_post_meta( $post_id, '_tts_trello_boards', $boards );
+			} else {
+				delete_post_meta( $post_id, '_tts_trello_boards' );
+			}
+		} else {
+			delete_post_meta( $post_id, '_tts_trello_boards' );
+		}
+
+		// Cleanup old single board meta if present.
+		delete_post_meta( $post_id, '_tts_trello_board' );
+
+		if ( isset( $_POST['tts_trello_map'] ) && is_array( $_POST['tts_trello_map'] ) ) {
+			$map = array();
+			foreach ( wp_unslash( $_POST['tts_trello_map'] ) as $row ) {
+				if ( empty( $row['idList'] ) || empty( $row['canale_social'] ) ) {
+					continue;
+				}
+				$map[] = array(
+					'idList'        => sanitize_text_field( $row['idList'] ),
+					'canale_social' => sanitize_text_field( $row['canale_social'] ),
+				);
+			}
+			if ( ! empty( $map ) ) {
+				update_post_meta( $post_id, '_tts_trello_map', $map );
+			} else {
+				delete_post_meta( $post_id, '_tts_trello_map' );
+			}
+		} else {
+			delete_post_meta( $post_id, '_tts_trello_map' );
+		}
+
+		// Save publishing frequency settings
+		if ( isset( $_POST['tts_publishing_frequency'] ) && is_array( $_POST['tts_publishing_frequency'] ) ) {
+			$frequency_settings = array();
+			foreach ( wp_unslash( $_POST['tts_publishing_frequency'] ) as $channel => $freq_data ) {
+				if ( ! empty( $freq_data['count'] ) && is_numeric( $freq_data['count'] ) && intval( $freq_data['count'] ) > 0 ) {
+					$frequency_settings[ sanitize_text_field( $channel ) ] = array(
+						'count'  => intval( $freq_data['count'] ),
+						'period' => sanitize_text_field( $freq_data['period'] ),
+					);
+				}
+			}
+			if ( ! empty( $frequency_settings ) ) {
+				update_post_meta( $post_id, '_tts_publishing_frequency', $frequency_settings );
+			} else {
+				delete_post_meta( $post_id, '_tts_publishing_frequency' );
+			}
+		} else {
+			delete_post_meta( $post_id, '_tts_publishing_frequency' );
+		}
+
+		// Save alert days ahead setting
+		if ( isset( $_POST['tts_alert_days_ahead'] ) && is_numeric( $_POST['tts_alert_days_ahead'] ) ) {
+			$alert_days = intval( $_POST['tts_alert_days_ahead'] );
+			if ( $alert_days > 0 && $alert_days <= 30 ) {
+				update_post_meta( $post_id, '_tts_alert_days_ahead', $alert_days );
+			} else {
+				delete_post_meta( $post_id, '_tts_alert_days_ahead' );
+			}
+		} else {
+			delete_post_meta( $post_id, '_tts_alert_days_ahead' );
+		}
+	}
+
+	/**
+	 * Check the validity of the saved social tokens for a client.
+	 *
+	 * @param int $client_id Client post ID.
+	 * @return bool|WP_Error True when at least one token is valid, WP_Error otherwise.
+	 */
+	public static function check_token( $client_id ) {
+		$client_id = absint( $client_id );
+
+		if ( ! $client_id ) {
+			return new WP_Error( 'invalid_client', __( 'ID client non valido.', 'fp-publisher' ) );
+		}
+
+		if ( 'tts_client' !== get_post_type( $client_id ) ) {
+			return new WP_Error( 'invalid_client', __( 'Il post indicato non è un client valido.', 'fp-publisher' ) );
+		}
+
+		$channels = array(
+			'facebook'  => array(
+				'meta'  => '_tts_fb_token',
+				'label' => __( 'Facebook', 'fp-publisher' ),
+			),
+			'instagram' => array(
+				'meta'  => '_tts_ig_token',
+				'label' => __( 'Instagram', 'fp-publisher' ),
+			),
+			'youtube'   => array(
+				'meta'  => '_tts_yt_token',
+				'label' => __( 'YouTube', 'fp-publisher' ),
+			),
+			'tiktok'    => array(
+				'meta'  => '_tts_tt_token',
+				'label' => __( 'TikTok', 'fp-publisher' ),
+			),
+		);
+
+		$valid_tokens   = array();
+		$missing_tokens = array();
+		$errors         = array();
+		$token_found    = false;
+
+		foreach ( $channels as $channel => $data ) {
+			$token = get_post_meta( $client_id, $data['meta'], true );
+
+			if ( empty( $token ) ) {
+				$missing_tokens[] = $data['label'];
+				continue;
+			}
+
+			$token_found = true;
+
+			$validation = self::validate_channel_token( $channel, $token );
+
+			if ( is_wp_error( $validation ) ) {
+				$errors[] = $validation->get_error_message();
+				continue;
+			}
+
+			if ( true === $validation ) {
+				$valid_tokens[] = $data['label'];
+			}
+		}
+
+		if ( ! empty( $valid_tokens ) ) {
+			return true;
+		}
+
+		$messages = array();
+
+		if ( ! empty( $errors ) ) {
+			$messages[] = implode( ' ', array_unique( $errors ) );
+		}
+
+		if ( ! $token_found ) {
+			if ( ! empty( $missing_tokens ) ) {
+				$messages[] = sprintf(
+					/* translators: %s: comma separated list of channels. */
+					__( 'Token mancanti per: %s.', 'fp-publisher' ),
+					implode( ', ', $missing_tokens )
+				);
+			} else {
+				$messages[] = __( 'Nessun token configurato per questo client.', 'fp-publisher' );
+			}
+
+			return new WP_Error( 'missing_tokens', implode( ' ', $messages ) );
+		}
+
+		if ( ! empty( $missing_tokens ) ) {
+			$messages[] = sprintf(
+				/* translators: %s: comma separated list of channels. */
+				__( 'Token mancanti per: %s.', 'fp-publisher' ),
+				implode( ', ', $missing_tokens )
+			);
+		}
+
+		if ( empty( $messages ) ) {
+			$messages[] = __( 'Impossibile verificare i token del client.', 'fp-publisher' );
+		}
+
+		return new WP_Error( 'invalid_tokens', implode( ' ', $messages ) );
+	}
+
+	/**
+	 * Validate a single token by channel.
+	 *
+	 * @param string $channel Channel slug.
+	 * @param string $token   Access token value.
+	 * @return bool|WP_Error True when valid, WP_Error otherwise.
+	 */
+	protected static function validate_channel_token( $channel, $token ) {
+		switch ( $channel ) {
+			case 'facebook':
+				return self::validate_facebook_token( $token );
+			case 'instagram':
+				return self::validate_instagram_token( $token );
+			case 'youtube':
+				return self::validate_youtube_token( $token );
+			case 'tiktok':
+				return self::validate_tiktok_token( $token );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Validate a Facebook token.
+	 *
+	 * @param string $token Access token.
+	 * @return bool|WP_Error
+	 */
+	protected static function validate_facebook_token( $token ) {
+		$url = add_query_arg(
+			array(
+				'fields'       => 'id',
+				'access_token' => $token,
+			),
+			'https://graph.facebook.com/v18.0/me'
+		);
+
+		$response = wp_remote_get(
+			$url,
+			array(
+				'timeout' => 5,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error(
+				'fb_request_failed',
+				sprintf(
+					__( 'Facebook: %s', 'fp-publisher' ),
+					$response->get_error_message()
+				)
+			);
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 !== $code || empty( $body['id'] ) ) {
+			$message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'token non valido.', 'fp-publisher' );
+
+			return new WP_Error(
+				'fb_invalid_token',
+				sprintf(
+					__( 'Facebook: %s', 'fp-publisher' ),
+					$message
+				)
+			);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Validate an Instagram token.
+	 *
+	 * @param string $token Access token.
+	 * @return bool|WP_Error
+	 */
+	protected static function validate_instagram_token( $token ) {
+		$url = add_query_arg(
+			array(
+				'fields'       => 'id',
+				'access_token' => $token,
+			),
+			'https://graph.instagram.com/me'
+		);
+
+		$response = wp_remote_get(
+			$url,
+			array(
+				'timeout' => 5,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error(
+				'ig_request_failed',
+				sprintf(
+					__( 'Instagram: %s', 'fp-publisher' ),
+					$response->get_error_message()
+				)
+			);
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 !== $code || empty( $body['id'] ) ) {
+			$message = isset( $body['error']['message'] ) ? $body['error']['message'] : __( 'token non valido.', 'fp-publisher' );
+
+			return new WP_Error(
+				'ig_invalid_token',
+				sprintf(
+					__( 'Instagram: %s', 'fp-publisher' ),
+					$message
+				)
+			);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Validate a YouTube token.
+	 *
+	 * @param string $token Access token.
+	 * @return bool|WP_Error
+	 */
+	protected static function validate_youtube_token( $token ) {
+		$url = add_query_arg(
+			array(
+				'access_token' => $token,
+			),
+			'https://oauth2.googleapis.com/tokeninfo'
+		);
+
+		$response = wp_remote_get(
+			$url,
+			array(
+				'timeout' => 5,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error(
+				'yt_request_failed',
+				sprintf(
+					__( 'YouTube: %s', 'fp-publisher' ),
+					$response->get_error_message()
+				)
+			);
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 !== $code ) {
+			$message = '';
+			if ( isset( $body['error_description'] ) ) {
+				$message = $body['error_description'];
+			} elseif ( isset( $body['error'] ) ) {
+				$message = $body['error'];
+			} else {
+				$message = __( 'token non valido.', 'fp-publisher' );
+			}
+
+			return new WP_Error(
+				'yt_invalid_token',
+				sprintf(
+					__( 'YouTube: %s', 'fp-publisher' ),
+					$message
+				)
+			);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Validate a TikTok token.
+	 *
+	 * @param string $token Access token.
+	 * @return bool|WP_Error
+	 */
+	protected static function validate_tiktok_token( $token ) {
+		if ( empty( $token ) ) {
+			return new WP_Error( 'tt_invalid_token', __( 'TikTok: token non valido.', 'fp-publisher' ) );
+		}
+
+		// No lightweight public endpoint is available for validation without additional credentials.
+		// Assume the token is valid when present to avoid unnecessary failures.
+		return true;
+	}
+
+	/**
+	 * Generic handler for OAuth callbacks.
+	 *
+	 * @param string $channel Social channel slug.
+	 */
+	protected function handle_oauth( $channel ) {
+		$state          = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
+		$code           = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
+		$step           = isset( $_GET['step'] ) ? absint( $_GET['step'] ) : 2;
+		$client         = isset( $_GET['client_id'] ) ? absint( $_GET['client_id'] ) : 0;
+		$state_key      = 'tts_oauth_state_' . sanitize_key( $channel );
+		$expected_state = '';
+		$user_id        = get_current_user_id();
+
+		if ( $user_id ) {
+			$stored_state = get_user_meta( $user_id, $state_key, true );
+
+			if ( is_string( $stored_state ) && '' !== $stored_state ) {
+				$expected_state = $stored_state;
+			}
+
+			delete_user_meta( $user_id, $state_key );
+		}
+
+		if ( '' === $expected_state && '' !== $state ) {
+			$transient_key = $state_key . '_' . $state;
+			$stored_state  = get_transient( $transient_key );
+
+			if ( is_string( $stored_state ) && '' !== $stored_state ) {
+				$expected_state = $stored_state;
+			}
+
+			delete_transient( $transient_key );
+		}
+
+		$state_matches = ( '' !== $state && '' !== $expected_state );
+
+		if ( $state_matches ) {
+			if ( function_exists( 'hash_equals' ) ) {
+				$state_matches = hash_equals( $expected_state, $state );
+			} else {
+				$state_matches = ( $expected_state === $state );
+			}
+		}
+
+		if ( empty( $code ) || ! $state_matches ) {
+			wp_die( esc_html__( 'OAuth verification failed.', 'fp-publisher' ) );
+		}
+
+		// Exchange code for token
+		$token = $this->exchange_code_for_token( $channel, $code );
+
+		if ( ! $token ) {
+			wp_die( esc_html__( 'Failed to obtain access token.', 'fp-publisher' ) );
+		}
+
+		if ( $client ) {
+			$meta_key = '';
+			switch ( $channel ) {
+				case 'facebook':
+					$meta_key = '_tts_fb_token';
+					break;
+				case 'instagram':
+					$meta_key = '_tts_ig_token';
+					break;
+				case 'youtube':
+					$meta_key = '_tts_yt_token';
+					break;
+				case 'tiktok':
+					$meta_key = '_tts_tt_token';
+					break;
+			}
+			if ( $meta_key ) {
+				update_post_meta( $client, $meta_key, $token );
+			}
+		} else {
+			set_transient( 'tts_oauth_' . $channel . '_token', $token, 15 * MINUTE_IN_SECONDS );
+		}
+
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page' => 'fp-publisher-client-wizard',
+					'step' => $step,
+				),
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
+	}
+
+	/**
+	 * Exchange authorization code for access token.
+	 *
+	 * @param string $channel Social platform.
+	 * @param string $code Authorization code.
+	 * @return string|false Access token or false on failure.
+	 */
+	private function exchange_code_for_token( $channel, $code ) {
+		$settings          = tsap_get_option( 'tts_social_apps', array() );
+		$platform_settings = isset( $settings[ $channel ] ) ? $settings[ $channel ] : array();
+		$redirect_uri      = admin_url( 'admin-post.php?action=tts_oauth_' . $channel );
+
+		switch ( $channel ) {
+			case 'facebook':
+				if ( empty( $platform_settings['app_id'] ) || empty( $platform_settings['app_secret'] ) ) {
+					return false;
+				}
+
+				$response = wp_remote_post(
+					'https://graph.facebook.com/v18.0/oauth/access_token',
+					array(
+						'body' => array(
+							'client_id'     => $platform_settings['app_id'],
+							'client_secret' => $platform_settings['app_secret'],
+							'redirect_uri'  => $redirect_uri,
+							'code'          => $code,
+						),
+					)
+				);
+
+				if ( is_wp_error( $response ) ) {
+					return false;
+				}
+
+				$body = json_decode( wp_remote_retrieve_body( $response ), true );
+				return isset( $body['access_token'] ) ? $body['access_token'] : false;
+
+			case 'instagram':
+				if ( empty( $platform_settings['app_id'] ) || empty( $platform_settings['app_secret'] ) ) {
+					return false;
+				}
+
+				$response = wp_remote_post(
+					'https://api.instagram.com/oauth/access_token',
+					array(
+						'body' => array(
+							'client_id'     => $platform_settings['app_id'],
+							'client_secret' => $platform_settings['app_secret'],
+							'redirect_uri'  => $redirect_uri,
+							'code'          => $code,
+							'grant_type'    => 'authorization_code',
+						),
+					)
+				);
+
+				if ( is_wp_error( $response ) ) {
+					return false;
+				}
+
+				$body = json_decode( wp_remote_retrieve_body( $response ), true );
+				return isset( $body['access_token'] ) ? $body['access_token'] : false;
+
+			case 'youtube':
+				if ( empty( $platform_settings['client_id'] ) || empty( $platform_settings['client_secret'] ) ) {
+					return false;
+				}
+
+				$response = wp_remote_post(
+					'https://oauth2.googleapis.com/token',
+					array(
+						'body' => array(
+							'client_id'     => $platform_settings['client_id'],
+							'client_secret' => $platform_settings['client_secret'],
+							'redirect_uri'  => $redirect_uri,
+							'code'          => $code,
+							'grant_type'    => 'authorization_code',
+						),
+					)
+				);
+
+				if ( is_wp_error( $response ) ) {
+					return false;
+				}
+
+				$body = json_decode( wp_remote_retrieve_body( $response ), true );
+				return isset( $body['access_token'] ) ? $body['access_token'] : false;
+
+			case 'tiktok':
+				if ( empty( $platform_settings['client_key'] ) || empty( $platform_settings['client_secret'] ) ) {
+					return false;
+				}
+
+				$response = wp_remote_post(
+					'https://open-api.tiktok.com/oauth/access_token/',
+					array(
+						'body' => array(
+							'client_key'    => $platform_settings['client_key'],
+							'client_secret' => $platform_settings['client_secret'],
+							'redirect_uri'  => $redirect_uri,
+							'code'          => $code,
+							'grant_type'    => 'authorization_code',
+						),
+					)
+				);
+
+				if ( is_wp_error( $response ) ) {
+					return false;
+				}
+
+				$body = json_decode( wp_remote_retrieve_body( $response ), true );
+				return isset( $body['data']['access_token'] ) ? $body['data']['access_token'] : false;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Specific OAuth handlers.
+	 */
+	public function handle_oauth_facebook() {
+		$this->handle_oauth( 'facebook' );
+	}
+
+	public function handle_oauth_instagram() {
+		$this->handle_oauth( 'instagram' );
+	}
+
+	public function handle_oauth_youtube() {
+		$this->handle_oauth( 'youtube' );
+	}
+
+	public function handle_oauth_tiktok() {
+		$this->handle_oauth( 'tiktok' );
+	}
 }
 
 new TTS_Client();

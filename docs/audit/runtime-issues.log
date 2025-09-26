@@ -1,0 +1,21 @@
+# Runtime Issues Log (Phase 3)
+
+## Instrumentation Summary
+- Added `TTS_Runtime_Logger` to capture PHP notices, warnings, fatal shutdowns, and WordPress deprecation callbacks when `WP_DEBUG` is enabled.
+- Logger writes structured JSON lines to a writable uploads subdirectory (filterable via `tsap_runtime_log_file`) and mirrors entries into the existing `TTS_Logger` channel for observability dashboards.
+- Bootstrapped automatically on `plugins_loaded` with safeguards for CLI contexts and a `TSAP_DISABLE_RUNTIME_LOGGER` escape hatch for production environments.
+
+## Captured Events
+The following diagnostic lines were generated via the new logger during a CLI smoke exercise that simulates missing webhook signatures and deprecated filter usage.
+
+```
+{"type":"php_error","severity":"warning","message":"Simulated warning: Missing Trello webhook signature during CLI smoke test.","file":"Command line code","line":1,"timestamp":"2025-09-26 16:16:24","context":{"method":"CLI","uri":"cli"}}
+{"type":"php_error","severity":"notice","message":"Simulated notice: Deprecated filter usage in CLI smoke test.","file":"Command line code","line":1,"timestamp":"2025-09-26 16:16:24","context":{"method":"CLI","uri":"cli"}}
+```
+
+## Remediated Runtime Risks
+- Fixed a fatal error in `TTS_Admin::ajax_import_data()` where the handler invoked an undefined `get_max_import_file_size()` method, causing AJAX imports to crash when large files were validated. The helper is now implemented with sane defaults and respects the existing `tts_import_max_file_size` filter.
+
+## Outstanding Follow-ups
+- Run the logger within a real WordPress instance to capture genuine admin/front-end interactions (dashboard widgets, calendar, analytics) and extend the log with live telemetry.
+- Use the gathered runtime data to prioritize remediation of deprecations and noisy notices before proceeding to the security phase.

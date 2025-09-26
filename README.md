@@ -24,11 +24,11 @@ Plugin WordPress per l'automazione della pubblicazione sui social e sui blog a p
 FP Publisher centralizza la gestione dei contenuti provenienti da Trello e da sorgenti esterne (Google Drive, Dropbox, upload locali) e automatizza la pubblicazione su Facebook, Instagram, YouTube, TikTok e siti WordPress. Include dashboard operative, code di pubblicazione, monitoraggio degli stati e strumenti di diagnosi.
 
 ## Download e installazione
-1. Accedi alle [GitHub Actions](https://github.com/franpass87/FP-Publisher/actions/workflows/build-wordpress-plugin.yml).
-2. Apri l'ultima esecuzione completata del workflow **Build WordPress Plugin**.
-3. Scarica l'artifact `fp-publisher-wordpress-plugin-latest`.
-4. Carica il file ZIP in **WordPress Admin → Plugin → Aggiungi nuovo → Carica plugin**.
-5. In alternativa avvia il workflow [Build Release Package](https://github.com/franpass87/FP-Publisher/actions/workflows/release-package.yml) per ottenere automaticamente ZIP firmato, checksum, manifest e note di rilascio.
+1. Scarica l'ultima release stabile dalla cartella [`dist/`](dist) del repository (`fp-publisher-1.1.0.zip`) oppure dalla sezione [Releases](https://github.com/franpass87/FP-Publisher/releases).
+2. Verifica l'integrità confrontando il file `fp-publisher-1.1.0.zip.sha256` con l'output di `sha256sum`.
+3. Carica il file ZIP in **WordPress Admin → Plugin → Aggiungi nuovo → Carica plugin**.
+4. In alternativa accedi alle [GitHub Actions](https://github.com/franpass87/FP-Publisher/actions/workflows/build-wordpress-plugin.yml), apri l'ultima esecuzione del workflow **Build WordPress Plugin** e scarica l'artifact `fp-publisher-wordpress-plugin-latest`.
+5. Puoi ancora avviare il workflow [Build Release Package](https://github.com/franpass87/FP-Publisher/actions/workflows/release-package.yml) per generare ZIP firmato, checksum, manifest e note di rilascio aggiuntive.
 
 ### Genera un pacchetto in locale
 Per creare un pacchetto firmato direttamente dall'ambiente di sviluppo esegui:
@@ -44,7 +44,7 @@ Lo script produce:
 - `build/release/artifacts/release-notes.md`
 - `build/release/artifacts/manifest.json`
 
-Il numero di versione viene letto automaticamente dall'header del plugin o, in sua assenza, generato con timestamp.
+Il numero di versione viene letto automaticamente dall'header del plugin o, in sua assenza, generato con timestamp. Il pacchetto già pronto in `dist/` è costruito con la stessa procedura e può essere caricato direttamente in produzione.
 
 ### Requisiti
 - WordPress 6.0 o superiore.
@@ -53,6 +53,7 @@ Il numero di versione viene letto automaticamente dall'header del plugin o, in s
 - Credenziali per le API dei canali social (Meta, YouTube, TikTok) e per eventuali blog collegati.
 
 ## Funzionalità principali
+- **Bootstrap unificato:** il coordinatore `TTS_Plugin_Bootstrap` inizializza hook, servizi e scheduler con controlli ambiente e fallback CLI.
 - **Dashboard operativa:** statistiche aggregate, attività recenti e scorciatoie verso le sezioni chiave.
 - **Clienti e credenziali:** gestione multi-cliente con metabox dedicati per secret, token e mappature Trello → canali social.
 - **Client Wizard:** onboarding guidato con checklist dinamica, percentuale di completamento, suggerimenti contestuali, test immediati delle credenziali Trello/social e reset rapido dei progressi.
@@ -63,6 +64,7 @@ Il numero di versione viene letto automaticamente dall'header del plugin o, in s
 - **Analytics:** aggregazione delle metriche dei canali, grafico interattivo (Chart.js) ed esportazione CSV.
 - **Health Status:** controllo quotidiano di token, hook Trello, Action Scheduler, requisiti WordPress e retention log configurabile.
 - **Sintesi componenti critici:** dashboard e CLI evidenziano token mancanti, webhook in errore, quote API e cron non pianificati con link rapidi alla remediation.
+- **Runtime logger JSON:** `TTS_Runtime_Logger` intercetta notice, warning e fatal error convertendoli in log JSON consultabili da CLI o dai sistemi di osservabilità.
 - **Blog WordPress:** pubblicazione automatica di articoli con gestione featured image, SEO, WPML, link dinamici e hashtag di default per ogni canale.
 
 ## Configurazione dei canali
@@ -137,7 +139,7 @@ Consulta [docs/guides/cli-automation.md](docs/guides/cli-automation.md) per scen
 
 ## Qualità e test automatici
 
-Per mantenere il plugin stabile e pronto alla distribuzione è disponibile un test suite automatizzato che copre sicurezza, integrazione Trello, token e REST API. Il repository esegue lo stesso flusso in GitHub Actions ad ogni push o pull request tramite il workflow **Plugin Quality Checks**.
+Per mantenere il plugin stabile e pronto alla distribuzione è disponibile un test suite automatizzato che copre sicurezza, integrazione Trello, token e REST API. Il repository esegue lo stesso flusso in GitHub Actions ad ogni push o pull request tramite il workflow **Plugin Quality Checks**, arricchito dal job **CI** multipiattaforma introdotto con la versione 1.1.0.
 
 ### Esegui i test in locale
 
@@ -148,9 +150,30 @@ Per mantenere il plugin stabile e pronto alla distribuzione è disponibile un te
    composer test
    ```
 
-Lo script `tools/run-tests.sh` avvia in sequenza ogni file `tests/test-*.php` e interrompe la procedura se uno dei check fallisce, indicando il file responsabile.
+   Il comando esegue PHPUnit in modalità `phpdbg`, i test smoke e i legacy runner per garantire la compatibilità dei vecchi script.
+3. Facoltativamente lancia i lint:
 
-> Suggerimento: integra `composer test` nelle pipeline di CI/CD interne per bloccare merge o deploy quando falliscono le verifiche automatiche.
+   ```bash
+   composer lint:phpcs
+   composer lint:phpstan
+   ```
+
+   PHPCS utilizza lo standard WordPress e PHPStan è configurato al livello 5 per l'analisi statica delle classi principali.
+
+Lo script `tools/run-tests.sh` resta disponibile per eseguire rapidamente i test storici `tests/test-*.php`, mentre i nuovi test risiedono in `tests/phpunit/` con bootstrap condiviso.
+
+> Suggerimento: integra `composer test` e i lint nelle pipeline di CI/CD interne per bloccare merge o deploy quando falliscono le verifiche automatiche.
+
+## Aggiornamenti
+
+Consulta [UPGRADE.md](UPGRADE.md) per le istruzioni passo-passo sull'aggiornamento dalla versione 1.0.1 alla 1.1.0, incluse le note dedicate agli ambienti multisite e al ripristino dei log runtime.
+
+## Build & Release (CI)
+
+- Gli artefatti di build (zip) non sono versionati nel repository.
+- Le pull request attivano un workflow GitHub Actions che esegue `scripts/build-plugin-zip.sh` e pubblica lo zip nei risultati della pipeline.
+- Il push di un tag che inizia con `v` genera automaticamente una GitHub Release con allegato lo zip e il file `.sha256`.
+- Per creare lo zip in locale esegui `bash scripts/build-plugin-zip.sh` e recupera l'output in `dist/`.
 
 ## Documentazione di riferimento
 - [MENU_STRUCTURE.md](MENU_STRUCTURE.md): struttura aggiornata del menu WordPress e benefici UX.
@@ -167,7 +190,8 @@ Lo script `tools/run-tests.sh` avvia in sequenza ogni file `tests/test-*.php` e 
   - [Troubleshooting](docs/guides/troubleshooting.md)
 
 ## Storico versioni
-Consulta il [CHANGELOG.md](CHANGELOG.md) per il dettaglio completo delle release. In sintesi:
+- Consulta il [CHANGELOG.md](CHANGELOG.md) per il dettaglio completo delle release. In sintesi:
+- **1.1.0** – Routine di upgrade automatizzate con migrazione delle opzioni multisite e pulizia cache durante gli aggiornamenti.
 - **1.0.1** – Aggiornamento completa della documentazione, accredito autore e contatti ufficiali.
 - **1.0.0** – Rilascio iniziale con menu unificato, integrazione multi-canale, analytics avanzati e ottimizzazioni di performance/sicurezza.
 

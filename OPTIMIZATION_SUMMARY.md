@@ -4,7 +4,7 @@
 cescopasseri.com)*
 
 Versioni interessate: **0.9.0 → 1.0.0**  
-Ultimo aggiornamento documentazione: **1.0.1**
+Ultimo aggiornamento documentazione: **1.1.0**
 
 Questa sintesi accompagna le note tecniche contenute in [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md) e nel [CHANGELOG](CHANGELOG
 .md), descrivendo gli impatti misurati delle ottimizzazioni.

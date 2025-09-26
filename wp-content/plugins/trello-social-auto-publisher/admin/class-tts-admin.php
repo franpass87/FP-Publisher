@@ -842,7 +842,7 @@ class TTS_Admin {
      * @return string
      */
     private function get_usage_profile() {
-        $settings = get_option( 'tts_settings', array() );
+        $settings = tsap_get_option( 'tts_settings', array() );
         $profile  = isset( $settings['usage_profile'] ) ? sanitize_key( $settings['usage_profile'] ) : 'standard';
 
         $allowed = array( 'standard', 'advanced', 'enterprise' );
@@ -986,7 +986,7 @@ class TTS_Admin {
         $checks = array();
 
         if ( ! empty( $package['column_mapping'] ) ) {
-            $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
+            $trello_enabled = (bool) tsap_get_option( 'tts_trello_enabled', 1 );
 
             if ( $trello_enabled ) {
                 $checks[] = array(
@@ -1527,7 +1527,7 @@ class TTS_Admin {
             array(
                 'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                 'nonce'   => wp_create_nonce( 'tts_wizard' ),
-                'trelloEnabled' => (bool) get_option( 'tts_trello_enabled', 1 ),
+                'trelloEnabled' => (bool) tsap_get_option( 'tts_trello_enabled', 1 ),
                 'strings' => array(
                     'validating' => __( 'Validating...', 'fp-publisher' ),
                     'connecting' => __( 'Connecting...', 'fp-publisher' ),
@@ -1659,7 +1659,7 @@ class TTS_Admin {
                 esc_url( $edit_link ),
                 esc_html( $post->post_title ),
                 esc_html( $channel_display ),
-                esc_html( $publish_at ? date_i18n( 'Y-m-d H:i', strtotime( $publish_at ) ) : '' )
+                esc_html( $publish_at ? wp_date( 'Y-m-d H:i', strtotime( $publish_at ) ) : '' )
             );
         }
         $output .= '</ul>';
@@ -1700,7 +1700,7 @@ class TTS_Admin {
             return;
         }
 
-        if ( ! (bool) get_option( 'tts_trello_enabled', 1 ) ) {
+        if ( ! (bool) tsap_get_option( 'tts_trello_enabled', 1 ) ) {
             return wp_send_json_error( __( 'Trello integration is disabled.', 'fp-publisher' ), 400 );
         }
 
@@ -2130,7 +2130,7 @@ class TTS_Admin {
      */
     private function render_standard_health_snapshot( $profile ) {
         $health            = TTS_Monitoring::get_current_health_status();
-        $health_data       = get_option( 'tts_last_health_check', array() );
+        $health_data       = tsap_get_option( 'tts_last_health_check', array() );
         $suggestions       = TTS_Monitoring::get_remediation_suggestions( $health_data );
         $actionable_items  = TTS_Monitoring::get_actionable_health_summary();
         $open_issues       = array_filter(
@@ -2271,7 +2271,7 @@ class TTS_Admin {
      * Render API status widget.
      */
     private function render_api_status_widget() {
-        $health_data = get_option( 'tts_last_health_check', array() );
+        $health_data = tsap_get_option( 'tts_last_health_check', array() );
         $api_status = isset( $health_data['checks']['api_connections'] ) ? $health_data['checks']['api_connections'] : array();
         
         echo '<div class="tts-monitoring-card">';
@@ -2609,7 +2609,7 @@ class TTS_Admin {
                 echo '</td>';
                 echo '<td><span class="tts-status-badge ' . $status_class . '">' . esc_html($status_text) . '</span></td>';
                 echo '<td>';
-                $date_text = $publish_at ? date_i18n('Y-m-d H:i', strtotime($publish_at)) : get_the_date('Y-m-d H:i', $post);
+                $date_text = $publish_at ? wp_date( 'Y-m-d H:i', strtotime( $publish_at ) ) : get_the_date( 'Y-m-d H:i', $post );
                 echo '<span class="tts-tooltip">';
                 echo esc_html($date_text);
                 echo '<span class="tts-tooltiptext">' . esc_html(human_time_diff(strtotime($date_text), current_time('timestamp'))) . ' ago</span>';
@@ -3263,7 +3263,7 @@ class TTS_Admin {
 
         // Check various system components
         $status_checks = array();
-        $health_data   = get_option( 'tts_last_health_check', array() );
+        $health_data   = tsap_get_option( 'tts_last_health_check', array() );
 
         // Check WordPress requirements
         $wp_version = get_bloginfo( 'version' );
@@ -3484,7 +3484,7 @@ class TTS_Admin {
 
         $packages        = $this->get_quickstart_packages();
         $active_prefill  = isset( $_SESSION['tts_quickstart_prefill'] ) ? $_SESSION['tts_quickstart_prefill'] : array();
-        $current_settings = get_option( 'tts_settings', array() );
+        $current_settings = tsap_get_option( 'tts_settings', array() );
         $previewed_slug   = isset( $_GET['package_preview'] ) ? sanitize_key( wp_unslash( $_GET['package_preview'] ) ) : '';
         $notice_message  = '';
         $notice_type     = 'updated';
@@ -3908,7 +3908,7 @@ class TTS_Admin {
         $profile = isset( $package['profile'] ) ? sanitize_key( $package['profile'] ) : 'standard';
 
         if ( null === $settings ) {
-            $settings = get_option( 'tts_settings', array() );
+            $settings = tsap_get_option( 'tts_settings', array() );
         }
 
         if ( ! is_array( $settings ) ) {
@@ -4260,7 +4260,7 @@ class TTS_Admin {
             );
         }
 
-        $settings = get_option( 'tts_settings', array() );
+        $settings = tsap_get_option( 'tts_settings', array() );
 
         if ( isset( $package['column_mapping'] ) ) {
             $encoded = wp_json_encode( $package['column_mapping'] );
@@ -4287,8 +4287,8 @@ class TTS_Admin {
             }
         }
 
-        update_option( 'tts_settings', $settings );
-        update_option( 'tts_quickstart_last_package', array(
+        tsap_update_option( 'tts_settings', $settings );
+        tsap_update_option( 'tts_quickstart_last_package', array(
             'slug'       => $slug,
             'applied_at' => current_time( 'mysql' ),
         ) );
@@ -4709,7 +4709,7 @@ class TTS_Admin {
             session_start();
         }
 
-        $trello_enabled = (bool) get_option( 'tts_trello_enabled', 1 );
+        $trello_enabled = (bool) tsap_get_option( 'tts_trello_enabled', 1 );
 
         $post_step = 0;
         if ( isset( $_POST['step'] ) ) {
@@ -4994,7 +4994,7 @@ class TTS_Admin {
                 $app_configured = false;
                 
                 // Check if app is configured
-                $settings = get_option( 'tts_social_apps', array() );
+                $settings = tsap_get_option( 'tts_social_apps', array() );
                 $platform_settings = isset( $settings[$slug] ) ? $settings[$slug] : array();
                 
                 switch ( $slug ) {
@@ -5773,7 +5773,7 @@ class TTS_Admin {
         }
 
         $trello_notice_flag = '';
-        $trello_enabled     = (bool) get_option( 'tts_trello_enabled', 1 );
+        $trello_enabled     = (bool) tsap_get_option( 'tts_trello_enabled', 1 );
         if ( 'trello' === $content_source && ! $trello_enabled ) {
             $trello_notice_flag = 'converted';
             $content_source     = 'manual';
@@ -6055,7 +6055,7 @@ class TTS_Admin {
             $content_sources = TTS_Content_Source::SOURCES;
         }
 
-        $trello_enabled  = (bool) get_option( 'tts_trello_enabled', 1 );
+        $trello_enabled  = (bool) tsap_get_option( 'tts_trello_enabled', 1 );
         $selected_source = 'manual';
 
         $editor_values = array(
@@ -6643,7 +6643,7 @@ class TTS_Admin {
                 }
             }
 
-            $settings = get_option( 'tts_social_apps', array() );
+            $settings = tsap_get_option( 'tts_social_apps', array() );
         ?>
         <div class="wrap">
             <h1><?php esc_html_e( 'Social Media Connections', 'fp-publisher' ); ?></h1>
@@ -6913,14 +6913,14 @@ class TTS_Admin {
         $social_apps = isset( $_POST['social_apps'] ) ? $_POST['social_apps'] : array();
 
         if ( ! is_array( $social_apps ) ) {
-            update_option( 'tts_social_apps', array() );
+            tsap_update_option( 'tts_social_apps', array() );
             return;
         }
 
         $social_apps    = wp_unslash( $social_apps );
         $sanitized_apps = $this->sanitize_social_app_settings_array( $social_apps );
 
-        update_option( 'tts_social_apps', $sanitized_apps );
+        tsap_update_option( 'tts_social_apps', $sanitized_apps );
     }
 
     /**
@@ -7025,7 +7025,7 @@ class TTS_Admin {
      */
     private function check_platform_connection_status( $platform ) {
         $platform = sanitize_key( $platform );
-        $settings = get_option( 'tts_social_apps', array() );
+        $settings = tsap_get_option( 'tts_social_apps', array() );
         $platform_settings = isset( $settings[ $platform ] ) ? $settings[ $platform ] : array();
 
         // Check if app credentials are configured
@@ -7094,7 +7094,7 @@ class TTS_Admin {
      * @return string OAuth URL.
      */
     private function get_oauth_url( $platform ) {
-        $settings = get_option( 'tts_social_apps', array() );
+        $settings = tsap_get_option( 'tts_social_apps', array() );
         $platform_settings = isset( $settings[$platform] ) ? $settings[$platform] : array();
         $redirect_uri = admin_url( 'admin-post.php?action=tts_oauth_' . $platform );
         $state = wp_generate_password( 20, false );
@@ -7493,7 +7493,7 @@ class TTS_Admin {
             return wp_send_json_error( array( 'message' => __( 'Invalid platform specified.', 'fp-publisher' ) ), 400 );
         }
 
-        $settings           = get_option( 'tts_social_apps', array() );
+        $settings           = tsap_get_option( 'tts_social_apps', array() );
         $platform_settings  = isset( $settings[ $platform ] ) && is_array( $settings[ $platform ] ) ? $settings[ $platform ] : array();
         $result             = $this->test_platform_connection( $platform, $platform_settings );
         $sanitized_response = array( 'message' => sanitize_text_field( $result['message'] ) );
@@ -7549,11 +7549,11 @@ class TTS_Admin {
             $sanitized_credentials[ $sanitized_key ] = sanitize_text_field( wp_unslash( $value ) );
         }
 
-        $social_apps                = get_option( 'tts_social_apps', array() );
+        $social_apps                = tsap_get_option( 'tts_social_apps', array() );
         $social_apps[ $platform ]   = $sanitized_credentials;
-        $previous_social_app_values = get_option( 'tts_social_apps', array() );
+        $previous_social_app_values = tsap_get_option( 'tts_social_apps', array() );
 
-        $updated = update_option( 'tts_social_apps', $social_apps );
+        $updated = tsap_update_option( 'tts_social_apps', $social_apps );
 
         if ( false === $updated && $previous_social_app_values !== $social_apps ) {
             return wp_send_json_error( array( 'message' => __( 'Unable to save social media credentials. Please try again.', 'fp-publisher' ) ), 500 );
@@ -7695,7 +7695,7 @@ class TTS_Admin {
      * @return array Rate limit information.
      */
     private function get_platform_rate_limits( $platform ) {
-        $settings = get_option( 'tts_settings', array() );
+        $settings = tsap_get_option( 'tts_settings', array() );
         
         // Check if we have cached rate limit data (updated every 15 minutes)
         $cache_key = "tts_rate_limits_{$platform}";
@@ -7814,7 +7814,7 @@ class TTS_Admin {
         
         // YouTube Data API quota information isn't directly available via API
         // We track usage internally
-        $daily_usage = get_option( 'tts_youtube_daily_usage', 0 );
+        $daily_usage = tsap_get_option( 'tts_youtube_daily_usage', 0 );
         $daily_limit = 10000; // YouTube default quota
         
         return array(
@@ -7850,6 +7850,40 @@ class TTS_Admin {
             'reset_time' => 'Hourly'
         );
     }
+    /**
+     * Determine the maximum allowed file size for imports.
+     *
+     * @return int File size in bytes.
+     */
+    private function get_max_import_file_size() {
+        $upload_limit = function_exists( 'wp_convert_hr_to_bytes' ) ? wp_convert_hr_to_bytes( ini_get( 'upload_max_filesize' ) ) : (int) ini_get( 'upload_max_filesize' );
+        $post_limit   = function_exists( 'wp_convert_hr_to_bytes' ) ? wp_convert_hr_to_bytes( ini_get( 'post_max_size' ) ) : (int) ini_get( 'post_max_size' );
+
+        $limits = array_filter(
+            array(
+                self::DEFAULT_IMPORT_MAX_FILE_SIZE,
+                $upload_limit,
+                $post_limit,
+            ),
+            function ( $value ) {
+                return is_numeric( $value ) && (int) $value > 0;
+            }
+        );
+
+        $limit = ! empty( $limits ) ? min( $limits ) : self::DEFAULT_IMPORT_MAX_FILE_SIZE;
+
+        if ( function_exists( 'apply_filters' ) ) {
+            /**
+             * Filter the maximum allowed import file size.
+             *
+             * @param int $limit Maximum file size in bytes.
+             */
+            $limit = apply_filters( 'tts_import_max_file_size', (int) $limit );
+        }
+
+        return max( 1, (int) $limit );
+    }
+
     public function ajax_import_data() {
         if ( ! $this->enforce_ajax_security( __FUNCTION__ ) ) {
             return;
@@ -8158,7 +8192,7 @@ class TTS_Admin {
     private function render_content_management_tabs() {
         $sources = TTS_Content_Source::SOURCES;
         $stats                = TTS_Content_Source::get_source_stats();
-        $trello_enabled       = get_option( 'tts_trello_enabled', 1 );
+        $trello_enabled       = tsap_get_option( 'tts_trello_enabled', 1 );
         $syncable_sources     = TTS_Content_Source::get_syncable_sources();
         $has_syncable_sources = ! empty( $syncable_sources );
         
@@ -8220,7 +8254,7 @@ class TTS_Admin {
      * @param bool  $has_syncable_sources Whether remote sources are available for syncing.
      */
     private function render_overview_content( $stats, $has_syncable_sources = null ) {
-        $trello_enabled = get_option( 'tts_trello_enabled', 1 );
+        $trello_enabled = tsap_get_option( 'tts_trello_enabled', 1 );
 
         if ( null === $has_syncable_sources ) {
             $has_syncable_sources = ! empty( TTS_Content_Source::get_syncable_sources() );
@@ -8783,12 +8817,12 @@ class TTS_Admin {
         // Handle settings save
         if ( isset( $_POST['tts_settings_nonce'] ) && wp_verify_nonce( $_POST['tts_settings_nonce'], 'tts_settings' ) ) {
             $trello_enabled = isset( $_POST['trello_enabled'] ) ? 1 : 0;
-            update_option( 'tts_trello_enabled', $trello_enabled );
+            tsap_update_option( 'tts_trello_enabled', $trello_enabled );
             
             echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved successfully.', 'fp-publisher' ) . '</p></div>';
         }
         
-        $trello_enabled = get_option( 'tts_trello_enabled', 1 );
+        $trello_enabled = tsap_get_option( 'tts_trello_enabled', 1 );
         
         echo '<div class="wrap">';
         echo '<h1>' . esc_html__( 'Test Connections & Settings', 'fp-publisher' ) . '</h1>';
@@ -8843,7 +8877,7 @@ class TTS_Admin {
         echo '<h2>' . esc_html__( 'Test Social Media API Connections', 'fp-publisher' ) . '</h2>';
         echo '<p>' . esc_html__( 'Test the global API configurations for each social media platform.', 'fp-publisher' ) . '</p>';
         
-        $social_apps = get_option( 'tts_social_apps', array() );
+        $social_apps = tsap_get_option( 'tts_social_apps', array() );
         $platforms = array(
             'facebook' => __( 'Facebook', 'fp-publisher' ),
             'instagram' => __( 'Instagram', 'fp-publisher' ),
@@ -9213,7 +9247,7 @@ class TTS_Admin {
             return wp_send_json_error( __( 'Invalid platform.', 'fp-publisher' ), 400 );
         }
 
-        $social_apps        = get_option( 'tts_social_apps', array() );
+        $social_apps        = tsap_get_option( 'tts_social_apps', array() );
         $platform_settings  = isset( $social_apps[ $platform ] ) && is_array( $social_apps[ $platform ] ) ? $social_apps[ $platform ] : array();
         $result             = $this->test_platform_connection( $platform, $platform_settings );
         $sanitized_response = array(
@@ -9650,7 +9684,7 @@ class TTS_Social_Posts_Table extends WP_List_Table {
                 'ID'          => $post->ID,
                 'title'       => $post->post_title,
                 'channel'     => is_array( $channel ) ? implode( ', ', $channel ) : $channel,
-                'publish_date'=> $publish ? date_i18n( 'Y-m-d H:i', strtotime( $publish ) ) : '',
+                'publish_date'=> $publish ? wp_date( 'Y-m-d H:i', strtotime( $publish ) ) : '',
                 'status'      => $status ? $status : __( 'scheduled', 'fp-publisher' ),
             );
         }

@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<ruleset name="Trello Social Auto Publisher Coding Standards">
+    <description>Project ruleset built on top of the WordPress Coding Standards.</description>
+
+    <file>wp-content/plugins/trello-social-auto-publisher</file>
+
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    <exclude-pattern>*/node_modules/*</exclude-pattern>
+    <exclude-pattern>*/tests/fixtures/*</exclude-pattern>
+    <exclude-pattern>*/assets/*</exclude-pattern>
+    <exclude-pattern>*/dist/*</exclude-pattern>
+
+    <arg value="sp"/>
+    <arg name="extensions" value="php,php5,inc"/>
+
+    <config name="minimum_supported_wp_version" value="5.8"/>
+
+    <rule ref="WordPress"/>
+    <rule ref="WordPress-Extra"/>
+</ruleset>

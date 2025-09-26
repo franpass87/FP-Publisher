@@ -3,7 +3,7 @@
 *Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
 
 Versione minima: **1.0.0**  
-Ultimo aggiornamento documentazione: **1.0.1**
+Ultimo aggiornamento documentazione: **1.1.0**
 
 Questo documento descrive i controlli di resilienza del publisher TTS e come operare in caso di limiti o guasti dei canali.
 

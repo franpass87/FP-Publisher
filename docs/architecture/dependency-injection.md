@@ -3,7 +3,7 @@
 *Autore: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
 
 Versione minima: **1.0.0**  
-Ultimo aggiornamento documentazione: **1.0.1**
+Ultimo aggiornamento documentazione: **1.1.0**
 
 Il plugin utilizza un contenitore compatibile con PSR-11 per gestire le dipendenze condivise e ridurre l'uso di variabili globali. Il contenitore vive in `includes/class-tts-service-container.php` ed è accessibile tramite l'helper `tsap_service_container()` definito nel file principale del plugin.
 

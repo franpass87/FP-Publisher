@@ -4,35 +4,27 @@ set -u
 set -o pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PLUGIN_DIR="$ROOT_DIR/wp-content/plugins/trello-social-auto-publisher"
-TEST_DIR="$PLUGIN_DIR/tests"
+PHPUNIT_BIN="$ROOT_DIR/vendor/bin/phpunit"
+PHPUNIT_CONFIG="$ROOT_DIR/phpunit.xml.dist"
 
-if [[ ! -d "$TEST_DIR" ]]; then
-    echo "Test directory not found: $TEST_DIR" >&2
+if [[ ! -x "$PHPUNIT_BIN" ]]; then
+    echo "PHPUnit is not installed. Run 'composer install' or 'composer update --dev' first." >&2
     exit 1
 fi
 
-mapfile -t test_files < <(find "$TEST_DIR" -maxdepth 1 -type f -name 'test-*.php' -print | sort)
-
-if [[ ${#test_files[@]} -eq 0 ]]; then
-    echo "No test files detected in $TEST_DIR" >&2
+if [[ ! -f "$PHPUNIT_CONFIG" ]]; then
+    echo "PHPUnit configuration not found at $PHPUNIT_CONFIG" >&2
     exit 1
 fi
 
-exit_code=0
+if command -v phpdbg >/dev/null 2>&1; then
+    PHPUNIT_COMMAND=(phpdbg -qrr "$PHPUNIT_BIN")
+    COVERAGE_ARGS=()
+else
+    PHPUNIT_COMMAND=("$PHPUNIT_BIN")
+    COVERAGE_ARGS=(--no-coverage)
+fi
 
-for test_file in "${test_files[@]}"; do
-    relative_path="${test_file#$ROOT_DIR/}"
-    echo "→ Running ${relative_path}"
+"${PHPUNIT_COMMAND[@]}" --configuration "$PHPUNIT_CONFIG" "${COVERAGE_ARGS[@]}" "$@"
 
-    if php "$test_file"; then
-        echo "✓ ${relative_path}"
-    else
-        echo "✗ ${relative_path}" >&2
-        exit_code=1
-    fi
-
-    echo ""
-done
-
-exit $exit_code
+exit $?

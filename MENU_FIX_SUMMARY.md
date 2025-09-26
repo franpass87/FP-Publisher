@@ -4,7 +4,7 @@
 ncescopasseri.com)*
 
 Versione interessata: **0.9.0 → 1.0.0**  
-Ultimo aggiornamento documentazione: **1.0.1**
+Ultimo aggiornamento documentazione: **1.1.0**
 
 Questa nota descrive il refactoring che ha portato al menu unificato del plugin, anticipando il rilascio 1.0.0 documentato nel [
 CHANGELOG](CHANGELOG.md).

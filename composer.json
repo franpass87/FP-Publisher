@@ -3,9 +3,26 @@
     "description": "Operational tooling and automation for the Trello Social Auto Publisher plugin.",
     "type": "project",
     "license": "GPL-2.0-or-later",
-    "require": {},
-    "require-dev": {},
+    "require-dev": {
+        "squizlabs/php_codesniffer": "^3.7",
+        "wp-coding-standards/wpcs": "^3.0",
+        "phpstan/phpstan": "^1.10",
+        "szepeviktor/phpstan-wordpress": "^1.1",
+        "phpunit/phpunit": "^9.6"
+    },
     "scripts": {
-        "test": "bash tools/run-tests.sh"
+        "test": "bash tools/run-tests.sh",
+        "lint": [
+            "@lint:phpcs",
+            "@lint:phpstan"
+        ],
+        "lint:phpcs": "php -d memory_limit=512M vendor/bin/phpcs",
+        "lint:phpcs-fix": "php -d memory_limit=512M vendor/bin/phpcbf",
+        "lint:phpstan": "php -d memory_limit=1G vendor/bin/phpstan analyse --memory-limit=1G"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
     }
 }

@@ -3,7 +3,7 @@
 *Author: Francesco Passeri – [francescopasseri.com](https://francescopasseri.com) – [info@francescopasseri.com](mailto:info@francescopasseri.com)*
 
 Applies to plugin version: **0.9.0** and above  
-Documentation refresh: **1.0.1**
+Documentation refresh: **1.1.0**
 
 ## Status
 Accepted
