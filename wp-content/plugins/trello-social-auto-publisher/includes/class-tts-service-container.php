@@ -8,8 +8,8 @@ namespace {
 namespace Psr\Container {
     if ( ! interface_exists( __NAMESPACE__ . '\\ContainerInterface' ) ) {
         interface ContainerInterface {
-            public function get( $id );
-            public function has( $id );
+            public function get( string $id );
+            public function has( string $id ): bool;
         }
     }
 
@@ -119,7 +119,7 @@ namespace {
          *
          * @return bool
          */
-        public function has( $id ) {
+        public function has( string $id ): bool {
             $id = (string) $id;
             return array_key_exists( $id, $this->definitions ) || array_key_exists( $id, $this->resolved );
         }
@@ -134,7 +134,7 @@ namespace {
          * @throws TTS_Service_Not_Found_Exception When the service is not registered.
          * @throws TTS_Service_Exception           When the service cannot be created.
          */
-        public function get( $id ) {
+        public function get( string $id ) {
             $id = (string) $id;
 
             if ( array_key_exists( $id, $this->resolved ) ) {
