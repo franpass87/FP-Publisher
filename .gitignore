@@ -32,8 +32,12 @@ Thumbs.db
 *.bak
 
 # Build artifacts
-dist/
+/dist/
+/assets/dist/
+/wp-content/plugins/trello-social-auto-publisher/admin/dist/
+/wp-content/plugins/trello-social-auto-publisher/assets/dist/
 *.zip
+*.zip.sha256
 build/
 compiled/
 

@@ -24,8 +24,8 @@ Plugin WordPress per l'automazione della pubblicazione sui social e sui blog a p
 FP Publisher centralizza la gestione dei contenuti provenienti da Trello e da sorgenti esterne (Google Drive, Dropbox, upload locali) e automatizza la pubblicazione su Facebook, Instagram, YouTube, TikTok e siti WordPress. Include dashboard operative, code di pubblicazione, monitoraggio degli stati e strumenti di diagnosi.
 
 ## Download e installazione
-1. Scarica l'ultima release stabile dalla cartella [`dist/`](dist) del repository (`fp-publisher-1.1.0.zip`) oppure dalla sezione [Releases](https://github.com/franpass87/FP-Publisher/releases).
-2. Verifica l'integrità confrontando il file `fp-publisher-1.1.0.zip.sha256` con l'output di `sha256sum`.
+1. Scarica l'ultima release stabile dalla cartella [`dist/`](dist) del repository (`fp-publisher-1.2.0.zip`) oppure dalla sezione [Releases](https://github.com/franpass87/FP-Publisher/releases).
+2. Verifica l'integrità confrontando il file `fp-publisher-1.2.0.zip.sha256` con l'output di `sha256sum`.
 3. Carica il file ZIP in **WordPress Admin → Plugin → Aggiungi nuovo → Carica plugin**.
 4. In alternativa accedi alle [GitHub Actions](https://github.com/franpass87/FP-Publisher/actions/workflows/build-wordpress-plugin.yml), apri l'ultima esecuzione del workflow **Build WordPress Plugin** e scarica l'artifact `fp-publisher-wordpress-plugin-latest`.
 5. Puoi ancora avviare il workflow [Build Release Package](https://github.com/franpass87/FP-Publisher/actions/workflows/release-package.yml) per generare ZIP firmato, checksum, manifest e note di rilascio aggiuntive.
@@ -166,7 +166,19 @@ Lo script `tools/run-tests.sh` resta disponibile per eseguire rapidamente i test
 
 ## Aggiornamenti
 
-Consulta [UPGRADE.md](UPGRADE.md) per le istruzioni passo-passo sull'aggiornamento dalla versione 1.0.1 alla 1.1.0, incluse le note dedicate agli ambienti multisite e al ripristino dei log runtime.
+Consulta [UPGRADE.md](UPGRADE.md) per le istruzioni passo-passo sull'aggiornamento dalla versione 1.1.0 alla 1.2.0, incluse le note dedicate agli ambienti multisite e al ripristino dei log runtime.
+
+## Build assets
+
+Le risorse amministrative non vengono più versionate: per rigenerarle dopo il clone esegui:
+
+```bash
+cd wp-content/plugins/trello-social-auto-publisher
+npm install
+npm run build
+```
+
+Il comando `npm run build` popola la cartella `admin/dist/` (ignorata da git) leggendo i sorgenti in `assets/src/`.
 
 ## Build & Release (CI)
 
@@ -191,6 +203,7 @@ Consulta [UPGRADE.md](UPGRADE.md) per le istruzioni passo-passo sull'aggiornamen
 
 ## Storico versioni
 - Consulta il [CHANGELOG.md](CHANGELOG.md) per il dettaglio completo delle release. In sintesi:
+- **1.2.0** – Restyling completo della UI admin con design tokens, componenti riutilizzabili, list tables avanzate e refit dei flussi principali.
 - **1.1.0** – Routine di upgrade automatizzate con migrazione delle opzioni multisite e pulizia cache durante gli aggiornamenti.
 - **1.0.1** – Aggiornamento completa della documentazione, accredito autore e contatti ufficiali.
 - **1.0.0** – Rilascio iniziale con menu unificato, integrazione multi-canale, analytics avanzati e ottimizzazioni di performance/sicurezza.

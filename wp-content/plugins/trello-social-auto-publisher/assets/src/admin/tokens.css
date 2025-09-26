@@ -1,0 +1,132 @@
+/**
+ * FP Publisher admin design tokens.
+ *
+ * The goal of this layer is to provide a constrained vocabulary that keeps
+ * custom UI aligned with core WordPress patterns (spacing, typography,
+ * colors, elevation) while remaining flexible enough for future components.
+ *
+ * Tokens intentionally mirror the WP admin defaults so we inherit automatic
+ * support for custom admin color schemes and accessibility improvements.
+ */
+:root {
+    /* Typography */
+    --fp-admin-font-family-base: var(--wp-admin-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+    --fp-admin-font-family-alt: "Inter", var(--fp-admin-font-family-base);
+    --fp-admin-font-family-mono: var(--wp-admin-font-family-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+
+    --fp-admin-font-size-xxs: 0.6875rem; /* 11px */
+    --fp-admin-font-size-xs: 0.75rem;    /* 12px */
+    --fp-admin-font-size-sm: 0.8125rem;  /* 13px */
+    --fp-admin-font-size-md: 0.875rem;   /* 14px */
+    --fp-admin-font-size-lg: 1rem;       /* 16px */
+    --fp-admin-font-size-xl: 1.125rem;   /* 18px */
+    --fp-admin-font-size-2xl: 1.375rem;  /* 22px */
+    --fp-admin-font-size-3xl: 1.75rem;   /* 28px */
+
+    --fp-admin-line-height-tight: 1.2;
+    --fp-admin-line-height-base: 1.5;
+    --fp-admin-line-height-loose: 1.7;
+
+    /* Spacing scale (4px baseline) */
+    --fp-admin-space-0: 0;
+    --fp-admin-space-1: 0.25rem;  /* 4px */
+    --fp-admin-space-2: 0.5rem;   /* 8px */
+    --fp-admin-space-3: 0.75rem;  /* 12px */
+    --fp-admin-space-4: 1rem;     /* 16px */
+    --fp-admin-space-5: 1.25rem;  /* 20px */
+    --fp-admin-space-6: 1.5rem;   /* 24px */
+    --fp-admin-space-7: 2rem;     /* 32px */
+    --fp-admin-space-8: 2.5rem;   /* 40px */
+    --fp-admin-space-9: 3rem;     /* 48px */
+
+    /* Color palette */
+    --fp-admin-color-primary: var(--wp-admin-theme-color, #2271b1);
+    --fp-admin-color-primary-strong: var(--wp-admin-theme-color-darker-20, #1a4e8a);
+    --fp-admin-color-primary-soft: rgba(34, 113, 177, 0.12);
+    --fp-admin-color-primary-contrast: #fff;
+
+    --fp-admin-color-accent: #9b51e0;
+    --fp-admin-color-accent-soft: rgba(155, 81, 224, 0.12);
+
+    --fp-admin-color-success: #1a9a5c;
+    --fp-admin-color-success-soft: rgba(26, 154, 92, 0.12);
+
+    --fp-admin-color-warning: #b8860b;
+    --fp-admin-color-warning-soft: rgba(184, 134, 11, 0.14);
+
+    --fp-admin-color-error: #c1352c;
+    --fp-admin-color-error-soft: rgba(193, 53, 44, 0.14);
+
+    --fp-admin-color-neutral-0: #fff;
+    --fp-admin-color-neutral-50: #f6f7f7;
+    --fp-admin-color-neutral-100: #ececec;
+    --fp-admin-color-neutral-200: #dcdcde;
+    --fp-admin-color-neutral-300: #c3c4c7;
+    --fp-admin-color-neutral-500: #50575e;
+    --fp-admin-color-neutral-700: #1d2327;
+
+    --fp-admin-surface: var(--fp-admin-color-neutral-0);
+    --fp-admin-surface-subtle: var(--fp-admin-color-neutral-50);
+    --fp-admin-surface-elevated: #ffffff;
+
+    --fp-admin-border-subtle: var(--fp-admin-color-neutral-100);
+    --fp-admin-border: var(--fp-admin-color-neutral-200);
+    --fp-admin-border-strong: var(--fp-admin-color-neutral-300);
+
+    /* Layout */
+    --fp-admin-container-max: min(100%, 1180px);
+    --fp-admin-content-max: min(100%, 960px);
+
+    /* Radii */
+    --fp-admin-radius-sm: 2px;
+    --fp-admin-radius-md: 4px;
+    --fp-admin-radius-lg: 8px;
+    --fp-admin-radius-xl: 12px;
+    --fp-admin-radius-pill: 999px;
+
+    /* Elevation */
+    --fp-admin-shadow-xs: 0 1px 2px rgba(30, 30, 30, 0.08);
+    --fp-admin-shadow-sm: 0 8px 16px rgba(30, 30, 30, 0.08);
+    --fp-admin-shadow-md: 0 12px 24px rgba(30, 30, 30, 0.12);
+
+    /* Transitions & motion */
+    --fp-admin-transition-base: 150ms ease-in-out;
+    --fp-admin-transition-slow: 240ms ease;
+
+    /* Component tokens */
+    --fp-admin-control-height-sm: 30px;
+    --fp-admin-control-height-md: 36px;
+    --fp-admin-control-height-lg: 42px;
+
+    --fp-admin-focus-ring: 0 0 0 1.5px var(--fp-admin-color-neutral-0), 0 0 0 4px var(--fp-admin-color-primary);
+
+    /* Legacy aliases (to avoid breaking existing styles while components migrate) */
+    --tts-primary: var(--fp-admin-color-primary);
+    --tts-primary-dark: var(--fp-admin-color-primary-strong);
+    --tts-secondary: var(--fp-admin-color-accent);
+    --tts-success: var(--fp-admin-color-success);
+    --tts-warning: var(--fp-admin-color-warning);
+    --tts-error: var(--fp-admin-color-error);
+    --tts-info: var(--fp-admin-color-accent);
+    --tts-light: var(--fp-admin-color-neutral-50);
+    --tts-dark: var(--fp-admin-color-neutral-700);
+    --tts-muted: var(--fp-admin-color-neutral-500);
+    --tts-surface: var(--fp-admin-surface);
+    --tts-surface-alt: var(--fp-admin-surface-subtle);
+    --tts-surface-elevated: var(--fp-admin-surface-elevated);
+    --tts-border: rgba(29, 35, 39, 0.08);
+    --tts-border-strong: rgba(29, 35, 39, 0.18);
+    --tts-border-radius: var(--fp-admin-radius-xl);
+    --tts-shadow: var(--fp-admin-shadow-md);
+    --tts-shadow-soft: var(--fp-admin-shadow-sm);
+    --tts-transition: all var(--fp-admin-transition-base);
+    --tts-gradient: linear-gradient(135deg, rgba(34, 113, 177, 0.95), rgba(75, 132, 196, 0.85));
+    --tts-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.65));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --fp-admin-transition-base: 1ms linear;
+        --fp-admin-transition-slow: 1ms linear;
+    }
+}

@@ -2,6 +2,15 @@
 
 Tutte le note di rilascio seguono il formato [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
+## [Unreleased]
+
+## [1.2.0] - 2025-11-10
+### Improved
+- Rafforzata l’accessibilità delle schermate admin di FP Publisher con indicatori di focus ad alto contrasto, descrizioni collegate ai titoli e rispetto delle preferenze di riduzione del movimento.
+
+### Documentation
+- Nuova scheda di riepilogo in `docs/admin-ui/a11y-polish.md` che raccoglie i controlli WCAG e le verifiche manuali completate nella fase [10].
+
 ## [1.1.0] - 2025-10-05
 ### Added
 - Orchestratore `TTS_Plugin_Upgrades` per eseguire automaticamente le migrazioni di schema, persistere la versione installata e resettare le cache dopo ogni deploy.
@@ -53,6 +62,8 @@ Tutte le note di rilascio seguono il formato [Keep a Changelog](https://keepacha
 - Consolidamento dei menu amministrativi per eliminare duplicazioni e pagine vuote.
 - Miglioramenti di accessibilità (ARIA, focus management, modalità high contrast) e compatibilità cross browser.
 
+[Unreleased]: https://github.com/franpass87/FP-Publisher/compare/1.2.0...HEAD
+[1.2.0]: https://github.com/franpass87/FP-Publisher/releases/tag/1.2.0
 [1.1.0]: https://github.com/franpass87/FP-Publisher/releases/tag/1.1.0
 [1.0.1]: https://github.com/franpass87/FP-Publisher/releases/tag/1.0.1
 [1.0.0]: https://github.com/franpass87/FP-Publisher/releases/tag/1.0.0

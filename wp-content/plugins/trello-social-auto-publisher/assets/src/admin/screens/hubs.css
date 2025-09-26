@@ -1,0 +1,159 @@
+/**
+ * Hub screen refit styles.
+ *
+ * Provides layout and interactive affordances for the Configuration,
+ * Production and Monitoring hub cards using the shared admin tokens and
+ * reusable components.
+ */
+@layer fp-admin-components {
+    :where(body[class*="fp-publisher"]) .fp-admin-hub {
+        display: flex;
+        flex-direction: column;
+        gap: var(--fp-admin-space-6);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub__intro {
+        display: flex;
+        flex-direction: column;
+        gap: var(--fp-admin-space-4);
+        max-width: var(--fp-admin-content-max);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub__description {
+        margin: 0;
+        color: var(--fp-admin-color-neutral-500);
+        line-height: var(--fp-admin-line-height-base);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub__grid {
+        display: grid;
+        gap: var(--fp-admin-space-5);
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card {
+        position: relative;
+        padding: var(--fp-admin-space-5);
+        min-height: 100%;
+        text-decoration: none;
+        color: inherit;
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card .dashicons {
+        font-size: 28px;
+        width: 28px;
+        height: 28px;
+        color: var(--fp-admin-color-primary);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card__header {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: var(--fp-admin-space-3);
+        align-items: start;
+        margin-bottom: var(--fp-admin-space-3);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card__title {
+        margin: 0;
+        font-size: var(--fp-admin-font-size-xl);
+        line-height: var(--fp-admin-line-height-tight);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card__description {
+        margin: 0;
+        color: var(--fp-admin-color-neutral-500);
+        font-size: var(--fp-admin-font-size-sm);
+        line-height: var(--fp-admin-line-height-base);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card__meta {
+        display: flex;
+        flex-direction: column;
+        gap: var(--fp-admin-space-2);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        font-size: var(--fp-admin-font-size-sm);
+        color: var(--fp-admin-color-neutral-500);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card__cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: var(--fp-admin-color-primary-soft);
+        color: var(--fp-admin-color-primary);
+        font-size: 18px;
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card__lock {
+        margin-top: var(--fp-admin-space-3);
+        display: flex;
+        align-items: center;
+        gap: var(--fp-admin-space-2);
+        font-size: var(--fp-admin-font-size-sm);
+        color: var(--fp-admin-color-neutral-500);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card--locked {
+        cursor: not-allowed;
+        opacity: 0.65;
+        border-style: dashed;
+        background: var(--fp-admin-surface-subtle);
+        box-shadow: none;
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub__footer {
+        background: var(--fp-admin-surface-subtle);
+        border: 1px solid var(--fp-admin-border);
+        border-radius: var(--fp-admin-radius-lg);
+        padding: var(--fp-admin-space-4);
+        display: grid;
+        gap: var(--fp-admin-space-3);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub__footer-title {
+        margin: 0;
+        font-size: var(--fp-admin-font-size-lg);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub__links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--fp-admin-space-2);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub__links a {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--fp-admin-space-1);
+        padding: var(--fp-admin-space-1) var(--fp-admin-space-2);
+        border-radius: var(--fp-admin-radius-pill);
+        background: var(--fp-admin-color-neutral-50);
+        color: var(--fp-admin-color-primary);
+        text-decoration: none;
+        font-size: var(--fp-admin-font-size-sm);
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub__links a:hover,
+    :where(body[class*="fp-publisher"]) .fp-admin-hub__links a:focus-visible {
+        background: var(--fp-admin-color-primary-soft);
+    }
+}
+
+@media (max-width: 782px) {
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card__header {
+        grid-template-columns: auto 1fr;
+    }
+
+    :where(body[class*="fp-publisher"]) .fp-admin-hub-card__cta {
+        display: none;
+    }
+}

@@ -3,119 +3,6 @@
  * Consolidated common styles used across all admin pages
  */
 
-/* Core Variables */
-:root {
-    --tts-primary: #1f6feb;
-    --tts-primary-dark: #184bb1;
-    --tts-secondary: #ff7a59;
-    --tts-success: #1ba97f;
-    --tts-warning: #f4c361;
-    --tts-error: #e5534b;
-    --tts-info: #3f8cff;
-    --tts-light: #f5f7fb;
-    --tts-dark: #13294b;
-    --tts-muted: #5b6b7f;
-    --tts-surface: #ffffff;
-    --tts-surface-alt: #f6f7fb;
-    --tts-surface-elevated: #ffffff;
-    --tts-border: rgba(19, 41, 75, 0.1);
-    --tts-border-strong: rgba(19, 41, 75, 0.18);
-    --tts-border-radius: 16px;
-    --tts-shadow: 0 18px 36px rgba(13, 61, 128, 0.12);
-    --tts-shadow-soft: 0 10px 24px rgba(13, 61, 128, 0.08);
-    --tts-transition: all 0.3s ease;
-    --tts-gradient: linear-gradient(135deg, rgba(31, 111, 235, 0.95), rgba(99, 125, 241, 0.85));
-    --tts-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.65));
-}
-
-/* Admin chrome enhancements */
-body[class*="fp-publisher"] #wpbody-content {
-    background: var(--tts-surface-alt);
-    padding: 32px 32px 48px;
-    box-sizing: border-box;
-}
-
-body[class*="fp-publisher"] .wrap {
-    position: relative;
-    background: var(--tts-surface);
-    border-radius: 18px;
-    border: 1px solid rgba(19, 41, 75, 0.09);
-    box-shadow: 0 18px 36px rgba(19, 41, 75, 0.08);
-    padding: 36px 38px;
-}
-
-body[class*="fp-publisher"] .wrap > * {
-    position: relative;
-    z-index: 1;
-}
-
-body[class*="fp-publisher"] .wrap h1 {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--tts-dark);
-    margin-bottom: 28px;
-}
-
-body[class*="fp-publisher"] .wrap h1::before {
-    content: '';
-    display: inline-block;
-    width: 8px;
-    height: 32px;
-    border-radius: 12px;
-    background: linear-gradient(180deg, rgba(31, 111, 235, 0.85), rgba(31, 111, 235, 0.55));
-}
-
-body[class*="fp-publisher"] .wrap .nav-tab-wrapper {
-    margin-top: -12px;
-    margin-bottom: 24px;
-    border-bottom: 1px solid rgba(19, 41, 75, 0.12);
-}
-
-#adminmenu .toplevel_page_fp-publisher-main > a {
-    background-image: var(--tts-gradient);
-    color: #fff !important;
-    font-weight: 600;
-    border-radius: 10px;
-    margin: 4px 8px;
-    box-shadow: 0 12px 24px rgba(31, 111, 235, 0.25);
-}
-
-#adminmenu .toplevel_page_fp-publisher-main > a .wp-menu-name {
-    letter-spacing: 0.02em;
-}
-
-#adminmenu .toplevel_page_fp-publisher-main > a:hover,
-#adminmenu .toplevel_page_fp-publisher-main.current > a,
-#adminmenu .toplevel_page_fp-publisher-main.opensub > a {
-    background-image: linear-gradient(135deg, rgba(24, 75, 177, 0.96), rgba(76, 114, 235, 0.92));
-    color: #fff !important;
-}
-
-#adminmenu .toplevel_page_fp-publisher-main .wp-submenu {
-    padding-top: 8px;
-    padding-bottom: 14px;
-}
-
-#adminmenu .toplevel_page_fp-publisher-main .wp-submenu a {
-    white-space: normal;
-    line-height: 1.45;
-    padding: 8px 16px;
-    color: var(--tts-dark);
-    border-left: 3px solid transparent;
-    transition: var(--tts-transition);
-}
-
-#adminmenu .toplevel_page_fp-publisher-main .wp-submenu li.current a,
-#adminmenu .toplevel_page_fp-publisher-main .wp-submenu a:hover,
-#adminmenu .toplevel_page_fp-publisher-main .wp-submenu a:focus {
-    background: rgba(31, 111, 235, 0.16);
-    border-left-color: var(--tts-primary);
-    color: var(--tts-primary);
-}
-
 /* Core Layout */
 .tts-container {
     max-width: 1280px;
@@ -592,13 +479,13 @@ body[class*="fp-publisher"] .wrap .nav-tab-wrapper {
         background: linear-gradient(135deg, rgba(31, 111, 235, 0.2), rgba(31, 44, 68, 0));
     }
 
-    #adminmenu .toplevel_page_fp-publisher-main .wp-submenu a {
+    #adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu a {
         color: var(--tts-muted);
     }
 
-    #adminmenu .toplevel_page_fp-publisher-main .wp-submenu li.current a,
-    #adminmenu .toplevel_page_fp-publisher-main .wp-submenu a:hover,
-    #adminmenu .toplevel_page_fp-publisher-main .wp-submenu a:focus {
+    #adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu li.current a,
+    #adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu a:hover,
+    #adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu a:focus {
         color: #fff;
     }
 

@@ -49,6 +49,13 @@ class TTS_Admin {
     private $view_helper;
 
     /**
+     * Menu registry responsible for canonical slugs and aliases.
+     *
+     * @var TTS_Admin_Menu_Registry|null
+     */
+    private $menu_registry;
+
+    /**
      * Default AJAX security ruleset.
      *
      * @return array<string, array{nonce_action: string, capabilities: array<int, string>, nonce_field?: string}>
@@ -144,7 +151,7 @@ class TTS_Admin {
      */
     public static function get_social_post_editor_url( $post_id = 0, array $args = array() ) {
         $defaults = array(
-            'page' => 'fp-publisher-social-posts',
+            'page' => 'fp-publisher-queue',
         );
 
         if ( $post_id > 0 ) {
@@ -193,9 +200,11 @@ class TTS_Admin {
             $ajax_security = new TTS_Admin_Ajax_Security( self::get_ajax_action_security_defaults() );
         }
 
-        $this->ajax_security = $ajax_security;
-        $this->view_helper   = $view_helper ?: new TTS_Admin_View_Helper();
+        $this->ajax_security  = $ajax_security;
+        $this->view_helper    = $view_helper ?: new TTS_Admin_View_Helper();
+        $this->menu_registry = null;
 
+        add_action( 'admin_init', array( $this, 'maybe_redirect_legacy_menu_slugs' ), 1 );
         add_action( 'restrict_manage_posts', array( $this, 'add_client_filter' ) );
         add_action( 'restrict_manage_posts', array( $this, 'add_approved_filter' ) );
         add_action( 'pre_get_posts', array( $this, 'filter_posts_by_client' ) );
@@ -208,37 +217,13 @@ class TTS_Admin {
         add_action( 'wp_ajax_tts_get_lists', array( $this, 'ajax_get_lists' ) );
         add_action( 'wp_ajax_tts_refresh_posts', array( $this, 'ajax_refresh_posts' ) );
         add_action( 'wp_ajax_tts_delete_post', array( $this, 'ajax_delete_post' ) );
-        add_action( 'wp_ajax_tts_bulk_action', array( $this, 'ajax_bulk_action' ) );
-        add_action( 'admin_post_tts_create_social_post', array( $this, 'handle_create_social_post' ) );
-        add_action( 'admin_post_tts_update_social_post', array( $this, 'handle_update_social_post' ) );
-        add_action( 'admin_init', array( $this, 'redirect_social_post_creation' ) );
-        add_action( 'wp_ajax_tts_system_maintenance', array( $this, 'ajax_system_maintenance' ) );
-        add_action( 'wp_ajax_tts_generate_report', array( $this, 'ajax_generate_report' ) );
-        add_filter( 'manage_tts_social_post_posts_columns', array( $this, 'add_approved_column' ) );
-        add_action( 'manage_tts_social_post_posts_custom_column', array( $this, 'render_approved_column' ), 10, 2 );
-        add_filter( 'bulk_actions-edit-tts_social_post', array( $this, 'register_bulk_actions' ) );
-        add_filter( 'handle_bulk_actions-edit-tts_social_post', array( $this, 'handle_bulk_actions' ), 10, 3 );
-        add_action( 'admin_notices', array( $this, 'render_missing_method_notices' ) );
-    }
-
-    /**
-     * Describe the grouped admin navigation once and reuse it across menu, hubs and quick actions.
-     *
-     * @return array<string, array<string, mixed>>
-     */
-    private function get_navigation_blueprint() {
-        static $blueprint = null;
-
-        if ( null !== $blueprint ) {
-            return $blueprint;
-        }
-
         $blueprint = array(
             'dashboard' => array(
                 'label' => __( 'Dashboard', 'fp-publisher' ),
                 'hub'   => array(
                     'title'      => __( 'Dashboard', 'fp-publisher' ),
-                    'slug'       => 'fp-publisher-main',
+                    'slug'       => 'fp-publisher-dashboard',
+                    'aliases'    => array( 'fp-publisher-main' ),
                     'callback'   => 'render_dashboard_page',
                     'capability' => 'manage_options',
                     'page_title' => __( 'FP Publisher Dashboard', 'fp-publisher' ),
@@ -247,15 +232,16 @@ class TTS_Admin {
                 'items' => array(),
             ),
             'configuration' => array(
-                'label' => __( 'Configurazione', 'fp-publisher' ),
+                'label' => __( 'Onboarding & Setup', 'fp-publisher' ),
                 'hub'   => array(
-                    'title'       => __( 'Centro Configurazione', 'fp-publisher' ),
-                    'description' => __( 'Organizza clienti, collega i canali social e definisci le impostazioni di base prima di iniziare a pubblicare.', 'fp-publisher' ),
+                    'title'       => __( 'Onboarding Hub', 'fp-publisher' ),
+                    'description' => __( 'Coordina la configurazione clienti, collega i canali social e completa i prerequisiti prima di pubblicare.', 'fp-publisher' ),
                     'class'       => 'tts-hub--configuration',
-                    'slug'        => 'fp-publisher-configuration-hub',
+                    'slug'        => 'fp-publisher-onboarding',
+                    'aliases'     => array( 'fp-publisher-configuration-hub' ),
                     'callback'    => 'render_configuration_hub_page',
                     'capability'  => 'tts_manage_clients',
-                    'page_title'  => __( 'Centro Configurazione', 'fp-publisher' ),
+                    'page_title'  => __( 'Onboarding Hub', 'fp-publisher' ),
                     'primary'     => true,
                     'footer'      => array(
                         'title'       => __( 'Hai bisogno di ulteriore supporto?', 'fp-publisher' ),
@@ -263,7 +249,7 @@ class TTS_Admin {
                         'links'       => array(
                             array(
                                 'label' => __( 'Apri documentazione', 'fp-publisher' ),
-                                'url'   => admin_url( 'admin.php?page=fp-publisher-help' ),
+                                'url'   => admin_url( 'admin.php?page=fp-publisher-support' ),
                             ),
                             array(
                                 'label' => __( 'Contatta il supporto', 'fp-publisher' ),
@@ -272,8 +258,8 @@ class TTS_Admin {
                         ),
                     ),
                     'quick_action' => array(
-                        'title'       => __( 'Apri Configurazione', 'fp-publisher' ),
-                        'description' => __( 'Gestisci clienti, connessioni e impostazioni', 'fp-publisher' ),
+                        'title'       => __( 'Apri Onboarding', 'fp-publisher' ),
+                        'description' => __( 'Gestisci clienti, connessioni e impostazioni iniziali', 'fp-publisher' ),
                         'icon'        => 'dashicons-admin-generic',
                         'color'       => '#135e96',
                         'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
@@ -281,8 +267,9 @@ class TTS_Admin {
                 ),
                 'items' => array(
                     array(
-                        'title'      => __( 'Client Overview', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-clienti',
+                        'title'      => __( 'Clients', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-clients',
+                        'aliases'    => array( 'fp-publisher-clienti' ),
                         'callback'   => 'render_clients_page',
                         'capability' => 'tts_manage_clients',
                         'card'       => array(
@@ -307,14 +294,15 @@ class TTS_Admin {
                         ),
                         'quick_action' => array(
                             'title'       => __( 'Client Wizard', 'fp-publisher' ),
-                            'description' => __( 'Set up a new social media client', 'fp-publisher' ),
+                            'description' => __( 'Imposta un nuovo cliente social', 'fp-publisher' ),
                             'icon'        => 'dashicons-plus',
                             'color'       => '#6366f1',
                         ),
                     ),
                     array(
-                        'title'      => __( 'Quickstart Packages', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-quickstart',
+                        'title'      => __( 'Templates & Automations', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-templates',
+                        'aliases'    => array( 'fp-publisher-quickstart' ),
                         'callback'   => 'render_quickstart_packages_page',
                         'capability' => 'tts_manage_clients',
                         'card'       => array(
@@ -322,15 +310,16 @@ class TTS_Admin {
                             'icon'        => 'dashicons-category',
                         ),
                         'quick_action' => array(
-                            'title'       => __( 'Quickstart Packages', 'fp-publisher' ),
-                            'description' => __( 'Import preset templates and mappings', 'fp-publisher' ),
+                            'title'       => __( 'Templates & Automations', 'fp-publisher' ),
+                            'description' => __( 'Importa preset e automazioni', 'fp-publisher' ),
                             'icon'        => 'dashicons-portfolio',
                             'color'       => '#0f172a',
                         ),
                     ),
                     array(
-                        'title'      => __( 'Social Connections', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-social-connections',
+                        'title'      => __( 'Channel Connections', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-connections',
+                        'aliases'    => array( 'fp-publisher-social-connections' ),
                         'callback'   => 'render_social_connections_page',
                         'capability' => 'tts_manage_integrations',
                         'card'       => array(
@@ -342,8 +331,9 @@ class TTS_Admin {
                         ),
                     ),
                     array(
-                        'title'      => __( 'Test Connections', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-test-connections',
+                        'title'      => __( 'Connection Diagnostics', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-connection-diagnostics',
+                        'aliases'    => array( 'fp-publisher-test-connections' ),
                         'callback'   => 'render_connection_test_page',
                         'capability' => 'tts_manage_integrations',
                         'card'       => array(
@@ -352,7 +342,7 @@ class TTS_Admin {
                         ),
                     ),
                     array(
-                        'title'      => __( 'General Settings', 'fp-publisher' ),
+                        'title'      => __( 'Global Settings', 'fp-publisher' ),
                         'slug'       => 'fp-publisher-settings',
                         'callback'   => 'render_settings_page',
                         'capability' => 'manage_options',
@@ -362,8 +352,9 @@ class TTS_Admin {
                         ),
                     ),
                     array(
-                        'title'      => __( 'Help & Onboarding', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-help',
+                        'title'      => __( 'Support Center', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-support',
+                        'aliases'    => array( 'fp-publisher-help' ),
                         'callback'   => 'render_help_page',
                         'capability' => 'manage_options',
                         'card'       => array(
@@ -374,15 +365,16 @@ class TTS_Admin {
                 ),
             ),
             'production' => array(
-                'label' => __( 'Produzione', 'fp-publisher' ),
+                'label' => __( 'Publishing Operations', 'fp-publisher' ),
                 'hub'   => array(
-                    'title'       => __( 'Centro Produzione', 'fp-publisher' ),
+                    'title'       => __( 'Publishing Hub', 'fp-publisher' ),
                     'description' => __( 'Coordina il lavoro quotidiano del team editoriale e controlla lo stato di avanzamento dei contenuti.', 'fp-publisher' ),
                     'class'       => 'tts-hub--production',
-                    'slug'        => 'fp-publisher-production-hub',
+                    'slug'        => 'fp-publisher-publishing',
+                    'aliases'     => array( 'fp-publisher-production-hub' ),
                     'callback'    => 'render_production_hub_page',
                     'capability'  => 'tts_read_social_posts',
-                    'page_title'  => __( 'Centro Produzione', 'fp-publisher' ),
+                    'page_title'  => __( 'Publishing Hub', 'fp-publisher' ),
                     'primary'     => true,
                     'footer'      => array(
                         'title'       => __( 'Risorse per il team editoriale', 'fp-publisher' ),
@@ -390,34 +382,38 @@ class TTS_Admin {
                         'links'       => array(
                             array(
                                 'label' => __( 'Apri guida al calendario', 'fp-publisher' ),
-                                'url'   => admin_url( 'admin.php?page=fp-publisher-help#calendar' ),
+                                'url'   => admin_url( 'admin.php?page=fp-publisher-support#calendar' ),
                             ),
                             array(
                                 'label' => __( 'Template briefing', 'fp-publisher' ),
-                                'url'   => admin_url( 'admin.php?page=fp-publisher-quickstart' ),
+                                'url'   => admin_url( 'admin.php?page=fp-publisher-templates' ),
                             ),
                         ),
                     ),
                     'quick_action' => array(
-                        'title'       => __( 'Vai alla Produzione', 'fp-publisher' ),
-                        'description' => __( 'Accedi a post, calendario e strumenti operativi', 'fp-publisher' ),
+                        'title'       => __( 'Vai alla pubblicazione', 'fp-publisher' ),
+                        'description' => __( 'Accedi a coda, calendario e strumenti operativi', 'fp-publisher' ),
                         'icon'        => 'dashicons-megaphone',
-                        'color'       => '#f56e28',
+                        'color'       => '#2563eb',
                         'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
                     ),
                 ),
                 'items' => array(
                     array(
-                        'title'      => __( 'Social Posts', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-social-posts',
+                        'title'      => __( 'Publishing Queue', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-queue',
+                        'aliases'    => array( 'fp-publisher-social-posts' ),
                         'callback'   => 'render_social_posts_page',
                         'capability' => 'tts_read_social_posts',
                         'card'       => array(
-                            'description' => __( 'Gestisci la coda editoriale, approva post e monitora gli stati di pubblicazione.', 'fp-publisher' ),
-                            'icon'        => 'dashicons-megaphone',
-                            'meta'        => array(
-                                __( 'Filtri per cliente, stato e canale', 'fp-publisher' ),
-                            ),
+                            'description' => __( 'Gestisci la pipeline dei contenuti, approva bozze e monitora gli stati.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-schedule',
+                        ),
+                        'quick_action' => array(
+                            'title'       => __( 'Apri Publishing Queue', 'fp-publisher' ),
+                            'description' => __( 'Rivedi post in uscita e approvazioni', 'fp-publisher' ),
+                            'icon'        => 'dashicons-yes',
+                            'color'       => '#0f172a',
                         ),
                     ),
                     array(
@@ -426,126 +422,110 @@ class TTS_Admin {
                         'callback'   => 'render_calendar_page',
                         'capability' => 'tts_read_social_posts',
                         'card'       => array(
-                            'description' => __( 'Visualizza i contenuti programmati in una vista calendario condivisa.', 'fp-publisher' ),
+                            'description' => __( 'Visualizza la pianificazione settimanale e mensile delle pubblicazioni.', 'fp-publisher' ),
                             'icon'        => 'dashicons-calendar-alt',
-                        ),
-                        'quick_action' => array(
-                            'title'       => __( 'View Calendar', 'fp-publisher' ),
-                            'description' => __( 'See scheduled posts in calendar view', 'fp-publisher' ),
-                            'icon'        => 'dashicons-calendar',
-                            'color'       => '#2563eb',
                         ),
                     ),
                     array(
-                        'title'      => __( 'Content Manager', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-content',
+                        'title'      => __( 'Content Library', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-content-library',
+                        'aliases'    => array( 'fp-publisher-content' ),
                         'callback'   => 'render_content_management_page',
                         'capability' => 'tts_edit_social_posts',
                         'card'       => array(
-                            'description' => __( 'Organizza bozze, asset e flussi di revisione con strumenti avanzati.', 'fp-publisher' ),
-                            'icon'        => 'dashicons-index-card',
+                            'description' => __( 'Organizza asset, bozze e varianti approvate per canale.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-archive',
                         ),
                     ),
                     array(
-                        'title'      => __( 'Publishing Status', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-frequency-status',
+                        'title'      => __( 'Publishing Health', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-publishing-health',
+                        'aliases'    => array( 'fp-publisher-frequency-status' ),
                         'callback'   => 'render_frequency_status_page',
                         'capability' => 'tts_read_social_posts',
                         'card'       => array(
-                            'description' => __( 'Controlla frequenze, backlog e KPI di pianificazione per cliente.', 'fp-publisher' ),
-                            'icon'        => 'dashicons-chart-bar',
+                            'description' => __( 'Controlla ritmo di pubblicazione, SLA e campagne critiche.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-chart-line',
                         ),
                     ),
                     array(
-                        'title'      => __( 'AI & Advanced Suite', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-ai-features',
+                        'title'      => __( 'AI Assistants', 'fp-publisher' ),
+                        'slug'       => 'fp-publisher-ai',
+                        'aliases'    => array( 'fp-publisher-ai-features' ),
                         'callback'   => 'render_ai_features_page',
                         'capability' => 'tts_edit_social_posts',
                         'card'       => array(
-                            'description' => __( 'Sfrutta automazioni assistite e workflow enterprise per accelerare la produzione.', 'fp-publisher' ),
-                            'icon'        => 'dashicons-art',
+                            'description' => __( 'Sfrutta automazioni AI per copy, asset e risposte rapide.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-robot',
                         ),
                     ),
                 ),
             ),
             'monitoring' => array(
-                'label' => __( 'Monitoraggio', 'fp-publisher' ),
+                'label' => __( 'Monitoring & Health', 'fp-publisher' ),
                 'hub'   => array(
-                    'title'       => __( 'Centro Monitoraggio', 'fp-publisher' ),
-                    'description' => __( 'Analizza performance, stato dell’infrastruttura e storico delle attività per mantenere il sistema sotto controllo.', 'fp-publisher' ),
+                    'title'       => __( 'Monitoring Hub', 'fp-publisher' ),
+                    'description' => __( 'Analizza performance, stato sistema e audit trail per mantenere il servizio affidabile.', 'fp-publisher' ),
                     'class'       => 'tts-hub--monitoring',
-                    'slug'        => 'fp-publisher-monitoring-hub',
+                    'slug'        => 'fp-publisher-monitoring',
+                    'aliases'     => array( 'fp-publisher-monitoring-hub' ),
                     'callback'    => 'render_monitoring_hub_page',
                     'capability'  => 'tts_view_reports',
-                    'page_title'  => __( 'Centro Monitoraggio', 'fp-publisher' ),
+                    'page_title'  => __( 'Monitoring Hub', 'fp-publisher' ),
                     'primary'     => true,
                     'footer'      => array(
-                        'title'       => __( 'Diagnostica e conformità', 'fp-publisher' ),
-                        'description' => __( 'Integra i log con flussi esterni o scarica report dettagliati per audit periodici.', 'fp-publisher' ),
+                        'title'       => __( 'Approfondisci i report', 'fp-publisher' ),
+                        'description' => __( 'Scarica template, linee guida e checklist per i controlli periodici.', 'fp-publisher' ),
                         'links'       => array(
                             array(
-                                'label' => __( 'Scarica ultimo audit', 'fp-publisher' ),
-                                'url'   => admin_url( 'admin.php?page=fp-publisher-log&tts_export=audit' ),
+                                'label' => __( 'Report mensili', 'fp-publisher' ),
+                                'url'   => admin_url( 'admin.php?page=fp-publisher-analytics' ),
                             ),
                             array(
-                                'label' => __( 'Controllo connessioni', 'fp-publisher' ),
-                                'url'   => admin_url( 'admin.php?page=fp-publisher-test-connections' ),
+                                'label' => __( 'Linee guida manutenzione', 'fp-publisher' ),
+                                'url'   => admin_url( 'admin.php?page=fp-publisher-system-health' ),
                             ),
                         ),
                     ),
                     'quick_action' => array(
-                        'title'       => __( 'Controlla Monitoraggio', 'fp-publisher' ),
-                        'description' => __( 'Consulta analytics, salute di sistema e log', 'fp-publisher' ),
+                        'title'       => __( 'Apri Monitoring Hub', 'fp-publisher' ),
+                        'description' => __( 'Controlla metriche, log e integrità di sistema', 'fp-publisher' ),
                         'icon'        => 'dashicons-visibility',
-                        'color'       => '#00a32a',
-                        'profiles'    => array( 'standard', 'advanced', 'enterprise' ),
+                        'color'       => '#0f766e',
+                        'profiles'    => array( 'advanced', 'enterprise' ),
                     ),
                 ),
                 'items' => array(
                     array(
-                        'title'      => __( 'Analytics', 'fp-publisher' ),
+                        'title'      => __( 'Analytics & Reports', 'fp-publisher' ),
                         'slug'       => 'fp-publisher-analytics',
                         'callback'   => 'render_analytics_page',
                         'capability' => 'tts_view_reports',
                         'card'       => array(
-                            'description' => __( 'Raccogli metriche aggregate, applica filtri avanzati ed esporta i report.', 'fp-publisher' ),
-                            'icon'        => 'dashicons-chart-pie',
-                            'meta'        => array(
-                                __( 'Esportazione CSV e confronti per cliente', 'fp-publisher' ),
-                            ),
+                            'description' => __( 'Visualizza metriche aggregate e report personalizzati.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-chart-area',
                         ),
                     ),
                     array(
                         'title'      => __( 'System Health', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-health',
+                        'slug'       => 'fp-publisher-system-health',
+                        'aliases'    => array( 'fp-publisher-health' ),
                         'callback'   => 'render_health_page',
                         'capability' => 'tts_manage_health',
                         'card'       => array(
-                            'description' => __( 'Verifica token, webhook, cron e requisiti WordPress in un unico pannello.', 'fp-publisher' ),
-                            'icon'        => 'dashicons-shield',
-                        ),
-                        'quick_action' => array(
-                            'title'       => __( 'Check Health Status', 'fp-publisher' ),
-                            'description' => __( 'Monitor system health and tokens', 'fp-publisher' ),
-                            'icon'        => 'dashicons-heart',
-                            'color'       => '#7c3aed',
+                            'description' => __( 'Monitora code, storage e stato dei servizi esterni.', 'fp-publisher' ),
+                            'icon'        => 'dashicons-shield-alt',
                         ),
                     ),
                     array(
                         'title'      => __( 'Activity Log', 'fp-publisher' ),
-                        'slug'       => 'fp-publisher-log',
+                        'slug'       => 'fp-publisher-activity-log',
+                        'aliases'    => array( 'fp-publisher-log' ),
                         'callback'   => 'render_log_page',
                         'capability' => 'tts_manage_system',
                         'card'       => array(
-                            'description' => __( 'Consulta lo storico eventi, analizza errori e scarica pacchetti di audit.', 'fp-publisher' ),
+                            'description' => __( 'Esamina audit trail, eventi recenti e azioni pianificate.', 'fp-publisher' ),
                             'icon'        => 'dashicons-list-view',
-                        ),
-                        'quick_action' => array(
-                            'title'       => __( 'Audit & Logs', 'fp-publisher' ),
-                            'description' => __( 'Controlla log, audit trail e backup', 'fp-publisher' ),
-                            'icon'        => 'dashicons-shield-alt',
-                            'color'       => '#0f172a',
-                            'profiles'    => array( 'enterprise' ),
                         ),
                     ),
                 ),
@@ -574,7 +554,7 @@ class TTS_Admin {
             return (string) $blueprint['dashboard']['hub']['slug'];
         }
 
-        return 'fp-publisher-main';
+        return 'fp-publisher-dashboard';
     }
 
     /**
@@ -694,34 +674,84 @@ class TTS_Admin {
         $dashboard_page     = isset( $dashboard_hub['page_title'] ) ? $dashboard_hub['page_title'] : __( 'FP Publisher Dashboard', 'fp-publisher' );
 
         $fp_publisher_title = __( 'FP Publisher', 'fp-publisher' );
-        if ( $this->can_register_menu_callback( $dashboard_callback, $dashboard_slug, $fp_publisher_title, $available_methods ) ) {
-            add_menu_page(
-                $dashboard_page,
-                $fp_publisher_title,
-                $dashboard_cap,
-                $dashboard_slug,
-                array( $this, $dashboard_callback ),
-                'dashicons-share-alt',
-                25
-            );
+        if ( ! $this->can_register_menu_callback( $dashboard_callback, $dashboard_slug, $fp_publisher_title, $available_methods ) ) {
+            return;
         }
 
-        $menu_items = $this->get_admin_menu_items();
+        $menu_items = array();
 
-        foreach ( $menu_items as $item ) {
+        foreach ( $this->get_admin_menu_items() as $item ) {
             if ( ! $this->can_register_menu_callback( $item['callback'], $item['slug'], $item['menu_title'], $available_methods ) ) {
                 continue;
             }
 
-            add_submenu_page(
-                $dashboard_slug,
-                $item['page_title'],
-                $item['menu_title'],
-                $item['capability'],
-                $item['slug'],
-                array( $this, $item['callback'] )
-            );
+            $menu_items[] = $item;
         }
+
+        $this->get_menu_registry()->register_menus(
+            array(
+                'slug'       => $dashboard_slug,
+                'callback'   => $dashboard_callback,
+                'capability' => $dashboard_cap,
+                'page_title' => $dashboard_page,
+                'menu_title' => $fp_publisher_title,
+                'icon'       => 'dashicons-share-alt',
+                'position'   => 25,
+            ),
+            $menu_items
+        );
+    }
+
+    /**
+     * Redirect legacy menu slugs to their canonical counterparts.
+     */
+    public function maybe_redirect_legacy_menu_slugs() {
+        if ( ! is_admin() || wp_doing_ajax() ) {
+            return;
+        }
+
+        if ( 'GET' !== strtoupper( isset( $_SERVER['REQUEST_METHOD'] ) ? (string) $_SERVER['REQUEST_METHOD'] : 'GET' ) ) {
+            return;
+        }
+
+        if ( empty( $_GET['page'] ) ) {
+            return;
+        }
+
+        $requested_slug = sanitize_key( wp_unslash( (string) $_GET['page'] ) );
+
+        if ( '' === $requested_slug ) {
+            return;
+        }
+
+        $canonical_slug = $this->get_menu_registry()->get_canonical_slug( $requested_slug );
+
+        if ( null === $canonical_slug || $canonical_slug === $requested_slug ) {
+            return;
+        }
+
+        $redirect_args = array( 'page' => $canonical_slug );
+
+        foreach ( $_GET as $key => $value ) {
+            if ( 'page' === $key ) {
+                continue;
+            }
+
+            $sanitized_key = sanitize_key( (string) $key );
+
+            if ( '' === $sanitized_key || isset( $redirect_args[ $sanitized_key ] ) ) {
+                continue;
+            }
+
+            if ( is_scalar( $value ) ) {
+                $redirect_args[ $sanitized_key ] = sanitize_text_field( wp_unslash( (string) $value ) );
+            }
+        }
+
+        $redirect_url = add_query_arg( $redirect_args, admin_url( 'admin.php' ) );
+
+        wp_safe_redirect( $redirect_url, 302 );
+        exit;
     }
 
     /**
@@ -731,7 +761,7 @@ class TTS_Admin {
      * @param array<string, mixed> $definition  Item definition.
      * @param bool                 $is_primary  Whether the entry should appear as a standalone label.
      *
-     * @return array<string, string>|null
+     * @return array<string, mixed>|null
      */
     private function build_menu_item_from_definition( $group_label, array $definition, $is_primary = false ) {
         $title    = isset( $definition['title'] ) ? (string) $definition['title'] : '';
@@ -765,12 +795,27 @@ class TTS_Admin {
                 $title
             );
 
+        $aliases = array();
+
+        if ( ! empty( $definition['aliases'] ) && is_array( $definition['aliases'] ) ) {
+            foreach ( $definition['aliases'] as $alias ) {
+                $alias = sanitize_key( (string) $alias );
+
+                if ( '' === $alias ) {
+                    continue;
+                }
+
+                $aliases[] = $alias;
+            }
+        }
+
         return array(
             'menu_title' => $menu_title,
             'page_title' => $page_title,
             'slug'       => $slug,
             'callback'   => $callback,
             'capability' => $capability,
+            'aliases'    => $aliases,
         );
     }
 
@@ -829,6 +874,22 @@ class TTS_Admin {
 
             $capability = isset( $item['capability'] ) ? $item['capability'] : 'manage_options';
             $capabilities[ $item['slug'] ] = $capability;
+
+            if ( ! empty( $item['aliases'] ) && is_array( $item['aliases'] ) ) {
+                foreach ( $item['aliases'] as $alias ) {
+                    if ( '' === $alias ) {
+                        continue;
+                    }
+
+                    $capabilities[ $alias ] = $capability;
+                }
+            }
+        }
+
+        foreach ( $this->get_menu_registry()->get_alias_map() as $alias => $canonical ) {
+            if ( isset( $capabilities[ $canonical ] ) ) {
+                $capabilities[ $alias ] = $capabilities[ $canonical ];
+            }
         }
 
         $cache = $capabilities;
@@ -929,6 +990,19 @@ class TTS_Admin {
         }
 
         return plugins_url( $relative_path, TSAP_PLUGIN_DIR . 'trello-social-auto-publisher.php' );
+    }
+
+    /**
+     * Retrieve the shared menu registry instance.
+     *
+     * @return TTS_Admin_Menu_Registry
+     */
+    private function get_menu_registry() {
+        if ( ! $this->menu_registry instanceof TTS_Admin_Menu_Registry ) {
+            $this->menu_registry = new TTS_Admin_Menu_Registry( $this );
+        }
+
+        return $this->menu_registry;
     }
 
     /**
@@ -1225,6 +1299,139 @@ class TTS_Admin {
     }
 
     /**
+     * Configure screen options for the activity log.
+     */
+    public function setup_log_screen() {
+        add_screen_option(
+            'per_page',
+            array(
+                'label'   => __( 'Log entries per page', 'fp-publisher' ),
+                'default' => 20,
+                'option'  => 'fp_publisher_logs_per_page',
+            )
+        );
+
+        add_filter( 'manage_fp-publisher_page_fp-publisher-log_columns', array( $this, 'filter_log_screen_columns' ) );
+    }
+
+    /**
+     * Configure screen options for the social posts table.
+     */
+    public function setup_social_posts_screen() {
+        add_screen_option(
+            'per_page',
+            array(
+                'label'   => __( 'Social posts per page', 'fp-publisher' ),
+                'default' => 20,
+                'option'  => 'fp_publisher_social_posts_per_page',
+            )
+        );
+
+        add_filter( 'manage_fp-publisher_page_fp-publisher-queue_columns', array( $this, 'filter_social_posts_columns' ) );
+        add_filter( 'manage_fp-publisher_page_fp-publisher-social-posts_columns', array( $this, 'filter_social_posts_columns' ) );
+    }
+
+    /**
+     * Persist screen option values for custom list tables.
+     *
+     * @param bool|int $status Whether to save the option, or the value to save.
+     * @param string    $option Option name.
+     * @param int       $value  Submitted value.
+     *
+     * @return bool|int
+     */
+    public function persist_screen_options( $status, $option, $value ) {
+        if ( in_array( $option, array( 'fp_publisher_logs_per_page', 'fp_publisher_social_posts_per_page' ), true ) ) {
+            return max( 1, (int) $value );
+        }
+
+        return $status;
+    }
+
+    /**
+     * Render contextual help tabs for custom admin screens.
+     *
+     * @param WP_Screen $screen Current screen object.
+     */
+    public function register_screen_help_tabs( $screen ) {
+        if ( ! $screen instanceof WP_Screen ) {
+            return;
+        }
+
+        if ( 'fp-publisher_page_fp-publisher-log' === $screen->id ) {
+            $screen->add_help_tab(
+                array(
+                    'id'      => 'fp-publisher-log-overview',
+                    'title'   => __( 'Overview', 'fp-publisher' ),
+                    'content' => '<p>' . esc_html__( 'Review every publication event, filter by channel or status, and download audit trails when troubleshooting delivery issues.', 'fp-publisher' ) . '</p>',
+                )
+            );
+
+            $screen->add_help_tab(
+                array(
+                    'id'      => 'fp-publisher-log-actions',
+                    'title'   => __( 'Filters & bulk actions', 'fp-publisher' ),
+                    'content' => '<p>' . esc_html__( 'Use the filters above the table or the quick view links to focus on failed or successful deliveries. Select multiple rows to purge old entries once they have been exported.', 'fp-publisher' ) . '</p>',
+                )
+            );
+
+            $screen->set_help_sidebar(
+                '<p><strong>' . esc_html__( 'Additional resources', 'fp-publisher' ) . '</strong></p>' .
+                '<p><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-support#logs' ) ) . '">' . esc_html__( 'Troubleshooting guide', 'fp-publisher' ) . '</a></p>' .
+                '<p><a href="' . esc_url( plugins_url( '../docs/admin-ui/list-tables.md', __FILE__ ) ) . '">' . esc_html__( 'Admin UI list tables handbook', 'fp-publisher' ) . '</a></p>'
+            );
+        }
+
+        if ( in_array( $screen->id, array( 'fp-publisher_page_fp-publisher-queue', 'fp-publisher_page_fp-publisher-social-posts' ), true ) ) {
+            $screen->add_help_tab(
+                array(
+                    'id'      => 'fp-publisher-queue-overview',
+                    'title'   => __( 'Overview', 'fp-publisher' ),
+                    'content' => '<p>' . esc_html__( 'Manage queued and published social posts, adjust scheduling details, and jump into the custom editor without leaving the table.', 'fp-publisher' ) . '</p>',
+                )
+            );
+
+            $screen->add_help_tab(
+                array(
+                    'id'      => 'fp-publisher-queue-actions',
+                    'title'   => __( 'Filters & bulk actions', 'fp-publisher' ),
+                    'content' => '<p>' . esc_html__( 'Filter posts by client or publishing outcome, and bulk delete outdated drafts once they have been exported.', 'fp-publisher' ) . '</p>',
+                )
+            );
+
+            $screen->set_help_sidebar(
+                '<p><strong>' . esc_html__( 'Need more help?', 'fp-publisher' ) . '</strong></p>' .
+                '<p><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-support#production' ) ) . '">' . esc_html__( 'Production workflow checklist', 'fp-publisher' ) . '</a></p>' .
+                '<p><a href="' . esc_url( plugins_url( '../docs/admin-ui/list-tables.md', __FILE__ ) ) . '">' . esc_html__( 'Admin UI list tables handbook', 'fp-publisher' ) . '</a></p>'
+            );
+        }
+    }
+
+    /**
+     * Provide columns for the log screen so Screen Options can toggle them.
+     *
+     * @return array<string, string>
+     */
+    public function filter_log_screen_columns( $columns ) {
+        $columns = TTS_Log_Table::get_column_definitions();
+        unset( $columns['cb'] );
+
+        return $columns;
+    }
+
+    /**
+     * Provide columns for the social posts screen so Screen Options can toggle them.
+     *
+     * @return array<string, string>
+     */
+    public function filter_social_posts_columns( $columns ) {
+        $columns = TTS_Social_Posts_Table::get_column_definitions();
+        unset( $columns['cb'] );
+
+        return $columns;
+    }
+
+    /**
      * Enqueue assets for the dashboard page.
      *
      * @param string $hook Current admin page hook.
@@ -1250,7 +1457,9 @@ class TTS_Admin {
      * @param string $hook Current admin page hook.
      */
     private function enqueue_core_assets( $hook ) {
-        TTS_Asset_Manager::enqueue_style( 'tts-core', 'admin/css/tts-core.css' );
+        TTS_Asset_Manager::enqueue_style( 'tts-foundation', 'admin/css/tts-foundation.css' );
+        TTS_Asset_Manager::enqueue_style( 'tts-components', 'admin/css/tts-components.css', array( 'tts-foundation' ) );
+        TTS_Asset_Manager::enqueue_style( 'tts-core', 'admin/css/tts-core.css', array( 'tts-components' ) );
 
         TTS_Asset_Manager::register_script( 'tts-notifications', 'admin/js/tts-notifications.js' );
         wp_enqueue_script( 'tts-notifications' );
@@ -1299,6 +1508,7 @@ class TTS_Admin {
 
         if ( in_array( $hook, $hub_hooks, true ) ) {
             $this->enqueue_shared_admin_page_assets();
+            $this->enqueue_hub_assets();
         }
 
         switch ( $hook ) {
@@ -1308,34 +1518,43 @@ class TTS_Admin {
             case 'fp-publisher_page_fp-publisher-analytics':
                 $this->enqueue_analytics_assets();
                 break;
+            case 'fp-publisher_page_fp-publisher-connections':
             case 'fp-publisher_page_fp-publisher-social-connections':
                 $this->enqueue_social_connections_assets();
                 break;
             case 'fp-publisher_page_fp-publisher-client-wizard':
                 // Wizard assets are handled separately to avoid duplication
                 break;
+            case 'fp-publisher_page_fp-publisher-system-health':
             case 'fp-publisher_page_fp-publisher-health':
                 $this->enqueue_health_assets();
                 break;
+            case 'fp-publisher_page_fp-publisher-ai':
             case 'fp-publisher_page_fp-publisher-ai-features':
                 $this->enqueue_ai_features_assets();
                 break;
+            case 'fp-publisher_page_fp-publisher-activity-log':
             case 'fp-publisher_page_fp-publisher-log':
+            case 'fp-publisher_page_fp-publisher-templates':
             case 'fp-publisher_page_fp-publisher-quickstart':
+            case 'fp-publisher_page_fp-publisher-queue':
             case 'fp-publisher_page_fp-publisher-social-posts':
             case 'fp-publisher_page_fp-publisher-settings':
+            case 'fp-publisher_page_fp-publisher-connection-diagnostics':
             case 'fp-publisher_page_fp-publisher-test-connections':
+            case 'fp-publisher_page_fp-publisher-support':
             case 'fp-publisher_page_fp-publisher-help':
+            case 'fp-publisher_page_fp-publisher-publishing-health':
             case 'fp-publisher_page_fp-publisher-frequency-status':
                 $this->enqueue_shared_admin_page_assets();
 
-                if ( 'fp-publisher_page_fp-publisher-social-posts' === $hook ) {
+                if ( in_array( $hook, array( 'fp-publisher_page_fp-publisher-queue', 'fp-publisher_page_fp-publisher-social-posts' ), true ) ) {
                     $this->enqueue_social_post_editor_assets();
                 }
                 break;
         }
 
-        if ( in_array( $hook, array( 'fp-publisher_page_fp-publisher-clienti', 'fp-publisher_page_fp-publisher-content' ), true ) ) {
+        if ( in_array( $hook, array( 'fp-publisher_page_fp-publisher-clients', 'fp-publisher_page_fp-publisher-clienti', 'fp-publisher_page_fp-publisher-content-library', 'fp-publisher_page_fp-publisher-content' ), true ) ) {
             $this->enqueue_shared_admin_page_assets();
         }
     }
@@ -1346,6 +1565,13 @@ class TTS_Admin {
     private function enqueue_shared_admin_page_assets() {
         TTS_Asset_Manager::enqueue_style( 'tts-optimized', 'admin/css/tts-optimized.css', array( 'tts-core' ) );
         TTS_Asset_Manager::enqueue_script( 'tts-optimized-core', 'admin/js/tts-optimized-core.js', array( 'tts-core', 'tts-admin-utils' ) );
+    }
+
+    /**
+     * Enqueue shared styling for admin hub pages.
+     */
+    private function enqueue_hub_assets() {
+        TTS_Asset_Manager::enqueue_style( 'tts-hubs', 'admin/css/tts-hubs.css', array( 'tts-optimized' ) );
     }
 
     /**
@@ -1825,7 +2051,7 @@ class TTS_Admin {
                             'action'          => 'edit',
                             'tts_open_editor' => 1,
                         ),
-                        'admin.php?page=fp-publisher-social-posts'
+                        'admin.php?page=fp-publisher-queue'
                     );
 
                     $edit_link = esc_url_raw( $edit_link );
@@ -2616,7 +2842,7 @@ class TTS_Admin {
                 echo '</span>';
                 echo '</td>';
                 echo '<td>';
-                echo '<a href="' . esc_url(admin_url('admin.php?page=fp-publisher-social-posts&action=log&post=' . $post->ID)) . '" class="tts-btn small secondary">';
+                echo '<a href="' . esc_url(admin_url('admin.php?page=fp-publisher-queue&action=log&post=' . $post->ID)) . '" class="tts-btn small secondary">';
                 echo esc_html__('View Log', 'fp-publisher');
                 echo '</a>';
                 echo '</td>';
@@ -2716,7 +2942,7 @@ class TTS_Admin {
         }
         
         echo '<div class="tts-widget-actions">';
-        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-test-connections' ) ) . '" class="button button-primary">';
+        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-connection-diagnostics' ) ) . '" class="button button-primary">';
         echo esc_html__( 'Test All Connections', 'fp-publisher' );
         echo '</a>';
         echo '</div>';
@@ -2882,12 +3108,33 @@ class TTS_Admin {
         $cards       = isset( $config['cards'] ) && is_array( $config['cards'] ) ? $config['cards'] : array();
         $footer      = isset( $config['footer'] ) ? (array) $config['footer'] : array();
 
-        echo '<div class="wrap tts-hub ' . esc_attr( $class ) . '">';
-        echo '<h1>' . esc_html( $title ) . '</h1>';
+        $heading_id     = wp_unique_id( 'fp-admin-page-title-' );
+        $description_id = '' !== $description ? wp_unique_id( 'fp-admin-page-lead-' ) : '';
 
-        if ( '' !== $description ) {
-            echo '<p class="description">' . esc_html( $description ) . '</p>';
+        echo '<div class="wrap fp-admin-hub tts-hub ' . esc_attr( $class ) . '">';
+
+        echo '<div class="fp-admin-hub__intro">';
+        echo '<div class="fp-admin-page-header" role="group" aria-labelledby="' . esc_attr( $heading_id ) . '"';
+
+        if ( '' !== $description_id ) {
+            echo ' aria-describedby="' . esc_attr( $description_id ) . '"';
         }
+
+        echo '>';
+        echo '<h1 class="fp-admin-page-header__title" id="' . esc_attr( $heading_id ) . '"';
+
+        if ( '' !== $description_id ) {
+            echo ' aria-describedby="' . esc_attr( $description_id ) . '"';
+        }
+
+        echo '>' . esc_html( $title ) . '</h1>';
+
+        if ( '' !== $description && '' !== $description_id ) {
+            echo '<p class="fp-admin-page-header__lead fp-admin-hub__description" id="' . esc_attr( $description_id ) . '">' . esc_html( $description ) . '</p>';
+        }
+
+        echo '</div>';
+        echo '</div>';
 
         $normalized_cards = array();
 
@@ -2923,7 +3170,7 @@ class TTS_Admin {
             echo '<div class="notice notice-warning"><p>' . esc_html__( 'Tutti gli strumenti di questa sezione richiedono permessi aggiuntivi. Contatta un amministratore per ottenere l’accesso.', 'fp-publisher' ) . '</p></div>';
         }
 
-        echo '<div class="tts-hub-grid">';
+        echo '<div class="fp-admin-hub__grid">';
 
         foreach ( $accessible_cards as $card ) {
             $icon             = isset( $card['icon'] ) ? (string) $card['icon'] : 'dashicons-admin-generic';
@@ -2932,24 +3179,26 @@ class TTS_Admin {
             $url              = isset( $card['url'] ) ? (string) $card['url'] : '';
             $meta             = isset( $card['meta'] ) && is_array( $card['meta'] ) ? $card['meta'] : array();
 
-            echo '<a class="tts-hub-card" href="' . esc_url( $url ) . '">';
-            echo '<span class="dashicons ' . esc_attr( $icon ) . '"></span>';
-            echo '<div class="tts-hub-card__content">';
-            echo '<h2>' . esc_html( $title_text ) . '</h2>';
+            echo '<a class="fp-admin-card fp-admin-hub-card tts-hub-card" href="' . esc_url( $url ) . '">';
+            echo '<div class="fp-admin-hub-card__header">';
+            echo '<span class="dashicons ' . esc_attr( $icon ) . '" aria-hidden="true"></span>';
+            echo '<div class="fp-admin-hub-card__heading">';
+            echo '<h2 class="fp-admin-hub-card__title">' . esc_html( $title_text ) . '</h2>';
             if ( '' !== $card_description ) {
-                echo '<p>' . esc_html( $card_description ) . '</p>';
+                echo '<p class="fp-admin-hub-card__description">' . esc_html( $card_description ) . '</p>';
             }
+            echo '</div>';
+            echo '<span class="fp-admin-hub-card__cta" aria-hidden="true">&rarr;</span>';
+            echo '</div>';
 
             if ( ! empty( $meta ) ) {
-                echo '<ul class="tts-hub-card__meta">';
+                echo '<ul class="fp-admin-hub-card__meta tts-hub-card__meta">';
                 foreach ( $meta as $meta_item ) {
                     echo '<li>' . esc_html( $meta_item ) . '</li>';
                 }
                 echo '</ul>';
             }
 
-            echo '</div>';
-            echo '<span class="tts-hub-card__cta" aria-hidden="true">&rarr;</span>';
             echo '</a>';
         }
 
@@ -2960,21 +3209,26 @@ class TTS_Admin {
             $meta             = isset( $card['meta'] ) && is_array( $card['meta'] ) ? $card['meta'] : array();
             $capability       = isset( $card['capability'] ) ? (string) $card['capability'] : '';
 
-            echo '<div class="tts-hub-card tts-hub-card--locked" aria-disabled="true">';
-            echo '<span class="dashicons ' . esc_attr( $icon ) . '"></span>';
-            echo '<div class="tts-hub-card__content">';
-            echo '<h2>' . esc_html( $title_text ) . '</h2>';
+            echo '<div class="fp-admin-card fp-admin-hub-card fp-admin-hub-card--locked tts-hub-card tts-hub-card--locked" aria-disabled="true">';
+            echo '<div class="fp-admin-hub-card__header">';
+            echo '<span class="dashicons ' . esc_attr( $icon ) . '" aria-hidden="true"></span>';
+            echo '<div class="fp-admin-hub-card__heading">';
+            echo '<h2 class="fp-admin-hub-card__title">' . esc_html( $title_text ) . '</h2>';
             if ( '' !== $card_description ) {
-                echo '<p>' . esc_html( $card_description ) . '</p>';
+                echo '<p class="fp-admin-hub-card__description">' . esc_html( $card_description ) . '</p>';
             }
 
             if ( ! empty( $meta ) ) {
-                echo '<ul class="tts-hub-card__meta">';
+                echo '<ul class="fp-admin-hub-card__meta tts-hub-card__meta">';
                 foreach ( $meta as $meta_item ) {
                     echo '<li>' . esc_html( $meta_item ) . '</li>';
                 }
                 echo '</ul>';
             }
+
+            echo '</div>';
+            echo '<span class="fp-admin-hub-card__cta" aria-hidden="true"><span class="dashicons dashicons-lock"></span></span>';
+            echo '</div>';
 
             $lock_message = __( 'Richiede permessi aggiuntivi per essere utilizzato.', 'fp-publisher' );
             if ( '' !== $capability ) {
@@ -2985,71 +3239,41 @@ class TTS_Admin {
                 );
             }
 
-            echo '<p class="tts-hub-card__lock"><span class="dashicons dashicons-lock" aria-hidden="true"></span>' . esc_html( $lock_message ) . '</p>';
+            echo '<p class="fp-admin-hub-card__lock tts-hub-card__lock"><span class="dashicons dashicons-lock" aria-hidden="true"></span>' . esc_html( $lock_message ) . '</p>';
 
-            echo '</div>';
-            echo '<span class="tts-hub-card__cta" aria-hidden="true"><span class="dashicons dashicons-lock"></span></span>';
             echo '</div>';
         }
 
         echo '</div>';
 
         if ( ! empty( $footer ) ) {
-            echo '<div class="tts-hub-footer">';
+            echo '<div class="fp-admin-hub__footer tts-hub-footer">';
             if ( ! empty( $footer['title'] ) ) {
-                echo '<h2>' . esc_html( $footer['title'] ) . '</h2>';
+                echo '<h2 class="fp-admin-hub__footer-title">' . esc_html( $footer['title'] ) . '</h2>';
+            }
+
+            if ( ! empty( $footer['description'] ) ) {
+                echo '<p class="fp-admin-hub__footer-description">' . esc_html( $footer['description'] ) . '</p>';
             }
 
             if ( ! empty( $footer['links'] ) && is_array( $footer['links'] ) ) {
-                echo '<div class="tts-hub-footer__links">';
+                echo '<ul class="fp-admin-hub__links tts-hub-footer__links">';
                 foreach ( $footer['links'] as $link ) {
                     $label = isset( $link['label'] ) ? (string) $link['label'] : '';
                     $url   = isset( $link['url'] ) ? (string) $link['url'] : '';
                     if ( '' === $label || '' === $url ) {
                         continue;
                     }
-                    echo '<a class="button button-secondary" href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a>';
+                    $link_target = empty( $link['external'] ) ? '_self' : '_blank';
+                    echo '<li><a href="' . esc_url( $url ) . '" target="' . esc_attr( $link_target ) . '"' . ( '_blank' === $link_target ? ' rel="noopener noreferrer"' : '' ) . '>' . esc_html( $label ) . '</a></li>';
                 }
-                echo '</div>';
+                echo '</ul>';
             }
 
-            if ( ! empty( $footer['description'] ) ) {
-                echo '<p>' . esc_html( $footer['description'] ) . '</p>';
-            }
             echo '</div>';
         }
 
         echo '</div>';
-
-        static $styles_printed = false;
-
-        if ( $styles_printed ) {
-            return;
-        }
-
-        $styles_printed = true;
-
-        echo '<style>'
-            . '.tts-hub{max-width:1180px;}'
-            . '.tts-hub .description{max-width:760px;}'
-            . '.tts-hub-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:24px;}'
-            . '.tts-hub-card{display:flex;flex-direction:row;gap:16px;align-items:flex-start;background:#fff;border:1px solid #dcd'
-            . 'cde;border-radius:8px;padding:20px;text-decoration:none;color:#1d2327;box-shadow:0 1px 2px rgb(0 0 0 / 5%);transitio'
-            . 'n:box-shadow .2s ease,transform .2s ease;}'
-            . '.tts-hub-card:hover{box-shadow:0 8px 16px rgb(30 41 59 / 15%);transform:translateY(-2px);}'
-            . '.tts-hub-card .dashicons{font-size:28px;width:28px;height:28px;color:#2271b1;}'
-            . '.tts-hub-card__content h2{font-size:16px;margin:0 0 6px;}'
-            . '.tts-hub-card__content p{margin:0;font-size:13px;color:#50575e;}'
-            . '.tts-hub-card__meta{margin:12px 0 0;padding-left:18px;color:#2c3338;font-size:12px;}'
-            . '.tts-hub-card__cta{margin-left:auto;font-size:24px;color:#2271b1;align-self:center;}'
-            . '.tts-hub-card--locked{cursor:not-allowed;opacity:0.65;border-style:dashed;background:#f6f7f7;box-shadow:none;}'
-            . '.tts-hub-card--locked .dashicons{color:#a7aaad;}'
-            . '.tts-hub-card--locked .tts-hub-card__cta{color:#a7aaad;}'
-            . '.tts-hub-card__lock{margin:12px 0 0;font-size:12px;color:#646970;display:flex;align-items:center;gap:6px;}'
-            . '.tts-hub-card__lock .dashicons{font-size:16px;width:16px;height:16px;}'
-            . '.tts-hub-footer{margin-top:32px;padding:20px;border:1px solid #dcdcde;border-radius:8px;background:#f6f7f7;}'
-            . '.tts-hub-footer__links{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;}'
-            . '</style>';
     }
 
     /**
@@ -3376,7 +3600,7 @@ class TTS_Admin {
         }
 
         echo '<div style="margin-top: 15px;">';
-        echo '<a href="' . admin_url( 'admin.php?page=fp-publisher-health' ) . '" class="tts-btn small">' . esc_html__( 'View Detailed Status', 'fp-publisher' ) . '</a>';
+        echo '<a href="' . admin_url( 'admin.php?page=fp-publisher-system-health' ) . '" class="tts-btn small">' . esc_html__( 'View Detailed Status', 'fp-publisher' ) . '</a>';
         echo '</div>';
 
         echo '</div>';
@@ -3434,7 +3658,7 @@ class TTS_Admin {
             foreach ( $clients as $client ) {
                 $url          = add_query_arg(
                     array(
-                        'page'       => 'fp-publisher-social-posts',
+                        'page'       => 'fp-publisher-queue',
                         'tts_client' => $client->ID,
                     ),
                     admin_url( 'admin.php' )
@@ -3454,7 +3678,7 @@ class TTS_Admin {
                 echo '<a href="' . esc_url( get_edit_post_link( $client->ID ) ) . '" class="button-link">' . esc_html__( 'Modifica cliente', 'fp-publisher' ) . '</a> | ';
                 $new_post_url = add_query_arg(
                     array(
-                        'page'            => 'fp-publisher-social-posts',
+                        'page'            => 'fp-publisher-queue',
                         'tts_client'      => $client->ID,
                         'tts_open_editor' => 1,
                     ),
@@ -3489,7 +3713,7 @@ class TTS_Admin {
         $notice_message  = '';
         $notice_type     = 'updated';
         $current_profile = $this->get_usage_profile();
-        $base_quickstart_url = admin_url( 'admin.php?page=fp-publisher-quickstart' );
+        $base_quickstart_url = admin_url( 'admin.php?page=fp-publisher-templates' );
 
         if ( isset( $_POST['tts_apply_package'] ) ) {
             check_admin_referer( 'tts_apply_quickstart' );
@@ -3515,7 +3739,7 @@ class TTS_Admin {
             esc_html__( 'Profilo attivo: %s', 'fp-publisher' ),
             esc_html( $this->format_usage_profile_label( $current_profile ) )
         ) . '</p>';
-        $quickstart_guide_url = admin_url( 'admin.php?page=fp-publisher-help#quickstart' );
+        $quickstart_guide_url = admin_url( 'admin.php?page=fp-publisher-support#quickstart' );
         printf(
             '<p class="description">%s</p>',
             sprintf(
@@ -4489,13 +4713,13 @@ class TTS_Admin {
                 'actions'     => $trello_enabled ? array(
                     array(
                         'label' => __( 'Gestisci integrazione Trello', 'fp-publisher' ),
-                        'url'   => admin_url( 'admin.php?page=fp-publisher-social-connections' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-connections' ),
                     ),
                 ) : array(),
                 'docs'        => array(
                     array(
                         'label' => __( 'Apri la Guida Quickstart', 'fp-publisher' ),
-                        'url'   => admin_url( 'admin.php?page=fp-publisher-help#quickstart' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-support#quickstart' ),
                     ),
                 ),
             ),
@@ -4508,17 +4732,17 @@ class TTS_Admin {
                 'actions'     => array(
                     array(
                         'label' => __( 'Apri Connessioni social', 'fp-publisher' ),
-                        'url'   => admin_url( 'admin.php?page=fp-publisher-social-connections' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-connections' ),
                     ),
                     array(
                         'label' => __( 'Testa le connessioni', 'fp-publisher' ),
-                        'url'   => admin_url( 'admin.php?page=fp-publisher-test-connections' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-connection-diagnostics' ),
                     ),
                 ),
                 'docs'        => array(
                     array(
                         'label' => __( 'Leggi la guida alle app social', 'fp-publisher' ),
-                        'url'   => admin_url( 'admin.php?page=fp-publisher-help#overview' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-support#overview' ),
                     ),
                 ),
             ),
@@ -4537,7 +4761,7 @@ class TTS_Admin {
                 'docs'        => array(
                     array(
                         'label' => __( 'Suggerimenti di mappatura', 'fp-publisher' ),
-                        'url'   => admin_url( 'admin.php?page=fp-publisher-help#quickstart' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-support#quickstart' ),
                     ),
                 ),
             ),
@@ -4551,7 +4775,7 @@ class TTS_Admin {
                 'docs'        => array(
                     array(
                         'label' => __( 'Configura blog & SEO', 'fp-publisher' ),
-                        'url'   => admin_url( 'admin.php?page=fp-publisher-help#blog' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-support#blog' ),
                     ),
                 ),
             ),
@@ -4565,7 +4789,7 @@ class TTS_Admin {
                 'docs'        => array(
                     array(
                         'label' => __( 'Controlla la checklist finale', 'fp-publisher' ),
-                        'url'   => admin_url( 'admin.php?page=fp-publisher-help#quickstart' ),
+                        'url'   => admin_url( 'admin.php?page=fp-publisher-support#quickstart' ),
                     ),
                 ),
             ),
@@ -4913,8 +5137,8 @@ class TTS_Admin {
             echo '<div class="notice notice-info">';
             echo '<h3>' . esc_html__( 'Social Media Setup Required', 'fp-publisher' ) . '</h3>';
             echo '<p>' . esc_html__( 'To connect social media accounts, you must first configure OAuth apps for each platform. Click "Configure App" for platforms that are not set up.', 'fp-publisher' ) . '</p>';
-            echo '<p><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ) . '" class="button">' . esc_html__( 'Manage Social Connections', 'fp-publisher' ) . '</a> ';
-            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-help' ) ) . '" target="_blank">' . esc_html__( 'View Setup Guide', 'fp-publisher' ) . '</a></p>';
+            echo '<p><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-connections' ) ) . '" class="button">' . esc_html__( 'Manage Social Connections', 'fp-publisher' ) . '</a> ';
+            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-support' ) ) . '" target="_blank">' . esc_html__( 'View Setup Guide', 'fp-publisher' ) . '</a></p>';
             echo '</div>';
         }
 
@@ -5025,7 +5249,7 @@ class TTS_Admin {
                 
                 if ( ! $app_configured ) {
                     echo '<br><span style="color: #d63638;">⚠️ ' . esc_html__( 'App not configured', 'fp-publisher' ) . '</span>';
-                    echo '<br><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ) . '" class="button">' . esc_html__( 'Configure App', 'fp-publisher' ) . '</a>';
+                    echo '<br><a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-connections' ) ) . '" class="button">' . esc_html__( 'Configure App', 'fp-publisher' ) . '</a>';
                 } elseif ( $connected ) {
                     echo '<br><span style="color: #00a32a;">✅ ' . esc_html__( 'Connected', 'fp-publisher' ) . '</span>';
                     echo '<br><button type="button" class="button button-secondary tts-test-token" data-platform="' . esc_attr( $slug ) . '" data-nonce="' . esc_attr( $wizard_nonce ) . '">' . esc_html__( 'Test token', 'fp-publisher' ) . '</button>';
@@ -5437,7 +5661,7 @@ class TTS_Admin {
             }
 
             $redirect_args = array(
-                'page'            => 'fp-publisher-social-posts',
+                'page'            => 'fp-publisher-queue',
                 'tts_open_editor' => 1,
             );
 
@@ -5463,7 +5687,7 @@ class TTS_Admin {
         }
 
         $redirect_args = array(
-            'page'            => 'fp-publisher-social-posts',
+            'page'            => 'fp-publisher-queue',
             'action'          => 'edit',
             'post'            => $post_id,
             'tts_open_editor' => 1,
@@ -6020,12 +6244,12 @@ class TTS_Admin {
             $editor_post    = get_post( $editor_post_id );
 
             if ( ! $editor_post || 'tts_social_post' !== $editor_post->post_type ) {
-                wp_safe_redirect( add_query_arg( array( 'page' => 'fp-publisher-social-posts', 'tts_error' => 'not-found' ), admin_url( 'admin.php' ) ) );
+                wp_safe_redirect( add_query_arg( array( 'page' => 'fp-publisher-queue', 'tts_error' => 'not-found' ), admin_url( 'admin.php' ) ) );
                 exit;
             }
 
             if ( ! current_user_can( 'edit_post', $editor_post_id ) ) {
-                wp_safe_redirect( add_query_arg( array( 'page' => 'fp-publisher-social-posts', 'tts_error' => 'unauthorized' ), admin_url( 'admin.php' ) ) );
+                wp_safe_redirect( add_query_arg( array( 'page' => 'fp-publisher-queue', 'tts_error' => 'unauthorized' ), admin_url( 'admin.php' ) ) );
                 exit;
             }
 
@@ -6232,6 +6456,18 @@ class TTS_Admin {
             echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Il social post è stato aggiornato con successo.', 'fp-publisher' ) . '</p></div>';
         }
 
+        $deleted_posts = isset( $_GET['deleted'] ) ? absint( $_GET['deleted'] ) : 0;
+        if ( $deleted_posts > 0 ) {
+            printf(
+                '<div class="notice notice-success is-dismissible"><p>%s</p></div>',
+                sprintf(
+                    /* translators: %s: number of deleted social posts. */
+                    esc_html__( 'Moved %s social posts to the trash.', 'fp-publisher' ),
+                    number_format_i18n( $deleted_posts )
+                )
+            );
+        }
+
         if ( '' !== $error_message ) {
             echo '<div class="notice notice-error"><p>' . esc_html( $error_message ) . '</p></div>';
         }
@@ -6252,7 +6488,16 @@ class TTS_Admin {
 
         echo '<div class="tts-social-posts-layout">';
         echo '<div class="tts-social-posts-table">';
+        $filters_summary = $table->get_filters_summary_text();
+        if ( '' !== $filters_summary ) {
+            echo '<p class="description">' . esc_html( $filters_summary ) . '</p>';
+        }
+        echo '<form method="get">';
+        echo '<input type="hidden" name="page" value="fp-publisher-queue" />';
+        $table->views();
+        $table->search_box( __( 'Search social posts', 'fp-publisher' ), 'fp-publisher-queue' );
         $table->display();
+        echo '</form>';
         echo '</div>';
 
         printf(
@@ -6601,21 +6846,32 @@ class TTS_Admin {
      * Render the settings page.
      */
     public function render_settings_page() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
+        }
+
+        $heading_id     = wp_unique_id( 'fp-admin-page-title-' );
+        $description_id = wp_unique_id( 'fp-admin-page-lead-' );
+
         ?>
-        <div class="wrap">
-            <h1><?php esc_html_e( 'Social Auto Publisher Settings', 'fp-publisher' ); ?></h1>
-            
-            <div class="notice notice-info">
-                <p><?php esc_html_e( 'Configure your global plugin settings here. For social media connections, please visit the Social Connections page.', 'fp-publisher' ); ?></p>
+        <div class="wrap fp-admin-settings">
+            <div class="fp-admin-page-header" role="group" aria-labelledby="<?php echo esc_attr( $heading_id ); ?>" aria-describedby="<?php echo esc_attr( $description_id ); ?>">
+                <h1 class="fp-admin-page-header__title" id="<?php echo esc_attr( $heading_id ); ?>" aria-describedby="<?php echo esc_attr( $description_id ); ?>"><?php esc_html_e( 'Social Auto Publisher Settings', 'fp-publisher' ); ?></h1>
+                <p class="fp-admin-page-header__lead" id="<?php echo esc_attr( $description_id ); ?>"><?php esc_html_e( 'Adjust global behaviours for content scheduling, logging and usage profiles. Connection credentials live on the Social Connections screen.', 'fp-publisher' ); ?></p>
             </div>
 
-            <form action="options.php" method="post">
-                <?php
-                settings_fields( 'tts_settings_group' );
-                do_settings_sections( 'tts_settings' );
-                submit_button();
-                ?>
-            </form>
+            <div class="fp-admin-card">
+                <?php settings_errors( 'tts_settings' ); ?>
+                <p class="fp-admin-help-text"><?php esc_html_e( 'Need to update OAuth tokens or verify APIs? Head to Social Connections for per-channel tools.', 'fp-publisher' ); ?></p>
+
+                <form action="options.php" method="post" class="fp-admin-settings__form">
+                    <?php
+                    settings_fields( 'tts_settings_group' );
+                    do_settings_sections( 'tts_settings' );
+                    submit_button();
+                    ?>
+                </form>
+            </div>
         </div>
         <?php
     }
@@ -6628,12 +6884,15 @@ class TTS_Admin {
         if ( ! is_admin() ) {
             wp_die( __( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
         }
-        
+
         // Check user capabilities early
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( __( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
         }
-        
+
+        $heading_id     = wp_unique_id( 'fp-admin-page-title-' );
+        $description_id = wp_unique_id( 'fp-admin-page-lead-' );
+
         try {
             // Handle form submissions
             if ( isset( $_POST['action'] ) && $_POST['action'] === 'save_social_apps' ) {
@@ -6645,248 +6904,121 @@ class TTS_Admin {
 
             $settings = tsap_get_option( 'tts_social_apps', array() );
         ?>
-        <div class="wrap">
-            <h1><?php esc_html_e( 'Social Media Connections', 'fp-publisher' ); ?></h1>
-            
-            <div class="notice notice-info">
-                <h3><?php esc_html_e( 'Setup Instructions', 'fp-publisher' ); ?></h3>
-                <p><?php esc_html_e( 'To connect your social media accounts, you need to create apps on each platform and configure OAuth credentials:', 'fp-publisher' ); ?></p>
+        <div class="wrap fp-admin-social-connections">
+            <div class="fp-admin-page-header" role="group" aria-labelledby="<?php echo esc_attr( $heading_id ); ?>" aria-describedby="<?php echo esc_attr( $description_id ); ?>">
+                <h1 class="fp-admin-page-header__title" id="<?php echo esc_attr( $heading_id ); ?>" aria-describedby="<?php echo esc_attr( $description_id ); ?>"><?php esc_html_e( 'Social Media Connections', 'fp-publisher' ); ?></h1>
+                <p class="fp-admin-page-header__lead" id="<?php echo esc_attr( $description_id ); ?>"><?php esc_html_e( 'Manage OAuth credentials, run connection tests and monitor rate limits for each supported social channel.', 'fp-publisher' ); ?></p>
+            </div>
+
+            <div class="fp-admin-card fp-admin-social-connections__intro">
+                <h2 class="screen-reader-text"><?php esc_html_e( 'Setup instructions', 'fp-publisher' ); ?></h2>
+                <p><?php esc_html_e( 'Create an app on every platform and paste the credentials below. Use the provided redirect URL for each OAuth integration.', 'fp-publisher' ); ?></p>
                 <ol>
-                    <li><strong>Facebook:</strong> <?php esc_html_e( 'Create an app at', 'fp-publisher' ); ?> <a href="https://developers.facebook.com/apps/" target="_blank">Facebook Developers</a></li>
-                    <li><strong>Instagram:</strong> <?php esc_html_e( 'Use Facebook app with Instagram Basic Display product', 'fp-publisher' ); ?></li>
-                    <li><strong>YouTube:</strong> <?php esc_html_e( 'Create a project at', 'fp-publisher' ); ?> <a href="https://console.developers.google.com/" target="_blank">Google Developers Console</a></li>
-                    <li><strong>TikTok:</strong> <?php esc_html_e( 'Apply for TikTok for Developers at', 'fp-publisher' ); ?> <a href="https://developers.tiktok.com/" target="_blank">TikTok Developers</a></li>
+                    <li><strong>Facebook:</strong> <?php esc_html_e( 'Create an app at', 'fp-publisher' ); ?> <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer">Facebook Developers</a></li>
+                    <li><strong>Instagram:</strong> <?php esc_html_e( 'Enable Instagram Basic Display on the same Facebook app.', 'fp-publisher' ); ?></li>
+                    <li><strong>YouTube:</strong> <?php esc_html_e( 'Create OAuth credentials inside Google Cloud Console.', 'fp-publisher' ); ?> <a href="https://console.developers.google.com/" target="_blank" rel="noopener noreferrer">Google Developers Console</a></li>
+                    <li><strong>TikTok:</strong> <?php esc_html_e( 'Request access to TikTok for Developers and generate a web app.', 'fp-publisher' ); ?> <a href="https://developers.tiktok.com/" target="_blank" rel="noopener noreferrer">TikTok Developers</a></li>
                 </ol>
                 <p><strong><?php esc_html_e( 'Redirect URI:', 'fp-publisher' ); ?></strong> <code><?php echo esc_url( admin_url( 'admin-post.php' ) ); ?></code></p>
             </div>
 
-            <div class="tts-social-apps-container">
-                <form method="post" action="">
-                    <?php wp_nonce_field( 'tts_save_social_apps', 'tts_social_nonce' ); ?>
-                    <input type="hidden" name="action" value="save_social_apps" />
+            <form id="tts-social-connections-form" class="fp-admin-social-connections__form tts-social-apps-container" method="post" action="">
+                <?php wp_nonce_field( 'tts_save_social_apps', 'tts_social_nonce' ); ?>
+                <input type="hidden" name="action" value="save_social_apps" />
 
-                    <div class="tts-social-platforms">
-                        <?php
-                        $platforms = array(
-                            'facebook' => array(
-                                'name' => 'Facebook',
-                                'icon' => '📘',
-                                'fields' => array( 'app_id', 'app_secret' )
-                            ),
-                            'instagram' => array(
-                                'name' => 'Instagram',
-                                'icon' => '📷',
-                                'fields' => array( 'app_id', 'app_secret' )
-                            ),
-                            'youtube' => array(
-                                'name' => 'YouTube',
-                                'icon' => '🎥',
-                                'fields' => array( 'client_id', 'client_secret' )
-                            ),
-                            'tiktok' => array(
-                                'name' => 'TikTok',
-                                'icon' => '🎵',
-                                'fields' => array( 'client_key', 'client_secret' )
-                            )
-                        );
+                <div class="fp-admin-social-connections__grid">
+                    <?php
+                    $platforms = array(
+                        'facebook' => array(
+                            'name' => 'Facebook',
+                            'icon' => '📘',
+                            'fields' => array( 'app_id', 'app_secret' )
+                        ),
+                        'instagram' => array(
+                            'name' => 'Instagram',
+                            'icon' => '📷',
+                            'fields' => array( 'app_id', 'app_secret' )
+                        ),
+                        'youtube' => array(
+                            'name' => 'YouTube',
+                            'icon' => '🎥',
+                            'fields' => array( 'client_id', 'client_secret' )
+                        ),
+                        'tiktok' => array(
+                            'name' => 'TikTok',
+                            'icon' => '🎵',
+                            'fields' => array( 'client_key', 'client_secret' )
+                        )
+                    );
 
-                        foreach ( $platforms as $platform => $config ) :
-                            $platform_settings = isset( $settings[$platform] ) ? $settings[$platform] : array();
-                        ?>
-                        <div class="tts-platform-config" data-platform="<?php echo esc_attr( $platform ); ?>">
-                            <h2><?php echo esc_html( $config['icon'] . ' ' . $config['name'] ); ?></h2>
-                            
-                            <?php foreach ( $config['fields'] as $field ) : 
-                                $field_value = isset( $platform_settings[$field] ) ? $platform_settings[$field] : '';
+                    foreach ( $platforms as $platform => $config ) :
+                        $platform_settings = isset( $settings[ $platform ] ) ? $settings[ $platform ] : array();
+                        $connection_status = $this->check_platform_connection_status( $platform );
+                    ?>
+                    <section class="fp-admin-card fp-admin-social-platform tts-platform-config" data-platform="<?php echo esc_attr( $platform ); ?>">
+                        <div class="fp-admin-social-platform__header">
+                            <h2 class="fp-admin-social-platform__title">
+                                <span class="fp-admin-social-platform__icon" aria-hidden="true"><?php echo esc_html( $config['icon'] ); ?></span>
+                                <span><?php echo esc_html( $config['name'] ); ?></span>
+                            </h2>
+                        </div>
+
+                        <div class="fp-admin-social-platform__fields">
+                            <?php foreach ( $config['fields'] as $field ) :
+                                $field_value = isset( $platform_settings[ $field ] ) ? $platform_settings[ $field ] : '';
                                 $field_label = ucwords( str_replace( '_', ' ', $field ) );
                             ?>
-                            <p>
-                                <label for="<?php echo esc_attr( $platform . '_' . $field ); ?>">
-                                    <?php echo esc_html( $field_label ); ?>:
+                            <div class="fp-admin-form-row">
+                                <label class="fp-admin-form-row__label" for="<?php echo esc_attr( $platform . '_' . $field ); ?>">
+                                    <?php echo esc_html( $field_label ); ?>
                                 </label>
-                                <input type="text" 
-                                       id="<?php echo esc_attr( $platform . '_' . $field ); ?>"
-                                       name="social_apps[<?php echo esc_attr( $platform ); ?>][<?php echo esc_attr( $field ); ?>]"
-                                       value="<?php echo esc_attr( $field_value ); ?>"
-                                       class="regular-text" />
-                            </p>
-                            <?php endforeach; ?>
-
-                            <?php 
-                            // Check connection status
-                            $connection_status = $this->check_platform_connection_status( $platform );
-                            ?>
-                            <div class="tts-connection-status" data-platform="<?php echo esc_attr( $platform ); ?>">
-                                <strong><?php esc_html_e( 'Status:', 'fp-publisher' ); ?></strong>
-                                <span class="tts-status-message tts-status-<?php echo esc_attr( $connection_status['status'] ); ?>">
-                                    <?php echo esc_html( $connection_status['message'] ); ?>
-                                </span>
-                                
-                                <?php if ( $connection_status['status'] === 'configured' ) : ?>
-                                    <div class="tts-platform-actions">
-                                        <a href="<?php echo esc_url( $this->get_oauth_url( $platform ) ); ?>" 
-                                           class="button button-primary">
-                                            <?php esc_html_e( 'Connect Account', 'fp-publisher' ); ?>
-                                        </a>
-                                        <button type="button" class="button tts-test-connection" 
-                                                data-platform="<?php echo esc_attr( $platform ); ?>">
-                                            <?php esc_html_e( 'Test Connection', 'fp-publisher' ); ?>
-                                        </button>
-                                    </div>
-                                    <div class="tts-test-result" id="test-result-<?php echo esc_attr( $platform ); ?>" style="display: none;"></div>
-                                <?php endif; ?>
-                                
-                                <?php if ( $connection_status['status'] === 'connected' ) : ?>
-                                    <div class="tts-rate-limit-info" id="rate-limit-<?php echo esc_attr( $platform ); ?>">
-                                        <button type="button" class="button tts-check-limits" 
-                                                data-platform="<?php echo esc_attr( $platform ); ?>">
-                                            <?php esc_html_e( 'Check API Limits', 'fp-publisher' ); ?>
-                                        </button>
-                                    </div>
-                                <?php endif; ?>
+                                <div class="fp-admin-form-row__control">
+                                    <input type="text"
+                                        id="<?php echo esc_attr( $platform . '_' . $field ); ?>"
+                                        name="social_apps[<?php echo esc_attr( $platform ); ?>][<?php echo esc_attr( $field ); ?>]"
+                                        value="<?php echo esc_attr( $field_value ); ?>"
+                                        class="regular-text" />
+                                </div>
                             </div>
+                            <?php endforeach; ?>
                         </div>
-                        <?php endforeach; ?>
+
+                        <div class="fp-admin-social-platform__status tts-connection-status" data-platform="<?php echo esc_attr( $platform ); ?>">
+                            <strong><?php esc_html_e( 'Status:', 'fp-publisher' ); ?></strong>
+                            <span class="tts-status-message tts-status-<?php echo esc_attr( $connection_status['status'] ); ?>">
+                                <?php echo esc_html( $connection_status['message'] ); ?>
+                            </span>
+
+                            <?php if ( $connection_status['status'] === 'configured' ) : ?>
+                                <div class="fp-admin-social-platform__actions tts-platform-actions">
+                                    <a href="<?php echo esc_url( $this->get_oauth_url( $platform ) ); ?>" class="button button-primary">
+                                        <?php esc_html_e( 'Connect Account', 'fp-publisher' ); ?>
+                                    </a>
+                                    <button type="button" class="button tts-test-connection" data-platform="<?php echo esc_attr( $platform ); ?>">
+                                        <?php esc_html_e( 'Test Connection', 'fp-publisher' ); ?>
+                                    </button>
+                                </div>
+                                <div class="fp-admin-social-platform__result tts-test-result" id="test-result-<?php echo esc_attr( $platform ); ?>" aria-live="polite"></div>
+                            <?php endif; ?>
+
+                            <?php if ( $connection_status['status'] === 'connected' ) : ?>
+                                <div class="fp-admin-social-platform__rate-limit tts-rate-limit-info" id="rate-limit-<?php echo esc_attr( $platform ); ?>">
+                                    <button type="button" class="button tts-check-limits" data-platform="<?php echo esc_attr( $platform ); ?>">
+                                        <?php esc_html_e( 'Check API Limits', 'fp-publisher' ); ?>
+                                    </button>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </section>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="fp-admin-toolbar">
+                    <div class="fp-admin-toolbar__group fp-admin-toolbar__group--align-end">
+                        <button type="submit" class="button button-primary"><?php esc_html_e( 'Save App Settings', 'fp-publisher' ); ?></button>
                     </div>
-
-                    <p class="submit">
-                        <input type="submit" class="button-primary" value="<?php esc_attr_e( 'Save App Settings', 'fp-publisher' ); ?>" />
-                    </p>
-                </form>
-            </div>
-
-            <script>
-            jQuery(document).ready(function($) {
-                // Connection testing
-                $('.tts-test-connection').on('click', function() {
-                    var platform = $(this).data('platform');
-                    var resultDiv = $('#test-result-' + platform);
-                    var button = $(this);
-                    
-                    button.prop('disabled', true).text('<?php esc_html_e( 'Testing...', 'fp-publisher' ); ?>');
-                    resultDiv.hide();
-                    
-                    $.post(ajaxurl, {
-                        action: 'tts_test_connection',
-                        platform: platform,
-                        nonce: '<?php echo wp_create_nonce( 'tts_test_connection' ); ?>'
-                    }, function(response) {
-                        button.prop('disabled', false).text('<?php esc_html_e( 'Test Connection', 'fp-publisher' ); ?>');
-                        
-                        if (response.success) {
-                            resultDiv.removeClass('error').addClass('success')
-                                     .html('✅ ' + response.data.message).show();
-                        } else {
-                            resultDiv.removeClass('success').addClass('error')
-                                     .html('❌ ' + (response.data.message || 'Connection test failed')).show();
-                        }
-                    }).fail(function() {
-                        button.prop('disabled', false).text('<?php esc_html_e( 'Test Connection', 'fp-publisher' ); ?>');
-                        resultDiv.removeClass('success').addClass('error')
-                                 .html('❌ Failed to test connection').show();
-                    });
-                });
-                
-                // Rate limit checking
-                $('.tts-check-limits').on('click', function() {
-                    var platform = $(this).data('platform');
-                    var container = $('#rate-limit-' + platform);
-                    var button = $(this);
-                    
-                    button.prop('disabled', true).text('<?php esc_html_e( 'Checking...', 'fp-publisher' ); ?>');
-                    
-                    $.post(ajaxurl, {
-                        action: 'tts_check_rate_limits',
-                        platform: platform,
-                        nonce: '<?php echo wp_create_nonce( 'tts_check_rate_limits' ); ?>'
-                    }, function(response) {
-                        button.prop('disabled', false).text('<?php esc_html_e( 'Check API Limits', 'fp-publisher' ); ?>');
-                        
-                        if (response.success) {
-                            var limits = response.data;
-                            var html = '<div class="tts-rate-limit-display">';
-                            html += '<strong><?php esc_html_e( 'API Rate Limits:', 'fp-publisher' ); ?></strong><br>';
-                            html += '<?php esc_html_e( 'Used:', 'fp-publisher' ); ?> ' + limits.used + ' / ' + limits.limit + '<br>';
-                            html += '<?php esc_html_e( 'Remaining:', 'fp-publisher' ); ?> ' + limits.remaining + '<br>';
-                            html += '<?php esc_html_e( 'Reset:', 'fp-publisher' ); ?> ' + limits.reset_time;
-                            html += '</div>';
-                            container.append(html);
-                        }
-                    });
-                });
-            });
-            </script>
-
-            <style>
-            .tts-social-apps-container {
-                margin-top: 20px;
-            }
-            .tts-social-platforms {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-                gap: 20px;
-                margin-bottom: 20px;
-            }
-            .tts-platform-config {
-                border: 1px solid #ddd;
-                padding: 20px;
-                border-radius: 8px;
-                background: #fff;
-            }
-            .tts-platform-config h2 {
-                margin-top: 0;
-                font-size: 1.3em;
-                border-bottom: 1px solid #eee;
-                padding-bottom: 10px;
-            }
-            .tts-connection-status {
-                margin-top: 15px;
-                padding: 10px;
-                background: #f9f9f9;
-                border-radius: 4px;
-            }
-            .tts-status-not-configured {
-                color: #d63638;
-            }
-            .tts-status-configured {
-                color: #f56e28;
-            }
-            .tts-status-connected {
-                color: #00a32a;
-            }
-            .tts-status-error {
-                color: #d63638;
-            }
-            .tts-platform-actions {
-                display: flex;
-                gap: 10px;
-                margin-top: 10px;
-            }
-            .tts-test-result {
-                margin-top: 10px;
-                padding: 8px;
-                border-radius: 4px;
-                font-size: 14px;
-            }
-            .tts-test-result.success {
-                background: #d1eddd;
-                color: #00a32a;
-                border: 1px solid #00a32a;
-            }
-            .tts-test-result.error {
-                background: #f7dde0;
-                color: #d63638;
-                border: 1px solid #d63638;
-            }
-            .tts-rate-limit-info {
-                margin-top: 10px;
-            }
-            .tts-rate-limit-display {
-                font-size: 12px;
-                color: #666;
-                margin-top: 5px;
-            }
-            </style>
+                </div>
+            </form>
         </div>
         <?php
         } catch ( Exception $e ) {
@@ -6897,7 +7029,7 @@ class TTS_Admin {
             echo '<div class="notice notice-error">';
             echo '<p>' . esc_html__( 'An error occurred while loading the social connections page. Please refresh the page or contact support.', 'fp-publisher' ) . '</p>';
             echo '</div>';
-            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
+            echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-dashboard' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
             echo '</div>';
         }
     }
@@ -7181,10 +7313,10 @@ class TTS_Admin {
                     </ul>
 
                     <div class="tts-help-actions">
-                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ); ?>" class="button button-primary">
+                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-connections' ) ); ?>" class="button button-primary">
                             <?php esc_html_e( 'Configure Social Apps', 'fp-publisher' ); ?>
                         </a>
-                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-quickstart' ) ); ?>" class="button">
+                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-templates' ) ); ?>" class="button">
                             <?php esc_html_e( 'Manage Quickstart Packages', 'fp-publisher' ); ?>
                         </a>
                         <a href="<?php echo esc_url( admin_url( 'admin.php?page=fp-publisher-client-wizard' ) ); ?>" class="button">
@@ -8678,11 +8810,11 @@ class TTS_Admin {
             }
             
             function handleCreateManual() {
-                window.location.href = "<?php echo esc_url( add_query_arg( array( 'page' => 'fp-publisher-social-posts', 'tts_open_editor' => 1, 'content_source' => 'manual' ), admin_url( 'admin.php' ) ) ); ?>";
+                window.location.href = "<?php echo esc_url( add_query_arg( array( 'page' => 'fp-publisher-queue', 'tts_open_editor' => 1, 'content_source' => 'manual' ), admin_url( 'admin.php' ) ) ); ?>";
             }
 
             function handleUploadFile() {
-                window.location.href = "<?php echo esc_url( add_query_arg( array( 'page' => 'fp-publisher-social-posts', 'tts_open_editor' => 1, 'content_source' => 'local_upload' ), admin_url( 'admin.php' ) ) ); ?>";
+                window.location.href = "<?php echo esc_url( add_query_arg( array( 'page' => 'fp-publisher-queue', 'tts_open_editor' => 1, 'content_source' => 'local_upload' ), admin_url( 'admin.php' ) ) ); ?>";
             }
         });
         </script>
@@ -8717,7 +8849,7 @@ class TTS_Admin {
         echo '<p>' . esc_html__( 'Calendar functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
         echo '</div>';
         echo '<p>' . esc_html__( 'This page will display your scheduled social media posts in a calendar view.', 'fp-publisher' ) . '</p>';
-        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
+        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-dashboard' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
         echo '</div>';
     }
 
@@ -8749,7 +8881,7 @@ class TTS_Admin {
         echo '<p>' . esc_html__( 'Analytics functionality is temporarily unavailable. Please refresh the page or contact support if the issue persists.', 'fp-publisher' ) . '</p>';
         echo '</div>';
         echo '<p>' . esc_html__( 'This page will display analytics and insights for your social media publishing activities.', 'fp-publisher' ) . '</p>';
-        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-main' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
+        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-dashboard' ) ) . '" class="button button-primary">' . esc_html__( 'Return to Dashboard', 'fp-publisher' ) . '</a>';
         echo '</div>';
     }
 
@@ -8997,7 +9129,7 @@ class TTS_Admin {
             echo esc_html__( 'Test Connection', 'fp-publisher' );
             echo '</button>';
         }
-        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-social-connections' ) ) . '" class="button">' . esc_html__( 'Configure', 'fp-publisher' ) . '</a>';
+        echo '<a href="' . esc_url( admin_url( 'admin.php?page=fp-publisher-connections' ) ) . '" class="button">' . esc_html__( 'Configure', 'fp-publisher' ) . '</a>';
         echo '</div>';
         
         echo '</div>';
@@ -9649,16 +9781,109 @@ if ( ! class_exists( 'WP_List_Table' ) ) {
 class TTS_Social_Posts_Table extends WP_List_Table {
 
     /**
+     * Selected client filter.
+     *
+     * @var int
+     */
+    private $client_filter = 0;
+
+    /**
+     * Selected status filter.
+     *
+     * @var string
+     */
+    private $status_filter = '';
+
+    /**
+     * Search term applied to the table.
+     *
+     * @var string
+     */
+    private $search_term = '';
+
+    /**
+     * Cached list of clients for the filter dropdown.
+     *
+     * @var array<int, array{id:int,title:string}>
+     */
+    private $available_clients = array();
+
+    /**
+     * Status counts for quick views and dropdown.
+     *
+     * @var array<string, int>
+     */
+    private $status_counts = array();
+
+    /**
+     * Aggregated statuses present in the dataset.
+     *
+     * @var array<int, string>
+     */
+    private $available_statuses = array();
+
+    /**
+     * Total items matching current filters.
+     *
+     * @var int
+     */
+    private $total_items = 0;
+
+    /**
+     * Constructor.
+     */
+    public function __construct() {
+        parent::__construct(
+            array(
+                'singular' => 'fp_publisher_social_post',
+                'plural'   => 'fp_publisher_social_posts',
+                'ajax'     => false,
+            )
+        );
+    }
+
+    /**
+     * Shared column definitions.
+     *
+     * @return array<string, string>
+     */
+    public static function get_column_definitions() {
+        return array(
+            'cb'           => '<input type="checkbox" />',
+            'title'        => __( 'Title', 'fp-publisher' ),
+            'client'       => __( 'Client', 'fp-publisher' ),
+            'channels'     => __( 'Channels', 'fp-publisher' ),
+            'publish_date' => __( 'Publish At', 'fp-publisher' ),
+            'status'       => __( 'Status', 'fp-publisher' ),
+        );
+    }
+
+    /**
      * Retrieve table columns.
      *
-     * @return array
+     * @return array<string, string>
      */
     public function get_columns() {
+        $columns = self::get_column_definitions();
+
+        if ( ! current_user_can( 'tts_delete_social_posts' ) ) {
+            unset( $columns['cb'] );
+        }
+
+        return $columns;
+    }
+
+    /**
+     * Sortable columns definition.
+     *
+     * @return array<string, array{0:string,1:bool}>
+     */
+    protected function get_sortable_columns() {
         return array(
-            'title'        => __( 'Titolo', 'fp-publisher' ),
-            'channel'      => __( 'Canale', 'fp-publisher' ),
-            'publish_date' => __( 'Data Pubblicazione', 'fp-publisher' ),
-            'status'       => __( 'Stato', 'fp-publisher' ),
+            'title'        => array( 'title', false ),
+            'client'       => array( 'client', false ),
+            'publish_date' => array( 'publish_date', true ),
+            'status'       => array( 'status', false ),
         );
     }
 
@@ -9666,85 +9891,593 @@ class TTS_Social_Posts_Table extends WP_List_Table {
      * Prepare the table items.
      */
     public function prepare_items() {
-        $posts = get_posts(
+        global $wpdb;
+
+        $this->process_bulk_action();
+
+        $this->client_filter = isset( $_REQUEST['tts_client'] ) ? absint( $_REQUEST['tts_client'] ) : 0;
+        $this->status_filter = isset( $_REQUEST['published_status'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['published_status'] ) ) : '';
+        $this->search_term   = isset( $_REQUEST['s'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['s'] ) ) : '';
+
+        $clients = get_posts(
             array(
-                'post_type'      => 'tts_social_post',
-                'post_status'    => 'any',
+                'post_type'      => 'tts_client',
+                'post_status'    => array( 'publish', 'draft', 'pending', 'future', 'private' ),
                 'posts_per_page' => -1,
+                'orderby'        => 'title',
+                'order'          => 'ASC',
             )
         );
 
-        $data = array();
-        foreach ( $posts as $post ) {
-            $channel = get_post_meta( $post->ID, '_tts_social_channel', true );
-            $publish = get_post_meta( $post->ID, '_tts_publish_at', true );
-            $status  = get_post_meta( $post->ID, '_published_status', true );
+        $this->available_clients = array_map(
+            static function ( $client ) {
+                return array(
+                    'id'    => (int) $client->ID,
+                    'title' => get_the_title( $client ),
+                );
+            },
+            $clients
+        );
 
-            $data[] = array(
-                'ID'          => $post->ID,
-                'title'       => $post->post_title,
-                'channel'     => is_array( $channel ) ? implode( ', ', $channel ) : $channel,
-                'publish_date'=> $publish ? wp_date( 'Y-m-d H:i', strtotime( $publish ) ) : '',
-                'status'      => $status ? $status : __( 'scheduled', 'fp-publisher' ),
+        $this->status_counts    = $this->calculate_status_counts();
+        $this->available_statuses = array_keys( array_diff_key( $this->status_counts, array( 'all' => true ) ) );
+        if ( ! in_array( 'scheduled', $this->available_statuses, true ) ) {
+            $this->available_statuses[] = 'scheduled';
+        }
+        sort( $this->available_statuses );
+
+        $per_page     = $this->get_items_per_page( 'fp_publisher_social_posts_per_page', 20 );
+        $current_page = max( 1, $this->get_pagenum() );
+        $offset       = ( $current_page - 1 ) * $per_page;
+
+        $orderby_request = isset( $_REQUEST['orderby'] ) ? sanitize_key( wp_unslash( $_REQUEST['orderby'] ) ) : 'publish_date';
+        $order_request   = isset( $_REQUEST['order'] ) ? sanitize_key( wp_unslash( $_REQUEST['order'] ) ) : 'desc';
+        $order           = 'asc' === strtolower( $order_request ) ? 'ASC' : 'DESC';
+
+        $args = array(
+            'post_type'      => 'tts_social_post',
+            'post_status'    => array( 'publish', 'draft', 'pending', 'future', 'private' ),
+            'posts_per_page' => $per_page,
+            'paged'          => $current_page,
+            's'              => $this->search_term,
+            'fields'         => 'ids',
+            'order'          => $order,
+        );
+
+        $meta_query = array();
+
+        if ( $this->client_filter > 0 ) {
+            $meta_query[] = array(
+                'key'   => '_tts_client_id',
+                'value' => $this->client_filter,
             );
         }
 
-        $this->items = $data;
+        if ( '' !== $this->status_filter ) {
+            if ( 'scheduled' === $this->status_filter ) {
+                $meta_query[] = array(
+                    'relation' => 'OR',
+                    array(
+                        'key'     => '_published_status',
+                        'compare' => 'NOT EXISTS',
+                    ),
+                    array(
+                        'key'     => '_published_status',
+                        'value'   => '',
+                        'compare' => '=',
+                    ),
+                    array(
+                        'key'   => '_published_status',
+                        'value' => 'scheduled',
+                    ),
+                );
+            } else {
+                $meta_query[] = array(
+                    'key'   => '_published_status',
+                    'value' => $this->status_filter,
+                );
+            }
+        }
+
+        if ( ! empty( $meta_query ) ) {
+            $meta_query['relation'] = 'AND';
+            $args['meta_query']     = $meta_query;
+        }
+
+        switch ( $orderby_request ) {
+            case 'title':
+                $args['orderby'] = 'title';
+                break;
+            case 'client':
+                $args['orderby']  = 'meta_value';
+                $args['meta_key'] = '_tts_client_id';
+                break;
+            case 'status':
+                $args['orderby']  = 'meta_value';
+                $args['meta_key'] = '_published_status';
+                break;
+            case 'publish_date':
+            default:
+                $args['orderby']  = 'meta_value';
+                $args['meta_key'] = '_tts_publish_at';
+                $orderby_request  = 'publish_date';
+                break;
+        }
+
+        $query = new WP_Query( $args );
+
+        $this->total_items = (int) $query->found_posts;
+
+        $items = array();
+        foreach ( $query->posts as $post_id ) {
+            $channels = get_post_meta( $post_id, '_tts_social_channel', true );
+            $publish  = get_post_meta( $post_id, '_tts_publish_at', true );
+            $status   = get_post_meta( $post_id, '_published_status', true );
+            $client   = get_post_meta( $post_id, '_tts_client_id', true );
+
+            $items[] = array(
+                'ID'             => $post_id,
+                'title'          => get_the_title( $post_id ),
+                'client'         => $client ? get_the_title( $client ) : __( 'Unassigned', 'fp-publisher' ),
+                'channels'       => $this->format_channels( $channels ),
+                'publish_date'   => $publish ? $publish : '',
+                'status'         => $status ? sanitize_text_field( $status ) : 'scheduled',
+                'client_id'      => (int) $client,
+                'raw_publish_at' => $publish,
+            );
+        }
+
+        $this->items = $items;
+
+        $columns  = $this->get_columns();
+        $hidden   = array();
+        if ( $this->screen ) {
+            $hidden = get_hidden_columns( $this->screen );
+        }
+        $sortable = $this->get_sortable_columns();
+
+        $this->_column_headers = array( $columns, $hidden, $sortable );
+
+        $this->set_pagination_args(
+            array(
+                'total_items' => $this->total_items,
+                'per_page'    => $per_page,
+                'total_pages' => ( $per_page > 0 ) ? ceil( $this->total_items / $per_page ) : 0,
+            )
+        );
     }
 
     /**
      * Render title column with row actions.
      *
-     * @param array $item Current row.
+     * @param array<string, mixed> $item Current row.
      *
      * @return string
      */
     public function column_title( $item ) {
-        $publish_url = wp_nonce_url(
-            add_query_arg(
-                array(
-                    'page'   => 'fp-publisher-social-posts',
-                    'action' => 'publish',
-                    'post'   => $item['ID'],
-                ),
-                admin_url( 'admin.php' )
-            ),
-            'tts_publish_social_post_' . $item['ID']
-        );
+        $actions = array();
 
-        $actions = array(
-            'publish'  => sprintf( '<a href="%s">%s</a>', esc_url( $publish_url ), __( 'Publish Now', 'fp-publisher' ) ),
-            'edit'     => sprintf(
+        if ( current_user_can( 'publish_posts' ) ) {
+            $actions['publish'] = sprintf(
                 '<a href="%s">%s</a>',
                 esc_url(
-                    add_query_arg(
-                        array(
-                            'page'            => 'fp-publisher-social-posts',
-                            'action'          => 'edit',
-                            'post'            => $item['ID'],
-                            'tts_open_editor' => 1,
+                    wp_nonce_url(
+                        add_query_arg(
+                            array(
+                                'page'   => 'fp-publisher-queue',
+                                'action' => 'publish',
+                                'post'   => (int) $item['ID'],
+                            ),
+                            admin_url( 'admin.php' )
                         ),
-                        admin_url( 'admin.php' )
+                        'tts_publish_social_post_' . (int) $item['ID']
                     )
                 ),
-                __( 'Edit', 'fp-publisher' )
+                __( 'Publish Now', 'fp-publisher' )
+            );
+        }
+
+        $actions['edit'] = sprintf(
+            '<a href="%s">%s</a>',
+            esc_url(
+                add_query_arg(
+                    array(
+                        'page'            => 'fp-publisher-queue',
+                        'action'          => 'edit',
+                        'post'            => (int) $item['ID'],
+                        'tts_open_editor' => 1,
+                    ),
+                    admin_url( 'admin.php' )
+                )
             ),
-            'view_log' => sprintf( '<a href="%s">%s</a>', esc_url( add_query_arg( array( 'page' => 'fp-publisher-social-posts', 'action' => 'log', 'post' => $item['ID'] ), admin_url( 'admin.php' ) ) ), __( 'View Log', 'fp-publisher' ) ),
+            __( 'Edit', 'fp-publisher' )
         );
+
+        $actions['view_log'] = sprintf(
+            '<a href="%s">%s</a>',
+            esc_url(
+                add_query_arg(
+                    array(
+                        'page'   => 'fp-publisher-queue',
+                        'action' => 'log',
+                        'post'   => (int) $item['ID'],
+                    ),
+                    admin_url( 'admin.php' )
+                )
+            ),
+            __( 'View Log', 'fp-publisher' )
+        );
+
+        if ( current_user_can( 'tts_delete_social_posts' ) ) {
+            $actions['delete'] = sprintf(
+                '<a href="%s">%s</a>',
+                esc_url(
+                    wp_nonce_url(
+                        add_query_arg(
+                            array(
+                                'page'   => 'fp-publisher-queue',
+                                'action' => 'delete',
+                                'post'   => (int) $item['ID'],
+                            ),
+                            admin_url( 'admin.php' )
+                        ),
+                        'bulk-' . $this->_args['plural']
+                    )
+                ),
+                __( 'Delete', 'fp-publisher' )
+            );
+        }
 
         return sprintf( '<strong>%1$s</strong>%2$s', esc_html( $item['title'] ), $this->row_actions( $actions ) );
     }
 
     /**
+     * Render checkbox column for bulk actions.
+     *
+     * @param array<string, mixed> $item Current item.
+     *
+     * @return string
+     */
+    public function column_cb( $item ) {
+        if ( ! current_user_can( 'tts_delete_social_posts' ) ) {
+            return '';
+        }
+
+        return sprintf(
+            '<label class="screen-reader-text" for="cb-select-%1$d">%2$s</label><input id="cb-select-%1$d" type="checkbox" name="social_post_ids[]" value="%1$d" />',
+            (int) $item['ID'],
+            esc_html__( 'Select social post', 'fp-publisher' )
+        );
+    }
+
+    /**
      * Default column rendering.
      *
-     * @param array  $item        Row item.
-     * @param string $column_name Column name.
+     * @param array<string, mixed> $item        Row item.
+     * @param string               $column_name Column name.
      *
      * @return string
      */
     public function column_default( $item, $column_name ) {
-        return isset( $item[ $column_name ] ) ? esc_html( $item[ $column_name ] ) : '';
+        switch ( $column_name ) {
+            case 'client':
+                return esc_html( $item['client'] );
+            case 'channels':
+                return esc_html( $item['channels'] );
+            case 'publish_date':
+                if ( ! empty( $item['publish_date'] ) ) {
+                    $timestamp = strtotime( $item['publish_date'] );
+                    if ( $timestamp ) {
+                        return esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $timestamp ) );
+                    }
+                }
+                return '&mdash;';
+            case 'status':
+                return esc_html( $this->format_status_label( $item['status'] ) );
+            default:
+                return isset( $item[ $column_name ] ) ? esc_html( (string) $item[ $column_name ] ) : '';
+        }
     }
 
+    /**
+     * Bulk actions definition.
+     *
+     * @return array<string, string>
+     */
+    protected function get_bulk_actions() {
+        if ( ! current_user_can( 'tts_delete_social_posts' ) ) {
+            return array();
+        }
+
+        return array(
+            'delete' => __( 'Delete', 'fp-publisher' ),
+        );
+    }
+
+    /**
+     * Provide the list table views.
+     *
+     * @return array<string, string>
+     */
+    protected function get_views() {
+        $views = array();
+        $base  = remove_query_arg( array( 'published_status', 'paged' ) );
+
+        $total = isset( $this->status_counts['all'] ) ? (int) $this->status_counts['all'] : $this->total_items;
+        $views['all'] = sprintf(
+            '<a href="%1$s" class="%2$s">%3$s</a>',
+            esc_url( remove_query_arg( array( 'published_status' ), $base ) ),
+            '' === $this->status_filter ? 'current' : '',
+            sprintf(
+                /* translators: %s: total number of social posts. */
+                __( 'All <span class="count">(%s)</span>', 'fp-publisher' ),
+                number_format_i18n( $total )
+            )
+        );
+
+        $statuses = $this->status_counts;
+        unset( $statuses['all'] );
+
+        foreach ( $statuses as $status => $count ) {
+            $views[ $status ] = sprintf(
+                '<a href="%1$s" class="%2$s">%3$s</a>',
+                esc_url( add_query_arg( 'published_status', $status, $base ) ),
+                $status === $this->status_filter ? 'current' : '',
+                sprintf(
+                    /* translators: 1: Status label. 2: Count. */
+                    __( '%1$s <span class="count">(%2$s)</span>', 'fp-publisher' ),
+                    esc_html( $this->format_status_label( $status ) ),
+                    number_format_i18n( (int) $count )
+                )
+            );
+        }
+
+        return $views;
+    }
+
+    /**
+     * Render controls above the list table.
+     *
+     * @param string $which Top or bottom.
+     */
+    protected function extra_tablenav( $which ) {
+        if ( 'top' !== $which ) {
+            return;
+        }
+
+        echo '<div class="alignleft actions">';
+        echo '<label class="screen-reader-text" for="filter-by-client">' . esc_html__( 'Filter by client', 'fp-publisher' ) . '</label>';
+        echo '<select name="tts_client" id="filter-by-client">';
+        echo '<option value="0">' . esc_html__( 'All Clients', 'fp-publisher' ) . '</option>';
+        foreach ( $this->available_clients as $client ) {
+            $title = $client['title'] ? $client['title'] : sprintf( __( 'Client #%d', 'fp-publisher' ), $client['id'] );
+            printf( '<option value="%1$d" %2$s>%3$s</option>', $client['id'], selected( $client['id'], $this->client_filter, false ), esc_html( $title ) );
+        }
+        echo '</select>';
+
+        echo '<label class="screen-reader-text" for="filter-by-status">' . esc_html__( 'Filter by status', 'fp-publisher' ) . '</label>';
+        echo '<select name="published_status" id="filter-by-status">';
+        echo '<option value="">' . esc_html__( 'All Statuses', 'fp-publisher' ) . '</option>';
+        foreach ( $this->available_statuses as $status ) {
+            printf( '<option value="%1$s" %2$s>%3$s</option>', esc_attr( $status ), selected( $status, $this->status_filter, false ), esc_html( $this->format_status_label( $status ) ) );
+        }
+        echo '</select>';
+
+        submit_button( __( 'Filter', 'fp-publisher' ), 'secondary', 'filter_action', false );
+
+        if ( $this->has_active_filters() ) {
+            echo ' <a class="button" href="' . esc_url( remove_query_arg( array( 'tts_client', 'published_status', 's', 'paged' ) ) ) . '">' . esc_html__( 'Reset', 'fp-publisher' ) . '</a>';
+        }
+
+        echo '</div>';
+    }
+
+    /**
+     * Output when the table has no items.
+     */
+    public function no_items() {
+        esc_html_e( 'No social posts match the current filters.', 'fp-publisher' );
+    }
+
+    /**
+     * Handle bulk and row actions.
+     */
+    public function process_bulk_action() {
+        if ( 'delete' !== $this->current_action() ) {
+            return;
+        }
+
+        if ( ! current_user_can( 'tts_delete_social_posts' ) ) {
+            wp_die( esc_html__( 'You are not allowed to delete social posts.', 'fp-publisher' ) );
+        }
+
+        check_admin_referer( 'bulk-' . $this->_args['plural'] );
+
+        $ids = array();
+
+        if ( isset( $_REQUEST['post'] ) ) {
+            $ids[] = absint( $_REQUEST['post'] );
+        }
+
+        if ( isset( $_REQUEST['social_post_ids'] ) && is_array( $_REQUEST['social_post_ids'] ) ) {
+            foreach ( $_REQUEST['social_post_ids'] as $post_id ) {
+                $ids[] = absint( $post_id );
+            }
+        }
+
+        $ids = array_unique( array_filter( $ids ) );
+
+        if ( empty( $ids ) ) {
+            return;
+        }
+
+        foreach ( $ids as $post_id ) {
+            wp_trash_post( $post_id );
+        }
+
+        $redirect = remove_query_arg( array( 'action', 'action2', 'social_post_ids', 'post', '_wpnonce', 'deleted' ) );
+        $redirect = add_query_arg( 'deleted', count( $ids ), $redirect );
+
+        wp_safe_redirect( $redirect );
+        exit;
+    }
+
+    /**
+     * Provide a friendly summary of active filters.
+     *
+     * @return string
+     */
+    public function get_filters_summary_text() {
+        $parts = array();
+
+        if ( $this->client_filter > 0 ) {
+            $client_name = '';
+            foreach ( $this->available_clients as $client ) {
+                if ( $client['id'] === $this->client_filter ) {
+                    $client_name = $client['title'];
+                    break;
+                }
+            }
+            if ( '' === $client_name ) {
+                $client_name = sprintf( __( 'Client #%d', 'fp-publisher' ), $this->client_filter );
+            }
+
+            $parts[] = sprintf(
+                /* translators: %s: Client name. */
+                __( 'Client: %s', 'fp-publisher' ),
+                $client_name
+            );
+        }
+
+        if ( '' !== $this->status_filter ) {
+            $parts[] = sprintf(
+                /* translators: %s: Status name. */
+                __( 'Status: %s', 'fp-publisher' ),
+                $this->format_status_label( $this->status_filter )
+            );
+        }
+
+        if ( '' !== $this->search_term ) {
+            $parts[] = sprintf(
+                /* translators: %s: Search term. */
+                __( 'Search: %s', 'fp-publisher' ),
+                $this->search_term
+            );
+        }
+
+        if ( empty( $parts ) ) {
+            return __( 'No filters applied', 'fp-publisher' );
+        }
+
+        return implode( ' · ', $parts );
+    }
+
+    /**
+     * Determine if filters are active.
+     *
+     * @return bool
+     */
+    private function has_active_filters() {
+        return ( $this->client_filter > 0 ) || '' !== $this->status_filter || '' !== $this->search_term;
+    }
+
+    /**
+     * Format stored channels into a readable string.
+     *
+     * @param mixed $channels Stored channels.
+     *
+     * @return string
+     */
+    private function format_channels( $channels ) {
+        if ( is_array( $channels ) ) {
+            $normalized = array();
+            foreach ( $channels as $channel ) {
+                $normalized[] = ucfirst( sanitize_text_field( $channel ) );
+            }
+
+            return implode( ', ', array_unique( $normalized ) );
+        }
+
+        return $channels ? ucfirst( sanitize_text_field( $channels ) ) : __( 'Not set', 'fp-publisher' );
+    }
+
+    /**
+     * Convert a status slug into a label.
+     *
+     * @param string $status Status slug.
+     *
+     * @return string
+     */
+    private function format_status_label( $status ) {
+        if ( '' === $status ) {
+            return __( 'Scheduled', 'fp-publisher' );
+        }
+
+        $normalized = strtolower( $status );
+
+        $labels = array(
+            'scheduled' => __( 'Scheduled', 'fp-publisher' ),
+            'published' => __( 'Published', 'fp-publisher' ),
+            'failed'    => __( 'Failed', 'fp-publisher' ),
+            'queued'    => __( 'Queued', 'fp-publisher' ),
+            'draft'     => __( 'Draft', 'fp-publisher' ),
+            'processing'=> __( 'Processing', 'fp-publisher' ),
+        );
+
+        if ( isset( $labels[ $normalized ] ) ) {
+            return $labels[ $normalized ];
+        }
+
+        $normalized = str_replace( array( '-', '_' ), ' ', $normalized );
+
+        return ucwords( $normalized );
+    }
+
+    /**
+     * Calculate status counts for views.
+     *
+     * @return array<string, int>
+     */
+    private function calculate_status_counts() {
+        global $wpdb;
+
+        $joins  = array();
+        $where  = array(
+            "p.post_type = 'tts_social_post'",
+            "p.post_status NOT IN ('trash', 'auto-draft')",
+        );
+        $params = array();
+
+        $joins[] = "LEFT JOIN {$wpdb->postmeta} pm_status ON pm_status.post_id = p.ID AND pm_status.meta_key = '_published_status'";
+
+        if ( $this->client_filter > 0 ) {
+            $joins[] = "INNER JOIN {$wpdb->postmeta} pm_client ON pm_client.post_id = p.ID AND pm_client.meta_key = '_tts_client_id'";
+            $where[] = 'pm_client.meta_value = %s';
+            $params[] = (string) $this->client_filter;
+        }
+
+        if ( '' !== $this->search_term ) {
+            $like   = '%' . $wpdb->esc_like( $this->search_term ) . '%';
+            $where[] = '(p.post_title LIKE %s OR p.post_content LIKE %s)';
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        $join_sql  = implode( ' ', $joins );
+        $where_sql = 'WHERE ' . implode( ' AND ', $where );
+
+        $sql = "SELECT CASE WHEN pm_status.meta_value IS NULL OR pm_status.meta_value = '' THEN 'scheduled' ELSE pm_status.meta_value END AS normalized_status, COUNT(DISTINCT p.ID) AS total FROM {$wpdb->posts} p {$join_sql} {$where_sql} GROUP BY normalized_status";
+
+        $records = $params ? $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A ) : $wpdb->get_results( $sql, ARRAY_A );
+
+        $counts = array( 'all' => 0 );
+
+        foreach ( (array) $records as $record ) {
+            $status            = $record['normalized_status'] ? sanitize_text_field( $record['normalized_status'] ) : 'scheduled';
+            $counts[ $status ] = isset( $counts[ $status ] ) ? $counts[ $status ] + (int) $record['total'] : (int) $record['total'];
+            $counts['all']    += (int) $record['total'];
+        }
+
+        return $counts;
+    }
 }

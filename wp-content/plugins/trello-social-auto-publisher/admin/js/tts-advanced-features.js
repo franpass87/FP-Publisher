@@ -19,7 +19,7 @@ class TTSAdvancedFeatures {
 
     setupKeyboardShortcuts() {
         // Define keyboard shortcuts
-        this.shortcuts.set('ctrl+shift+d', () => this.navigateTo('fp-publisher-main'));
+        this.shortcuts.set('ctrl+shift+d', () => this.navigateTo('fp-publisher-dashboard'));
         this.shortcuts.set('ctrl+shift+c', () => this.navigateTo('fp-publisher-calendar'));
         this.shortcuts.set('ctrl+shift+a', () => this.navigateTo('fp-publisher-analytics'));
         this.shortcuts.set('ctrl+shift+h', () => this.navigateTo('fp-publisher-health'));
@@ -973,7 +973,7 @@ class TTSAdvancedFeatures {
         const newState = !isEnabled;
         localStorage.setItem('tts-auto-refresh', newState.toString());
         
-        if (newState && window.location.href.includes('page=fp-publisher-main')) {
+        if (newState && (window.location.href.includes('page=fp-publisher-dashboard') || window.location.href.includes('page=fp-publisher-main'))) {
             // Enable auto refresh for dashboard
             this.startAutoRefresh();
         } else {
@@ -1023,6 +1023,7 @@ class TTSAdvancedFeatures {
             let helpContent = '';
             
             switch (currentPage) {
+                case 'fp-publisher-dashboard':
                 case 'fp-publisher-main':
                     helpContent = this.getDashboardHelp();
                     break;

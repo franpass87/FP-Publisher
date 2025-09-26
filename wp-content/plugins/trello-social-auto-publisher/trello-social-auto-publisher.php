@@ -3,7 +3,7 @@
  * Plugin Name: FP Publisher
  * Plugin URI:  https://github.com/franpass87/FP-Social-Auto-Publisher
  * Description: Comprehensive multi-source content management system for automated social media publishing. Supports Trello, Google Drive, Dropbox, local uploads, and manual content creation with advanced scheduling and OAuth integration.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      Francesco Passeri
  * Author URI:  https://francescopasseri.com
  * Text Domain: fp-publisher
@@ -21,7 +21,7 @@ if ( ! defined( 'TSAP_PLUGIN_DIR' ) ) {
 }
 
 if ( ! defined( 'TSAP_VERSION' ) ) {
-        define( 'TSAP_VERSION', '1.1.0' );
+        define( 'TSAP_VERSION', '1.2.0' );
 }
 
 if ( ! defined( 'TSAP_VERSION_OPTION' ) ) {
@@ -47,7 +47,7 @@ if ( ! function_exists( 'tsap_get_plugin_version' ) ) {
          * @return string
          */
         function tsap_get_plugin_version() {
-                return defined( 'TSAP_VERSION' ) ? TSAP_VERSION : '1.1.0';
+                return defined( 'TSAP_VERSION' ) ? TSAP_VERSION : '1.2.0';
         }
 }
 
@@ -592,7 +592,8 @@ add_action(
 		if ( is_admin() ) {
 			require_once TSAP_PLUGIN_DIR . 'admin/class-tts-admin-ajax-security.php';
 			require_once TSAP_PLUGIN_DIR . 'admin/class-tts-admin-view-helper.php';
-			require_once TSAP_PLUGIN_DIR . 'admin/class-tts-admin.php';
+                    require_once TSAP_PLUGIN_DIR . 'admin/class-tts-admin.php';
+                    require_once TSAP_PLUGIN_DIR . 'admin/class-tts-admin-menu-registry.php';
 			require_once TSAP_PLUGIN_DIR . 'admin/controllers/class-tts-admin-menu-controller.php';
 			require_once TSAP_PLUGIN_DIR . 'admin/controllers/class-tts-ajax-social-settings-controller.php';
 			require_once TSAP_PLUGIN_DIR . 'admin/controllers/class-tts-import-export-controller.php';

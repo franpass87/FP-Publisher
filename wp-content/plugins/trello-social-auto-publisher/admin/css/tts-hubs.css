@@ -1,0 +1,6 @@
+/**
+ * Hub screen bundle entry point.
+ *
+ * The actual source lives under assets/src/admin/screens/hubs.css.
+ */
+@import "../../assets/src/admin/screens/hubs.css";

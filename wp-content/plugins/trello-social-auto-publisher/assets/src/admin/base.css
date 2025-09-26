@@ -1,0 +1,191 @@
+@import "./tokens.css";
+
+/**
+ * Shared admin base styles.
+ *
+ * These rules focus on layout primitives, consistent spacing and focus
+ * management. Components and visual flourishes live in the feature bundles.
+ */
+:where(body[class*="fp-publisher"]) #wpbody-content {
+    padding: var(--fp-admin-space-6) var(--fp-admin-space-6) var(--fp-admin-space-8);
+    background: var(--fp-admin-surface-subtle);
+    box-sizing: border-box;
+}
+
+:where(body[class*="fp-publisher"]) .wrap {
+    margin: 0;
+    padding: var(--fp-admin-space-6) var(--fp-admin-space-7);
+    background: var(--fp-admin-surface);
+    border: 1px solid var(--fp-admin-border);
+    border-radius: var(--fp-admin-radius-xl);
+    box-shadow: var(--fp-admin-shadow-sm);
+    font-family: var(--fp-admin-font-family-base);
+    color: var(--fp-admin-color-neutral-700);
+}
+
+@media (max-width: 960px) {
+    :where(body[class*="fp-publisher"]) #wpbody-content {
+        padding: var(--fp-admin-space-4) var(--fp-admin-space-3) var(--fp-admin-space-6);
+    }
+
+    :where(body[class*="fp-publisher"]) .wrap {
+        padding: var(--fp-admin-space-5) var(--fp-admin-space-4);
+    }
+}
+
+:where(body[class*="fp-publisher"]) .wrap h1,
+:where(body[class*="fp-publisher"]) .wrap .wp-heading-inline {
+    display: flex;
+    align-items: center;
+    gap: var(--fp-admin-space-3);
+    font-size: var(--fp-admin-font-size-3xl);
+    line-height: var(--fp-admin-line-height-tight);
+    margin: 0 0 var(--fp-admin-space-5);
+    color: var(--fp-admin-color-neutral-700);
+}
+
+:where(body[class*="fp-publisher"]) .wrap h1::before,
+:where(body[class*="fp-publisher"]) .wrap .wp-heading-inline::before {
+    content: '';
+    width: 6px;
+    height: 32px;
+    border-radius: var(--fp-admin-radius-pill);
+    background: linear-gradient(180deg, var(--fp-admin-color-primary) 0%, var(--fp-admin-color-primary-strong) 100%);
+}
+
+:where(body[class*="fp-publisher"]) .wrap .nav-tab-wrapper {
+    margin: calc(var(--fp-admin-space-3) * -1) 0 var(--fp-admin-space-4);
+    border-bottom: 1px solid var(--fp-admin-border);
+}
+
+:where(body[class*="fp-publisher"]) .wrap .nav-tab {
+    font-family: var(--fp-admin-font-family-alt);
+    font-size: var(--fp-admin-font-size-md);
+    padding: var(--fp-admin-space-2) var(--fp-admin-space-3);
+}
+
+:where(body[class*="fp-publisher"]) .wrap .nav-tab-active {
+    border-bottom-color: var(--fp-admin-color-primary);
+    color: var(--fp-admin-color-primary);
+}
+
+:where(body[class*="fp-publisher"]) a:focus-visible,
+:where(body[class*="fp-publisher"]) button:focus-visible,
+:where(body[class*="fp-publisher"]) [role="button"]:focus-visible,
+:where(body[class*="fp-publisher"]) input:focus-visible,
+:where(body[class*="fp-publisher"]) select:focus-visible,
+:where(body[class*="fp-publisher"]) textarea:focus-visible {
+    outline: 2px solid var(--fp-admin-color-primary);
+    outline-offset: 2px;
+    box-shadow: var(--fp-admin-focus-ring);
+    border-radius: var(--fp-admin-radius-sm);
+}
+
+:where(body[class*="fp-publisher"]) .fp-admin-tab:focus-visible {
+    border-radius: var(--fp-admin-radius-pill);
+}
+
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) > a:focus-visible {
+    outline: 2px solid var(--fp-admin-color-primary-contrast);
+    outline-offset: -3px;
+    box-shadow: 0 0 0 3px var(--fp-admin-color-primary-strong);
+}
+
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu a:focus-visible {
+    outline: 2px solid var(--fp-admin-color-primary);
+    outline-offset: -2px;
+}
+
+:where(body[class*="fp-publisher"]) .fp-admin-screen {
+    max-width: var(--fp-admin-container-max);
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--fp-admin-space-6);
+}
+
+:where(body[class*="fp-publisher"]) .fp-admin-screen__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--fp-admin-space-4);
+    flex-wrap: wrap;
+}
+
+:where(body[class*="fp-publisher"]) .fp-admin-screen__title {
+    margin: 0;
+    font-size: var(--fp-admin-font-size-2xl);
+    line-height: var(--fp-admin-line-height-tight);
+}
+
+:where(body[class*="fp-publisher"]) .fp-admin-screen__actions {
+    display: flex;
+    gap: var(--fp-admin-space-3);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 782px) {
+    :where(body[class*="fp-publisher"]) .fp-admin-screen__header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) > a {
+    border-radius: var(--fp-admin-radius-md);
+    font-weight: 600;
+    background: linear-gradient(135deg, rgba(34, 113, 177, 0.9), rgba(75, 132, 196, 0.9));
+    color: var(--fp-admin-color-primary-contrast) !important;
+    margin: var(--fp-admin-space-1) var(--fp-admin-space-2);
+    box-shadow: var(--fp-admin-shadow-xs);
+}
+
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) > a .wp-menu-name {
+    letter-spacing: 0.01em;
+}
+
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) > a:hover,
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main).current > a,
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main).opensub > a {
+    background: linear-gradient(135deg, var(--fp-admin-color-primary-strong), rgba(34, 113, 177, 0.95));
+    color: var(--fp-admin-color-primary-contrast) !important;
+}
+
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu {
+    padding-block: var(--fp-admin-space-2);
+}
+
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu a {
+    white-space: normal;
+    line-height: var(--fp-admin-line-height-base);
+    padding: var(--fp-admin-space-2) var(--fp-admin-space-3);
+    border-left: 3px solid transparent;
+    transition: border-color var(--fp-admin-transition-base), color var(--fp-admin-transition-base), background var(--fp-admin-transition-base);
+}
+
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu li.current a,
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu a:hover,
+#adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu a:focus {
+    background: var(--fp-admin-color-primary-soft);
+    border-left-color: var(--fp-admin-color-primary);
+    color: var(--fp-admin-color-primary);
+}
+
+@media (forced-colors: active) {
+    :where(body[class*="fp-publisher"]) a:focus-visible,
+    :where(body[class*="fp-publisher"]) button:focus-visible,
+    :where(body[class*="fp-publisher"]) [role="button"]:focus-visible,
+    :where(body[class*="fp-publisher"]) input:focus-visible,
+    :where(body[class*="fp-publisher"]) select:focus-visible,
+    :where(body[class*="fp-publisher"]) textarea:focus-visible {
+        outline: 2px solid CanvasText;
+        box-shadow: none;
+    }
+
+    #adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) > a:focus-visible,
+    #adminmenu :is(.toplevel_page_fp-publisher-dashboard, .toplevel_page_fp-publisher-main) .wp-submenu a:focus-visible {
+        box-shadow: none;
+        outline: 2px solid CanvasText;
+    }
+}
