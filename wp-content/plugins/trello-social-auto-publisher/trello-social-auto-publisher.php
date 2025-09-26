@@ -622,6 +622,9 @@ add_action( 'plugins_loaded', function () {
     // Attach the refresh action to the token refresh handler.
     add_action( 'tts_refresh_tokens', array( 'TTS_Token_Refresh', 'refresh_tokens' ) );
 
+    // Register async analytics processor.
+    add_action( 'init', array( 'TTS_Analytics', 'register_async_hook' ) );
+
     // Schedule daily metrics fetching.
     add_action( 'init', function () {
         if ( ! wp_next_scheduled( 'tts_fetch_metrics' ) ) {
@@ -639,21 +642,43 @@ add_action( 'plugins_loaded', function () {
         }
     } );
 
-    // Hook the link checker.
+    // Hook the link checker with batching to avoid large queries.
     add_action( 'tts_check_links', function () {
-        $posts = get_posts(
-            array(
-                'post_type'      => 'tts_social_post',
-                'post_status'    => 'any',
-                'posts_per_page' => -1,
-                'fields'         => 'ids',
-                'meta_key'       => '_published_status',
-                'meta_value'     => 'scheduled',
-            )
-        );
+        $batch_size = (int) apply_filters( 'tts_link_check_batch_size', 75 );
+        $batch_size = max( 1, $batch_size );
+        $paged      = 1;
 
-        foreach ( $posts as $post_id ) {
-            TTS_Link_Checker::verify_urls( $post_id );
-        }
+        do {
+            $query = new WP_Query(
+                array(
+                    'post_type'              => 'tts_social_post',
+                    'post_status'            => 'any',
+                    'posts_per_page'         => $batch_size,
+                    'paged'                  => $paged,
+                    'fields'                 => 'ids',
+                    'orderby'                => 'ID',
+                    'order'                  => 'ASC',
+                    'meta_key'               => '_published_status',
+                    'meta_value'             => 'scheduled',
+                    'no_found_rows'          => true,
+                    'update_post_term_cache' => false,
+                    'update_post_meta_cache' => false,
+                )
+            );
+
+            if ( empty( $query->posts ) ) {
+                break;
+            }
+
+            foreach ( $query->posts as $post_id ) {
+                TTS_Link_Checker::verify_urls( (int) $post_id );
+            }
+
+            if ( count( $query->posts ) < $batch_size ) {
+                break;
+            }
+
+            $paged++;
+        } while ( true );
     } );
 } );
