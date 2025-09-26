@@ -39,7 +39,7 @@ if ( ! class_exists( 'TTS_Plugin_Upgrades' ) ) {
                  *
                  * @var string
                  */
-                private $current_version = '1.1.0';
+                private $current_version = '1.2.0';
 
                 /**
                  * Retrieve the shared singleton instance.

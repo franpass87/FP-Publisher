@@ -106,7 +106,7 @@ class TTS_Backup {
 			$backup_data = array(
 				'timestamp' => current_time( 'mysql' ),
 				'type'      => $type,
-				'version'   => '1.1.0',
+                            'version'   => '1.2.0',
 				'site_url'  => get_site_url(),
 				'meta'      => array(),
 				'data'      => array(),

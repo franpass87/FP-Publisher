@@ -1150,7 +1150,7 @@ class TTS_Monitoring {
 		}
 
 		$message .= "Please check your Social Auto Publisher dashboard for more details.\n";
-		$message .= 'Dashboard: ' . admin_url( 'admin.php?page=fp-publisher-main' );
+                $message .= 'Dashboard: ' . admin_url( 'admin.php?page=fp-publisher-dashboard' );
 
 		wp_mail( $alert_settings['email'], $subject, $message );
 	}
@@ -1297,7 +1297,7 @@ class TTS_Monitoring {
 		if ( ! empty( $high_priority_alerts ) ) {
 			echo '<div class="notice notice-error is-dismissible">';
 			echo '<p><strong>Social Auto Publisher Health Alert:</strong> ' . count( $high_priority_alerts ) . ' critical issue(s) detected.</p>';
-			echo '<p><a href="' . admin_url( 'admin.php?page=fp-publisher-main' ) . '">View Dashboard</a></p>';
+                        echo '<p><a href="' . admin_url( 'admin.php?page=fp-publisher-dashboard' ) . '">View Dashboard</a></p>';
 			echo '</div>';
 		}
 	}

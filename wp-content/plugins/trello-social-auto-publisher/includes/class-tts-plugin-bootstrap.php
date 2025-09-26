@@ -99,6 +99,7 @@ if ( ! class_exists( 'TTS_Plugin_Bootstrap' ) ) {
                         'admin/class-tts-admin-ajax-security.php',
                         'admin/class-tts-admin-view-helper.php',
                         'admin/class-tts-admin.php',
+                        'admin/class-tts-admin-menu-registry.php',
                         'admin/controllers/class-tts-admin-menu-controller.php',
                         'admin/controllers/class-tts-ajax-social-settings-controller.php',
                         'admin/controllers/class-tts-import-export-controller.php',

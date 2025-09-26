@@ -36,7 +36,7 @@ class TTS_Advanced_Utils {
 
 		$options     = wp_parse_args( $options, $defaults );
 		$export_data = array(
-                    'version'   => defined( 'TSAP_VERSION' ) ? TSAP_VERSION : '1.1.0',
+                    'version'   => defined( 'TSAP_VERSION' ) ? TSAP_VERSION : '1.2.0',
 			'timestamp' => current_time( 'mysql' ),
 			'site_url'  => get_site_url(),
 			'data'      => array(),
@@ -920,7 +920,7 @@ class TTS_Advanced_Utils {
 	public static function generate_system_report() {
 		return array(
 			'plugin_info'   => array(
-                            'version'      => defined( 'TSAP_VERSION' ) ? TSAP_VERSION : '1.1.0',
+                            'version'      => defined( 'TSAP_VERSION' ) ? TSAP_VERSION : '1.2.0',
 				'active_since' => tsap_get_option( 'tts_first_activation', 'Unknown' ),
 				'last_updated' => current_time( 'mysql' ),
 			),

@@ -170,10 +170,10 @@ $tests = array(
 		tts_assert_equals( 'published', $post_payload['status'], 'Status values must be sanitized.' );
 
 		$edit_link = $post_payload['edit_link'];
-		tts_assert_true(
-			0 === strpos( $edit_link, 'admin.php?page=fp-publisher-social-posts' ),
-			'Edit links should route through the custom FP Publisher editor.'
-		);
+                tts_assert_true(
+                        0 === strpos( $edit_link, 'admin.php?page=fp-publisher-queue' ) || 0 === strpos( $edit_link, 'admin.php?page=fp-publisher-social-posts' ),
+                        'Edit links should route through the custom FP Publisher editor.'
+                );
 
 		$query_args = array();
 		$query_url  = 'http://example.com/' . ltrim( $edit_link, '/' );
@@ -186,10 +186,10 @@ $tests = array(
 		parse_str( $query_string, $query_args );
 
 		tts_assert_equals(
-			'fp-publisher-social-posts',
-			isset( $query_args['page'] ) ? $query_args['page'] : '',
-			'Edit links must stay scoped to the FP Publisher editor page.'
-		);
+                        'fp-publisher-queue',
+                        isset( $query_args['page'] ) ? $query_args['page'] : '',
+                        'Edit links must stay scoped to the FP Publisher editor page.'
+                );
 		tts_assert_equals(
 			'edit',
 			isset( $query_args['action'] ) ? $query_args['action'] : '',

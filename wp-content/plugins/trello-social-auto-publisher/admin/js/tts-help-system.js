@@ -18,7 +18,7 @@ class TTSHelpSystem {
 
     loadHelpData() {
         this.helpData = {
-            'fp-publisher-main': {
+            'fp-publisher-dashboard': {
                 title: 'Dashboard Help',
                 sections: [
                     {
@@ -105,6 +105,8 @@ class TTSHelpSystem {
                 ]
             }
         };
+
+        this.helpData['fp-publisher-main'] = this.helpData['fp-publisher-dashboard'];
     }
 
     addHelpButton() {

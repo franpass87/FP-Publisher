@@ -15,6 +15,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TTS_Settings {
 
 	/**
+	 * Cached plugin settings.
+	 *
+	 * @var array|null
+	 */
+	private $settings = null;
+
+	/**
 	 * Initialize hooks.
 	 */
 	public function __construct() {
@@ -38,11 +45,15 @@ class TTS_Settings {
 			'tts_settings_group',
 			'tts_settings',
 			array(
+				'type'              => 'array',
 				'sanitize_callback' => 'tts_sanitize_settings',
+				'default'           => array(),
+				'capability'        => 'manage_options',
 			)
 		);
 
-		$channels = array( 'facebook', 'instagram', 'youtube', 'tiktok' );
+		$channels   = array( 'facebook', 'instagram', 'youtube', 'tiktok' );
+		$utm_params = array( 'utm_source', 'utm_medium', 'utm_campaign' );
 
 		// Trello API credentials.
 		add_settings_section(
@@ -57,7 +68,10 @@ class TTS_Settings {
 			__( 'API Key', 'fp-publisher' ),
 			array( $this, 'render_trello_api_key_field' ),
 			'tts_settings',
-			'tts_trello_api'
+			'tts_trello_api',
+			array(
+				'label_for' => $this->get_field_id( 'trello_api_key' ),
+			)
 		);
 
 		add_settings_field(
@@ -65,7 +79,10 @@ class TTS_Settings {
 			__( 'API Token', 'fp-publisher' ),
 			array( $this, 'render_trello_api_token_field' ),
 			'tts_settings',
-			'tts_trello_api'
+			'tts_trello_api',
+			array(
+				'label_for' => $this->get_field_id( 'trello_api_token' ),
+			)
 		);
 
 		// Column mapping.
@@ -81,7 +98,10 @@ class TTS_Settings {
 			__( 'Column Mapping (JSON)', 'fp-publisher' ),
 			array( $this, 'render_column_mapping_field' ),
 			'tts_settings',
-			'tts_column_mapping'
+			'tts_column_mapping',
+			array(
+				'label_for' => $this->get_field_id( 'column_mapping' ),
+			)
 		);
 
 		// Usage modes.
@@ -97,7 +117,10 @@ class TTS_Settings {
 			__( 'Interfaccia preferita', 'fp-publisher' ),
 			array( $this, 'render_usage_profile_field' ),
 			'tts_settings',
-			'tts_usage_modes'
+			'tts_usage_modes',
+			array(
+				'label_for' => $this->get_field_id( 'usage_profile_standard' ),
+			)
 		);
 
 		// Social access token.
@@ -113,7 +136,10 @@ class TTS_Settings {
 			__( 'Access Token', 'fp-publisher' ),
 			array( $this, 'render_social_access_token_field' ),
 			'tts_settings',
-			'tts_social_token'
+			'tts_social_token',
+			array(
+				'label_for' => $this->get_field_id( 'social_access_token' ),
+			)
 		);
 
 		// Scheduling options.
@@ -132,7 +158,8 @@ class TTS_Settings {
 				'tts_settings',
 				'tts_scheduling_options',
 				array(
-					'channel' => $channel,
+					'channel'   => $channel,
+					'label_for' => $this->get_field_id( $channel . '_offset' ),
 				)
 			);
 		}
@@ -150,7 +177,10 @@ class TTS_Settings {
 			__( 'Default Latitude', 'fp-publisher' ),
 			array( $this, 'render_default_lat_field' ),
 			'tts_settings',
-			'tts_location_options'
+			'tts_location_options',
+			array(
+				'label_for' => $this->get_field_id( 'default_lat' ),
+			)
 		);
 
 		add_settings_field(
@@ -158,7 +188,10 @@ class TTS_Settings {
 			__( 'Default Longitude', 'fp-publisher' ),
 			array( $this, 'render_default_lng_field' ),
 			'tts_settings',
-			'tts_location_options'
+			'tts_location_options',
+			array(
+				'label_for' => $this->get_field_id( 'default_lng' ),
+			)
 		);
 
 		// Image size options.
@@ -177,7 +210,8 @@ class TTS_Settings {
 				'tts_settings',
 				'tts_image_sizes',
 				array(
-					'channel' => $channel,
+					'channel'   => $channel,
+					'label_for' => $this->get_field_id( $channel . '_size' ),
 				)
 			);
 		}
@@ -195,7 +229,10 @@ class TTS_Settings {
 			__( 'FFmpeg Binary Path', 'fp-publisher' ),
 			array( $this, 'render_media_transcoder_path_field' ),
 			'tts_settings',
-			'tts_media_processing'
+			'tts_media_processing',
+			array(
+				'label_for' => $this->get_field_id( 'media_transcoder_path' ),
+			)
 		);
 
 		// UTM options.
@@ -205,10 +242,9 @@ class TTS_Settings {
 			'__return_false',
 			'tts_settings'
 		);
-		$params = array( 'utm_source', 'utm_medium', 'utm_campaign' );
 
 		foreach ( $channels as $channel ) {
-			foreach ( $params as $param ) {
+			foreach ( $utm_params as $param ) {
 				add_settings_field(
 					$channel . '_' . $param,
 					sprintf( __( '%1$s UTM %2$s', 'fp-publisher' ), ucfirst( $channel ), ucfirst( str_replace( 'utm_', '', $param ) ) ),
@@ -216,8 +252,9 @@ class TTS_Settings {
 					'tts_settings',
 					'tts_utm_options',
 					array(
-						'channel' => $channel,
-						'param'   => $param,
+						'channel'   => $channel,
+						'param'     => $param,
+						'label_for' => $this->get_field_id( 'utm_' . $channel . '_' . $param ),
 					)
 				);
 			}
@@ -236,7 +273,10 @@ class TTS_Settings {
 			__( 'Facebook Template', 'fp-publisher' ),
 			array( $this, 'render_facebook_template_field' ),
 			'tts_settings',
-			'tts_template_options'
+			'tts_template_options',
+			array(
+				'label_for' => $this->get_field_id( 'facebook_template' ),
+			)
 		);
 
 		add_settings_field(
@@ -244,7 +284,10 @@ class TTS_Settings {
 			__( 'Instagram Template', 'fp-publisher' ),
 			array( $this, 'render_instagram_template_field' ),
 			'tts_settings',
-			'tts_template_options'
+			'tts_template_options',
+			array(
+				'label_for' => $this->get_field_id( 'instagram_template' ),
+			)
 		);
 
 		add_settings_field(
@@ -252,7 +295,10 @@ class TTS_Settings {
 			__( 'YouTube Template', 'fp-publisher' ),
 			array( $this, 'render_youtube_template_field' ),
 			'tts_settings',
-			'tts_template_options'
+			'tts_template_options',
+			array(
+				'label_for' => $this->get_field_id( 'youtube_template' ),
+			)
 		);
 
 		add_settings_field(
@@ -260,7 +306,10 @@ class TTS_Settings {
 			__( 'TikTok Template', 'fp-publisher' ),
 			array( $this, 'render_tiktok_template_field' ),
 			'tts_settings',
-			'tts_template_options'
+			'tts_template_options',
+			array(
+				'label_for' => $this->get_field_id( 'tiktok_template' ),
+			)
 		);
 
 		add_settings_field(
@@ -268,7 +317,10 @@ class TTS_Settings {
 			__( 'Labels as Hashtags', 'fp-publisher' ),
 			array( $this, 'render_labels_as_hashtags_field' ),
 			'tts_settings',
-			'tts_template_options'
+			'tts_template_options',
+			array(
+				'label_for' => $this->get_field_id( 'labels_as_hashtags' ),
+			)
 		);
 
 		// URL shortener options.
@@ -284,7 +336,10 @@ class TTS_Settings {
 			__( 'URL Shortener', 'fp-publisher' ),
 			array( $this, 'render_url_shortener_field' ),
 			'tts_settings',
-			'tts_url_shortener'
+			'tts_url_shortener',
+			array(
+				'label_for' => $this->get_field_id( 'url_shortener' ),
+			)
 		);
 
 		add_settings_field(
@@ -292,7 +347,10 @@ class TTS_Settings {
 			__( 'Bitly Token', 'fp-publisher' ),
 			array( $this, 'render_bitly_token_field' ),
 			'tts_settings',
-			'tts_url_shortener'
+			'tts_url_shortener',
+			array(
+				'label_for' => $this->get_field_id( 'bitly_token' ),
+			)
 		);
 
 		// Notification options.
@@ -308,7 +366,10 @@ class TTS_Settings {
 			__( 'Slack Webhook', 'fp-publisher' ),
 			array( $this, 'render_slack_webhook_field' ),
 			'tts_settings',
-			'tts_notification_options'
+			'tts_notification_options',
+			array(
+				'label_for' => $this->get_field_id( 'slack_webhook' ),
+			)
 		);
 
 		add_settings_field(
@@ -316,7 +377,10 @@ class TTS_Settings {
 			__( 'Notification Emails', 'fp-publisher' ),
 			array( $this, 'render_notification_emails_field' ),
 			'tts_settings',
-			'tts_notification_options'
+			'tts_notification_options',
+			array(
+				'label_for' => $this->get_field_id( 'notification_emails' ),
+			)
 		);
 
 		// Logging options.
@@ -332,17 +396,62 @@ class TTS_Settings {
 			__( 'Log Retention (days)', 'fp-publisher' ),
 			array( $this, 'render_log_retention_days_field' ),
 			'tts_settings',
-			'tts_logging_options'
+			'tts_logging_options',
+			array(
+				'label_for' => $this->get_field_id( 'log_retention_days' ),
+			)
 		);
+	}
+
+	/**
+	 * Retrieve cached plugin settings.
+	 *
+	 * @return array
+	 */
+	private function get_settings() {
+		if ( null === $this->settings ) {
+			$stored         = tsap_get_option( 'tts_settings', array() );
+			$this->settings = is_array( $stored ) ? $stored : array();
+		}
+
+		return $this->settings;
+	}
+
+	/**
+	 * Retrieve a single setting value.
+	 *
+	 * @param string $key     Setting key.
+	 * @param mixed  $default Default value when the key is missing.
+	 * @return mixed
+	 */
+	private function get_setting( $key, $default = '' ) {
+		$settings = $this->get_settings();
+
+		return isset( $settings[ $key ] ) ? $settings[ $key ] : $default;
+	}
+
+	/**
+	 * Build a stable field identifier for markup binding.
+	 *
+	 * @param string $suffix Field suffix.
+	 * @return string
+	 */
+	private function get_field_id( $suffix ) {
+		return 'tts_settings_' . sanitize_key( $suffix );
 	}
 
 	/**
 	 * Render the settings page.
 	 */
 	public function render_settings_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'fp-publisher' ) );
+		}
+
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Trello Social Settings', 'fp-publisher' ); ?></h1>
+			<?php settings_errors( 'tts_settings' ); ?>
 			<form action="options.php" method="post">
 				<?php
 				settings_fields( 'tts_settings_group' );
@@ -353,56 +462,85 @@ class TTS_Settings {
 		</div>
 		<?php
 	}
-
 	/**
 	 * Render field for Trello API key.
 	 */
 	public function render_trello_api_key_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['trello_api_key'] ) ? esc_attr( $options['trello_api_key'] ) : '';
-		echo '<input type="text" name="tts_settings[trello_api_key]" value="' . $value . '" class="regular-text" />';
+		$field_id = $this->get_field_id( 'trello_api_key' );
+		$value    = $this->get_setting( 'trello_api_key', '' );
+
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[trello_api_key]" value="%2$s" class="regular-text" autocomplete="off" />',
+			esc_attr( $field_id ),
+			esc_attr( $value )
+		);
 	}
 
 	/**
 	 * Render field for Trello API token.
 	 */
 	public function render_trello_api_token_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['trello_api_token'] ) ? esc_attr( $options['trello_api_token'] ) : '';
-		echo '<input type="text" name="tts_settings[trello_api_token]" value="' . $value . '" class="regular-text" />';
+		$field_id = $this->get_field_id( 'trello_api_token' );
+		$value    = $this->get_setting( 'trello_api_token', '' );
+
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[trello_api_token]" value="%2$s" class="regular-text" autocomplete="off" />',
+			esc_attr( $field_id ),
+			esc_attr( $value )
+		);
 	}
 
 	/**
 	 * Render field for column mapping.
 	 */
 	public function render_column_mapping_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['column_mapping'] ) ? esc_textarea( $options['column_mapping'] ) : '';
-		echo '<textarea name="tts_settings[column_mapping]" rows="5" cols="50" class="large-text">' . $value . '</textarea>';
+		$field_id       = $this->get_field_id( 'column_mapping' );
+		$description_id = $field_id . '-description';
+		$value          = $this->get_setting( 'column_mapping', '' );
+
+		printf(
+			'<textarea id="%1$s" name="tts_settings[column_mapping]" rows="5" cols="50" class="large-text code" aria-describedby="%2$s">%3$s</textarea>',
+			esc_attr( $field_id ),
+			esc_attr( $description_id ),
+			esc_textarea( $value )
+		);
+
+		printf(
+			'<p id="%1$s" class="description">%2$s</p>',
+			esc_attr( $description_id ),
+			esc_html__( 'Provide a JSON map of Trello column identifiers to readable names.', 'fp-publisher' )
+		);
 	}
 
 	/**
 	 * Render field for social access token.
 	 */
 	public function render_social_access_token_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['social_access_token'] ) ? esc_attr( $options['social_access_token'] ) : '';
-		echo '<input type="password" name="tts_settings[social_access_token]" value="' . $value . '" class="regular-text" />';
+		$field_id = $this->get_field_id( 'social_access_token' );
+		$value    = $this->get_setting( 'social_access_token', '' );
+
+		printf(
+			'<input type="password" id="%1$s" name="tts_settings[social_access_token]" value="%2$s" class="regular-text" autocomplete="new-password" />',
+			esc_attr( $field_id ),
+			esc_attr( $value )
+		);
 	}
 
 	/**
 	 * Render introductory copy for the usage modes section.
 	 */
 	public function render_usage_modes_intro() {
-		echo '<p class="description">' . esc_html__( 'Seleziona il profilo che meglio rappresenta il tuo team per mostrare solo gli strumenti necessari.', 'fp-publisher' ) . '</p>';
+		printf(
+			'<p class="description">%s</p>',
+			esc_html__( 'Seleziona il profilo che meglio rappresenta il tuo team per mostrare solo gli strumenti necessari.', 'fp-publisher' )
+		);
 	}
 
 	/**
 	 * Render usage profile selector field.
 	 */
 	public function render_usage_profile_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['usage_profile'] ) ? sanitize_key( $options['usage_profile'] ) : 'standard';
+		$current = sanitize_key( $this->get_setting( 'usage_profile', 'standard' ) );
 
 		$choices = array(
 			'standard'   => array(
@@ -421,12 +559,15 @@ class TTS_Settings {
 
 		echo '<fieldset class="tts-usage-profile">';
 		foreach ( $choices as $key => $choice ) {
-			$checked = checked( $value, $key, false );
-			echo '<label style="display:block;margin-bottom:12px;">';
-			echo '<input type="radio" name="tts_settings[usage_profile]" value="' . esc_attr( $key ) . '" ' . $checked . ' /> ';
-			echo '<strong>' . esc_html( $choice['label'] ) . '</strong>';
-			echo '<br /><span class="description">' . esc_html( $choice['description'] ) . '</span>';
-			echo '</label>';
+			$input_id = $this->get_field_id( 'usage_profile_' . $key );
+			printf(
+				'<label for="%1$s" class="tts-usage-profile__option"><input type="radio" id="%1$s" name="tts_settings[usage_profile]" value="%2$s"%3$s /> <strong>%4$s</strong><br /><span class="description">%5$s</span></label>',
+				esc_attr( $input_id ),
+				esc_attr( $key ),
+				checked( $current, $key, false ),
+				esc_html( $choice['label'] ),
+				esc_html( $choice['description'] )
+			);
 		}
 		echo '</fieldset>';
 	}
@@ -437,29 +578,50 @@ class TTS_Settings {
 	 * @param array $args Field arguments.
 	 */
 	public function render_offset_field( $args ) {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$channel = isset( $args['channel'] ) ? $args['channel'] : '';
-		$key     = $channel . '_offset';
-		$value   = isset( $options[ $key ] ) ? intval( $options[ $key ] ) : 0;
-		echo '<input type="number" min="0" name="tts_settings[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '" class="small-text" />';
+		$channel = isset( $args['channel'] ) ? sanitize_key( $args['channel'] ) : '';
+
+		if ( '' === $channel ) {
+			return;
+		}
+
+		$key      = $channel . '_offset';
+		$field_id = $this->get_field_id( $key );
+		$value    = absint( $this->get_setting( $key, 0 ) );
+
+		printf(
+			'<input type="number" id="%1$s" name="tts_settings[%2$s]" value="%3$s" class="small-text" min="0" step="1" />',
+			esc_attr( $field_id ),
+			esc_attr( $key ),
+			esc_attr( $value )
+		);
 	}
 
 	/**
 	 * Render field for default latitude.
 	 */
 	public function render_default_lat_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['default_lat'] ) ? esc_attr( $options['default_lat'] ) : '';
-		echo '<input type="text" name="tts_settings[default_lat]" value="' . $value . '" class="regular-text" />';
+		$field_id = $this->get_field_id( 'default_lat' );
+		$value    = $this->get_setting( 'default_lat', '' );
+
+		printf(
+			'<input type="number" id="%1$s" name="tts_settings[default_lat]" value="%2$s" class="regular-text" step="any" />',
+			esc_attr( $field_id ),
+			esc_attr( $value )
+		);
 	}
 
 	/**
 	 * Render field for default longitude.
 	 */
 	public function render_default_lng_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['default_lng'] ) ? esc_attr( $options['default_lng'] ) : '';
-		echo '<input type="text" name="tts_settings[default_lng]" value="' . $value . '" class="regular-text" />';
+		$field_id = $this->get_field_id( 'default_lng' );
+		$value    = $this->get_setting( 'default_lng', '' );
+
+		printf(
+			'<input type="number" id="%1$s" name="tts_settings[default_lng]" value="%2$s" class="regular-text" step="any" />',
+			esc_attr( $field_id ),
+			esc_attr( $value )
+		);
 	}
 
 	/**
@@ -468,28 +630,52 @@ class TTS_Settings {
 	 * @param array $args Field arguments.
 	 */
 	public function render_image_size_field( $args ) {
-		$options  = tsap_get_option( 'tts_settings', array() );
-		$channel  = isset( $args['channel'] ) ? $args['channel'] : '';
-		$key      = $channel . '_size';
-		$defaults = array(
+		$channel = isset( $args['channel'] ) ? sanitize_key( $args['channel'] ) : '';
+
+		if ( '' === $channel ) {
+			return;
+		}
+
+		$key        = $channel . '_size';
+		$field_id   = $this->get_field_id( $key );
+		$defaults   = array(
 			'facebook'  => '1080x1350',
 			'instagram' => '1080x1350',
 			'youtube'   => '1080x1920',
 			'tiktok'    => '1080x1920',
 		);
-		$value    = isset( $options[ $key ] ) ? esc_attr( $options[ $key ] ) : ( isset( $defaults[ $channel ] ) ? $defaults[ $channel ] : '' );
-		echo '<input type="text" name="tts_settings[' . esc_attr( $key ) . ']" value="' . $value . '" class="regular-text" placeholder="' . esc_attr( $defaults[ $channel ] ) . '" />';
+		$placeholder = isset( $defaults[ $channel ] ) ? $defaults[ $channel ] : '';
+		$value       = $this->get_setting( $key, '' );
+
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[%2$s]" value="%3$s" class="regular-text" placeholder="%4$s" />',
+			esc_attr( $field_id ),
+			esc_attr( $key ),
+			esc_attr( $value ),
+			esc_attr( $placeholder )
+		);
 	}
 
 	/**
 	 * Render field for media transcoder path.
 	 */
 	public function render_media_transcoder_path_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['media_transcoder_path'] ) ? esc_attr( $options['media_transcoder_path'] ) : '';
+		$field_id       = $this->get_field_id( 'media_transcoder_path' );
+		$description_id = $field_id . '-description';
+		$value          = $this->get_setting( 'media_transcoder_path', '' );
 
-		echo '<input type="text" name="tts_settings[media_transcoder_path]" value="' . $value . '" class="regular-text" placeholder="/usr/bin/ffmpeg" />';
-		echo '<p class="description">' . esc_html__( 'Provide the absolute path to the ffmpeg binary used for video compression.', 'fp-publisher' ) . '</p>';
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[media_transcoder_path]" value="%2$s" class="regular-text" placeholder="/usr/bin/ffmpeg" aria-describedby="%3$s" />',
+			esc_attr( $field_id ),
+			esc_attr( $value ),
+			esc_attr( $description_id )
+		);
+
+		printf(
+			'<p id="%1$s" class="description">%2$s</p>',
+			esc_attr( $description_id ),
+			esc_html__( 'Provide the absolute path to the ffmpeg binary used for video compression.', 'fp-publisher' )
+		);
 	}
 
 	/**
@@ -498,68 +684,135 @@ class TTS_Settings {
 	 * @param array $args Field arguments.
 	 */
 	public function render_utm_field( $args ) {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$channel = isset( $args['channel'] ) ? $args['channel'] : '';
-		$param   = isset( $args['param'] ) ? $args['param'] : '';
-		$value   = isset( $options['utm'][ $channel ][ $param ] ) ? esc_attr( $options['utm'][ $channel ][ $param ] ) : '';
-		echo '<input type="text" name="tts_settings[utm][' . esc_attr( $channel ) . '][' . esc_attr( $param ) . ']" value="' . $value . '" class="regular-text" />';
+		$channel = isset( $args['channel'] ) ? sanitize_key( $args['channel'] ) : '';
+		$param   = isset( $args['param'] ) ? sanitize_key( $args['param'] ) : '';
+
+		if ( '' === $channel || '' === $param ) {
+			return;
+		}
+
+		$field_id = $this->get_field_id( 'utm_' . $channel . '_' . $param );
+		$settings = $this->get_settings();
+		$value    = isset( $settings['utm'][ $channel ][ $param ] ) ? $settings['utm'][ $channel ][ $param ] : '';
+
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[utm][%2$s][%3$s]" value="%4$s" class="regular-text" />',
+			esc_attr( $field_id ),
+			esc_attr( $channel ),
+			esc_attr( $param ),
+			esc_attr( $value )
+		);
 	}
 
 	/**
 	 * Render field for Facebook template.
 	 */
 	public function render_facebook_template_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['facebook_template'] ) ? esc_attr( $options['facebook_template'] ) : '';
-		echo '<input type="text" name="tts_settings[facebook_template]" value="' . $value . '" class="regular-text" placeholder="{title} {url} {due}" />';
-		echo '<p class="description">' . esc_html__( 'Available placeholders: {title}, {url}, {due}, {labels}, {client_name}', 'fp-publisher' ) . '</p>';
+		$field_id       = $this->get_field_id( 'facebook_template' );
+		$description_id = $field_id . '-description';
+		$value          = $this->get_setting( 'facebook_template', '' );
+
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[facebook_template]" value="%2$s" class="regular-text" placeholder="{title} {url} {due}" aria-describedby="%3$s" />',
+			esc_attr( $field_id ),
+			esc_attr( $value ),
+			esc_attr( $description_id )
+		);
+
+		printf(
+			'<p id="%1$s" class="description">%2$s</p>',
+			esc_attr( $description_id ),
+			esc_html__( 'Available placeholders: {title}, {url}, {due}, {labels}, {client_name}', 'fp-publisher' )
+		);
 	}
 
 	/**
 	 * Render field for Instagram template.
 	 */
 	public function render_instagram_template_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['instagram_template'] ) ? esc_attr( $options['instagram_template'] ) : '';
-		echo '<input type="text" name="tts_settings[instagram_template]" value="' . $value . '" class="regular-text" placeholder="{title} {url} {due}" />';
-		echo '<p class="description">' . esc_html__( 'Available placeholders: {title}, {url}, {due}, {labels}, {client_name}', 'fp-publisher' ) . '</p>';
+		$field_id       = $this->get_field_id( 'instagram_template' );
+		$description_id = $field_id . '-description';
+		$value          = $this->get_setting( 'instagram_template', '' );
+
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[instagram_template]" value="%2$s" class="regular-text" placeholder="{title} {url} {due}" aria-describedby="%3$s" />',
+			esc_attr( $field_id ),
+			esc_attr( $value ),
+			esc_attr( $description_id )
+		);
+
+		printf(
+			'<p id="%1$s" class="description">%2$s</p>',
+			esc_attr( $description_id ),
+			esc_html__( 'Available placeholders: {title}, {url}, {due}, {labels}, {client_name}', 'fp-publisher' )
+		);
 	}
 
 	/**
 	 * Render field for YouTube template.
 	 */
 	public function render_youtube_template_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['youtube_template'] ) ? esc_attr( $options['youtube_template'] ) : '';
-		echo '<input type="text" name="tts_settings[youtube_template]" value="' . $value . '" class="regular-text" placeholder="{title} {url} {due}" />';
-		echo '<p class="description">' . esc_html__( 'Available placeholders: {title}, {url}, {due}, {labels}, {client_name}', 'fp-publisher' ) . '</p>';
+		$field_id       = $this->get_field_id( 'youtube_template' );
+		$description_id = $field_id . '-description';
+		$value          = $this->get_setting( 'youtube_template', '' );
+
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[youtube_template]" value="%2$s" class="regular-text" placeholder="{title} {url} {due}" aria-describedby="%3$s" />',
+			esc_attr( $field_id ),
+			esc_attr( $value ),
+			esc_attr( $description_id )
+		);
+
+		printf(
+			'<p id="%1$s" class="description">%2$s</p>',
+			esc_attr( $description_id ),
+			esc_html__( 'Available placeholders: {title}, {url}, {due}, {labels}, {client_name}', 'fp-publisher' )
+		);
 	}
 
 	/**
 	 * Render field for TikTok template.
 	 */
 	public function render_tiktok_template_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['tiktok_template'] ) ? esc_attr( $options['tiktok_template'] ) : '';
-		echo '<input type="text" name="tts_settings[tiktok_template]" value="' . $value . '" class="regular-text" placeholder="{title} {url} {due}" />';
-		echo '<p class="description">' . esc_html__( 'Available placeholders: {title}, {url}, {due}, {labels}, {client_name}', 'fp-publisher' ) . '</p>';
+		$field_id       = $this->get_field_id( 'tiktok_template' );
+		$description_id = $field_id . '-description';
+		$value          = $this->get_setting( 'tiktok_template', '' );
+
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[tiktok_template]" value="%2$s" class="regular-text" placeholder="{title} {url} {due}" aria-describedby="%3$s" />',
+			esc_attr( $field_id ),
+			esc_attr( $value ),
+			esc_attr( $description_id )
+		);
+
+		printf(
+			'<p id="%1$s" class="description">%2$s</p>',
+			esc_attr( $description_id ),
+			esc_html__( 'Available placeholders: {title}, {url}, {due}, {labels}, {client_name}', 'fp-publisher' )
+		);
 	}
 
 	/**
 	 * Render field for labels-as-hashtags option.
 	 */
 	public function render_labels_as_hashtags_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$checked = ! empty( $options['labels_as_hashtags'] );
-		echo '<label><input type="checkbox" name="tts_settings[labels_as_hashtags]" value="1"' . checked( $checked, true, false ) . ' /> ' . esc_html__( 'Append Trello labels as hashtags', 'fp-publisher' ) . '</label>';
+		$field_id = $this->get_field_id( 'labels_as_hashtags' );
+		$checked  = ! empty( $this->get_setting( 'labels_as_hashtags', 0 ) );
+
+		printf(
+			'<label for="%1$s"><input type="checkbox" id="%1$s" name="tts_settings[labels_as_hashtags]" value="1"%2$s /> %3$s</label>',
+			esc_attr( $field_id ),
+			checked( $checked, true, false ),
+			esc_html__( 'Append Trello labels as hashtags', 'fp-publisher' )
+		);
 	}
 
 	/**
 	 * Render the URL shortener select field.
 	 */
 	public function render_url_shortener_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['url_shortener'] ) ? $options['url_shortener'] : 'none';
+		$field_id = $this->get_field_id( 'url_shortener' );
+		$value    = sanitize_key( $this->get_setting( 'url_shortener', 'none' ) );
 
 		$choices = array(
 			'none'  => __( 'None', 'fp-publisher' ),
@@ -567,9 +820,14 @@ class TTS_Settings {
 			'bitly' => __( 'Bitly', 'fp-publisher' ),
 		);
 
-		echo '<select name="tts_settings[url_shortener]">';
+		printf( '<select id="%1$s" name="tts_settings[url_shortener]">', esc_attr( $field_id ) );
 		foreach ( $choices as $key => $label ) {
-			echo '<option value="' . esc_attr( $key ) . '"' . selected( $value, $key, false ) . '>' . esc_html( $label ) . '</option>';
+			printf(
+				'<option value="%1$s"%2$s>%3$s</option>',
+				esc_attr( $key ),
+				selected( $value, $key, false ),
+				esc_html( $label )
+			);
 		}
 		echo '</select>';
 	}
@@ -578,39 +836,74 @@ class TTS_Settings {
 	 * Render field for Bitly token.
 	 */
 	public function render_bitly_token_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['bitly_token'] ) ? esc_attr( $options['bitly_token'] ) : '';
-		echo '<input type="text" name="tts_settings[bitly_token]" value="' . $value . '" class="regular-text" />';
-		echo '<p class="description">' . esc_html__( 'Required for Bitly shortening.', 'fp-publisher' ) . '</p>';
+		$field_id       = $this->get_field_id( 'bitly_token' );
+		$description_id = $field_id . '-description';
+		$value          = $this->get_setting( 'bitly_token', '' );
+
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[bitly_token]" value="%2$s" class="regular-text" aria-describedby="%3$s" />',
+			esc_attr( $field_id ),
+			esc_attr( $value ),
+			esc_attr( $description_id )
+		);
+
+		printf(
+			'<p id="%1$s" class="description">%2$s</p>',
+			esc_attr( $description_id ),
+			esc_html__( 'Required for Bitly shortening.', 'fp-publisher' )
+		);
 	}
 
 	/**
 	 * Render field for Slack webhook.
 	 */
 	public function render_slack_webhook_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['slack_webhook'] ) ? esc_url( $options['slack_webhook'] ) : '';
-		echo '<input type="url" name="tts_settings[slack_webhook]" value="' . $value . '" class="regular-text" />';
+		$field_id = $this->get_field_id( 'slack_webhook' );
+		$value    = $this->get_setting( 'slack_webhook', '' );
+
+		printf(
+			'<input type="url" id="%1$s" name="tts_settings[slack_webhook]" value="%2$s" class="regular-text" placeholder="https://hooks.slack.com/..." />',
+			esc_attr( $field_id ),
+			esc_url( $value )
+		);
 	}
 
 	/**
 	 * Render field for notification emails.
 	 */
 	public function render_notification_emails_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['notification_emails'] ) ? esc_attr( $options['notification_emails'] ) : '';
-		echo '<input type="text" name="tts_settings[notification_emails]" value="' . $value . '" class="regular-text" />';
-		echo '<p class="description">' . esc_html__( 'Comma-separated list of email addresses.', 'fp-publisher' ) . '</p>';
+		$field_id       = $this->get_field_id( 'notification_emails' );
+		$description_id = $field_id . '-description';
+		$value          = $this->get_setting( 'notification_emails', '' );
+
+		printf(
+			'<input type="text" id="%1$s" name="tts_settings[notification_emails]" value="%2$s" class="regular-text" aria-describedby="%3$s" />',
+			esc_attr( $field_id ),
+			esc_attr( $value ),
+			esc_attr( $description_id )
+		);
+
+		printf(
+			'<p id="%1$s" class="description">%2$s</p>',
+			esc_attr( $description_id ),
+			esc_html__( 'Comma-separated list of email addresses.', 'fp-publisher' )
+		);
 	}
 
 	/**
 	 * Render field for log retention period.
 	 */
 	public function render_log_retention_days_field() {
-		$options = tsap_get_option( 'tts_settings', array() );
-		$value   = isset( $options['log_retention_days'] ) ? intval( $options['log_retention_days'] ) : 30;
-		echo '<input type="number" min="1" name="tts_settings[log_retention_days]" value="' . esc_attr( $value ) . '" class="small-text" />';
+		$field_id = $this->get_field_id( 'log_retention_days' );
+		$value    = absint( $this->get_setting( 'log_retention_days', 30 ) );
+
+		printf(
+			'<input type="number" id="%1$s" name="tts_settings[log_retention_days]" value="%2$s" class="small-text" min="1" step="1" />',
+			esc_attr( $field_id ),
+			esc_attr( $value )
+		);
 	}
+
 }
 
 /**
@@ -622,9 +915,17 @@ class TTS_Settings {
 function tts_sanitize_settings( $input ) {
 	$output = array();
 
-	if ( ! is_array( $input ) ) {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		add_settings_error( 'tts_settings', 'tts_settings_permissions', __( 'You are not allowed to save these settings.', 'fp-publisher' ), 'error' );
 		return $output;
 	}
+
+	if ( ! is_array( $input ) ) {
+		add_settings_error( 'tts_settings', 'tts_settings_invalid_payload', __( 'The submitted settings payload is invalid.', 'fp-publisher' ), 'error' );
+		return $output;
+	}
+
+	$input = wp_unslash( $input );
 
 	$text_keys = array(
 		'trello_api_key',
@@ -643,21 +944,34 @@ function tts_sanitize_settings( $input ) {
 	}
 
 	if ( isset( $input['column_mapping'] ) ) {
-		$decoded = json_decode( $input['column_mapping'], true );
-		if ( json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ) {
-			$output['column_mapping'] = wp_json_encode( $decoded );
+		$raw_mapping = trim( (string) $input['column_mapping'] );
+
+		if ( '' === $raw_mapping ) {
+			$output['column_mapping'] = '';
 		} else {
-			$output['column_mapping'] = array();
+			$decoded = json_decode( $raw_mapping, true );
+
+			if ( JSON_ERROR_NONE === json_last_error() && is_array( $decoded ) ) {
+				$output['column_mapping'] = wp_json_encode( $decoded );
+			} else {
+				$output['column_mapping'] = '';
+				add_settings_error( 'tts_settings', 'tts_settings_column_mapping', __( 'Column mapping must be valid JSON.', 'fp-publisher' ), 'error' );
+			}
 		}
 	}
 
 	if ( isset( $input['log_retention_days'] ) ) {
-		$output['log_retention_days'] = absint( $input['log_retention_days'] );
+		$days = absint( $input['log_retention_days'] );
+		if ( $days < 1 ) {
+			$days = 30;
+			add_settings_error( 'tts_settings', 'tts_settings_log_retention', __( 'Log retention must be at least one day.', 'fp-publisher' ), 'error' );
+		}
+		$output['log_retention_days'] = $days;
 	}
 
 	if ( isset( $input['usage_profile'] ) ) {
-		$profile                 = sanitize_key( $input['usage_profile'] );
-		$allowed                 = array( 'standard', 'advanced', 'enterprise' );
+		$profile = sanitize_key( $input['usage_profile'] );
+		$allowed = array( 'standard', 'advanced', 'enterprise' );
 		$output['usage_profile'] = in_array( $profile, $allowed, true ) ? $profile : 'standard';
 	}
 
@@ -686,21 +1000,36 @@ function tts_sanitize_settings( $input ) {
 		$output['default_lng'] = sanitize_text_field( $input['default_lng'] );
 	}
 
-	if ( isset( $input['url_shortener'] ) && in_array( $input['url_shortener'], array( 'none', 'wp', 'bitly' ), true ) ) {
-		$output['url_shortener'] = $input['url_shortener'];
-	} else {
-		$output['url_shortener'] = 'none';
+	if ( isset( $input['url_shortener'] ) ) {
+		$shortener = sanitize_key( $input['url_shortener'] );
+		$allowed   = array( 'none', 'wp', 'bitly' );
+
+		if ( in_array( $shortener, $allowed, true ) ) {
+			$output['url_shortener'] = $shortener;
+		} else {
+			$output['url_shortener'] = 'none';
+			add_settings_error( 'tts_settings', 'tts_settings_url_shortener', __( 'Invalid URL shortener selection. Default option applied.', 'fp-publisher' ), 'error' );
+		}
 	}
 
 	$output['labels_as_hashtags'] = ! empty( $input['labels_as_hashtags'] ) ? 1 : 0;
 
 	if ( isset( $input['utm'] ) && is_array( $input['utm'] ) ) {
 		foreach ( $input['utm'] as $channel => $params ) {
-			if ( ! is_array( $params ) ) {
+			$channel_key = sanitize_key( $channel );
+
+			if ( '' === $channel_key || ! is_array( $params ) ) {
 				continue;
 			}
+
 			foreach ( $params as $param_key => $param_value ) {
-				$output['utm'][ $channel ][ $param_key ] = sanitize_text_field( $param_value );
+				$param_slug = sanitize_key( $param_key );
+
+				if ( '' === $param_slug ) {
+					continue;
+				}
+
+				$output['utm'][ $channel_key ][ $param_slug ] = sanitize_text_field( $param_value );
 			}
 		}
 	}
@@ -720,9 +1049,14 @@ function tts_sanitize_settings( $input ) {
 	}
 
 	if ( isset( $input['notification_emails'] ) ) {
-		$emails                        = array_map( 'sanitize_email', array_map( 'trim', explode( ',', $input['notification_emails'] ) ) );
-		$emails                        = array_filter( $emails );
-		$output['notification_emails'] = implode( ',', $emails );
+		$raw_emails = array_filter( array_map( 'trim', explode( ',', $input['notification_emails'] ) ) );
+		$emails     = array_filter( array_map( 'sanitize_email', $raw_emails ) );
+
+		if ( empty( $emails ) && ! empty( $raw_emails ) ) {
+			add_settings_error( 'tts_settings', 'tts_settings_notification_emails', __( 'No valid email addresses were detected. The saved list is empty.', 'fp-publisher' ), 'error' );
+		}
+
+		$output['notification_emails'] = implode( ', ', $emails );
 	}
 
 	return $output;

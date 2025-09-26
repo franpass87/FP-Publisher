@@ -1,0 +1,8 @@
+/**
+ * Foundation stylesheet that bundles design tokens and base admin layout.
+ *
+ * This file is intentionally thin. All editing should happen in the source
+ * files under assets/src/admin/ to keep tokens reusable across bundles.
+ */
+@import "../../assets/src/admin/tokens.css";
+@import "../../assets/src/admin/base.css";

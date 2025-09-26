@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../js/tts-calendar.js"],
-  "sourcesContent": ["(function($){\n    $(document).on('click', '.tts-calendar-nav a', function(e){\n        e.preventDefault();\n        var month = $(this).data('month');\n        if(month){\n            var url = new URL(window.location.href);\n            url.searchParams.set('month', month);\n            window.location.href = url.toString();\n        }\n    });\n})(jQuery);\n"],
-  "mappings": "OAAC,SAASA,EAAE,CACRA,EAAE,QAAQ,EAAE,GAAG,QAAS,sBAAuB,SAASC,EAAE,CACtDA,EAAE,eAAe,EACjB,IAAIC,EAAQF,EAAE,IAAI,EAAE,KAAK,OAAO,EAChC,GAAGE,EAAM,CACL,IAAIC,EAAM,IAAI,IAAI,OAAO,SAAS,IAAI,EACtCA,EAAI,aAAa,IAAI,QAASD,CAAK,EACnC,OAAO,SAAS,KAAOC,EAAI,SAAS,CACxC,CACJ,CAAC,CACL,GAAG,MAAM",
-  "names": ["$", "e", "month", "url"]
-}
