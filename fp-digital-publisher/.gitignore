@@ -1,0 +1,13 @@
+/vendor/
+/node_modules/
+/build/
+/dist/
+/*.log
+*.min.*
+*.map
+*.zip
+*.png
+*.jpg
+*.jpeg
+*.gif
+.DS_Store

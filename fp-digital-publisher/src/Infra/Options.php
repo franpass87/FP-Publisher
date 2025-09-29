@@ -1,0 +1,352 @@
+<?php
+
+declare(strict_types=1);
+
+namespace FP\Publisher\Infra;
+
+use function add_option;
+use function array_key_exists;
+use function array_replace_recursive;
+use function base64_decode;
+use function base64_encode;
+use function defined;
+use function explode;
+use function filter_var;
+use function function_exists;
+use function get_option;
+use function is_array;
+use function is_string;
+use function preg_match;
+use function random_bytes;
+use function sanitize_email;
+use function sanitize_key;
+use function sanitize_text_field;
+use function str_starts_with;
+use function strlen;
+use function substr;
+use function update_option;
+
+final class Options
+{
+    private const OPTION_KEY = 'fp_publisher_options';
+    private const DEFAULT_TIMEZONE = 'Europe/Rome';
+
+    public static function bootstrap(): void
+    {
+        if (false === get_option(self::OPTION_KEY, false)) {
+            add_option(self::OPTION_KEY, self::getDefaults(), false);
+        }
+    }
+
+    public static function all(): array
+    {
+        $stored = self::getRaw();
+        $options = array_replace_recursive(self::getDefaults(), $stored);
+        $options['tokens'] = self::decryptTokens($stored['tokens'] ?? []);
+
+        return $options;
+    }
+
+    public static function get(?string $key = null, mixed $default = null): mixed
+    {
+        if ($key === null) {
+            return self::all();
+        }
+
+        $options = self::all();
+        $segments = explode('.', $key);
+        $value = $options;
+
+        foreach ($segments as $segment) {
+            if (is_array($value) && array_key_exists($segment, $value)) {
+                $value = $value[$segment];
+                continue;
+            }
+
+            return $default;
+        }
+
+        return $value;
+    }
+
+    public static function set(string $key, mixed $value): void
+    {
+        $segments = explode('.', $key);
+        if ($segments[0] === 'tokens') {
+            if (count($segments) === 1 && is_array($value)) {
+                foreach ($value as $service => $token) {
+                    self::setToken((string) $service, is_string($token) ? $token : null);
+                }
+                return;
+            }
+
+            if (count($segments) === 2) {
+                self::setToken($segments[1], is_string($value) ? $value : null);
+                return;
+            }
+        }
+
+        $stored = self::getRaw();
+        $ref =& $stored;
+
+        foreach ($segments as $index => $segment) {
+            if (! is_array($ref)) {
+                $ref = [];
+            }
+
+            if ($index === count($segments) - 1) {
+                $ref[$segment] = self::sanitizeValue($segments, $value);
+                continue;
+            }
+
+            if (! array_key_exists($segment, $ref) || ! is_array($ref[$segment])) {
+                $ref[$segment] = [];
+            }
+
+            $ref =& $ref[$segment];
+        }
+
+        update_option(self::OPTION_KEY, $stored, false);
+    }
+
+    public static function getTokens(): array
+    {
+        return self::decryptTokens(self::getRaw()['tokens'] ?? []);
+    }
+
+    public static function setToken(string $service, ?string $token): void
+    {
+        $service = sanitize_text_field($service);
+        $stored = self::getRaw();
+        $stored['tokens'] ??= [];
+
+        if ($token === null || $token === '') {
+            unset($stored['tokens'][$service]);
+        } else {
+            $stored['tokens'][$service] = self::encodeToken($token);
+        }
+
+        update_option(self::OPTION_KEY, $stored, false);
+    }
+
+    public static function hasTokens(): bool
+    {
+        foreach (self::getTokens() as $token) {
+            if (is_string($token) && $token !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function sanitizeValue(array $segments, mixed $value): mixed
+    {
+        return match ($segments[0] ?? '') {
+            'brands' => array_values(array_filter(array_map('sanitize_text_field', (array) $value))),
+            'channels' => array_values(array_filter(array_map('sanitize_text_field', (array) $value))),
+            'alert_emails' => array_values(array_filter(array_map(
+                static fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL) ? sanitize_email($email) : null,
+                (array) $value
+            ))),
+            'timezone' => self::sanitizeTimezone($value),
+            'queue' => self::sanitizeQueueValue($segments, $value),
+            default => $value,
+        };
+    }
+
+    private static function sanitizeQueueValue(array $segments, mixed $value): mixed
+    {
+        if (($segments[1] ?? '') === 'retry_backoff') {
+            $field = $segments[2] ?? '';
+            return match ($field) {
+                'base' => max(10, (int) $value),
+                'factor' => max(1.0, (float) $value),
+                'max' => max(60, (int) $value),
+                default => $value,
+            };
+        }
+
+        if (($segments[1] ?? '') === 'blackout_windows') {
+            return self::sanitizeBlackoutWindows($value);
+        }
+
+        $field = $segments[1] ?? '';
+        return match ($field) {
+            'max_concurrent' => max(1, (int) $value),
+            'max_attempts' => max(1, (int) $value),
+            default => $value,
+        };
+    }
+
+    private static function sanitizeBlackoutWindows(mixed $value): array
+    {
+        $timezone = self::sanitizeTimezone(self::get('timezone'));
+        $windows = [];
+
+        foreach ((array) $value as $window) {
+            if (! is_array($window)) {
+                continue;
+            }
+
+            $start = self::sanitizeTime($window['start'] ?? null);
+            $end = self::sanitizeTime($window['end'] ?? null);
+
+            if ($start === '' || $end === '') {
+                continue;
+            }
+
+            $channel = isset($window['channel']) ? sanitize_key((string) $window['channel']) : '';
+            $tz = isset($window['timezone']) && is_string($window['timezone']) && $window['timezone'] !== ''
+                ? sanitize_text_field($window['timezone'])
+                : $timezone;
+
+            $days = [];
+            if (isset($window['days'])) {
+                foreach ((array) $window['days'] as $day) {
+                    $day = (int) $day;
+                    if ($day >= 0 && $day <= 6) {
+                        $days[] = $day;
+                    }
+                }
+            }
+
+            $windows[] = [
+                'channel' => $channel !== '' ? $channel : null,
+                'start' => $start,
+                'end' => $end,
+                'timezone' => $tz,
+                'days' => array_values(array_unique($days)),
+            ];
+        }
+
+        return $windows;
+    }
+
+    private static function sanitizeTime(mixed $value): string
+    {
+        if (! is_string($value)) {
+            return '';
+        }
+
+        return preg_match('/^\d{2}:\d{2}$/', $value) === 1 ? $value : '';
+    }
+
+    private static function sanitizeTimezone(mixed $value): string
+    {
+        if (is_string($value) && $value !== '') {
+            return sanitize_text_field($value);
+        }
+
+        return self::DEFAULT_TIMEZONE;
+    }
+
+    private static function getDefaults(): array
+    {
+        return [
+            'brands' => [],
+            'channels' => [],
+            'alert_emails' => [],
+            'timezone' => self::DEFAULT_TIMEZONE,
+            'queue' => [
+                'max_concurrent' => 5,
+                'max_attempts' => 5,
+                'retry_backoff' => [
+                    'base' => 60,
+                    'factor' => 2.0,
+                    'max' => 3600,
+                ],
+                'blackout_windows' => [],
+            ],
+            'tokens' => [],
+        ];
+    }
+
+    private static function getRaw(): array
+    {
+        $stored = get_option(self::OPTION_KEY, []);
+
+        return is_array($stored) ? $stored : [];
+    }
+
+    private static function decryptTokens(array $tokens): array
+    {
+        $decrypted = [];
+
+        foreach ($tokens as $service => $payload) {
+            $decoded = self::decodeToken(is_string($payload) ? $payload : null);
+            if ($decoded !== null) {
+                $decrypted[$service] = $decoded;
+            }
+        }
+
+        return $decrypted;
+    }
+
+    private static function encodeToken(string $token): string
+    {
+        if (! self::sodiumAvailable()) {
+            return 'plain:' . base64_encode($token);
+        }
+
+        $nonceLength = self::nonceLength();
+        $nonce = random_bytes($nonceLength);
+        $ciphertext = sodium_crypto_secretbox($token, $nonce, self::encryptionKey());
+
+        return 'sodium:' . base64_encode($nonce . $ciphertext);
+    }
+
+    private static function decodeToken(?string $payload): ?string
+    {
+        if ($payload === null || $payload === '') {
+            return null;
+        }
+
+        if (str_starts_with($payload, 'sodium:') && self::sodiumAvailable()) {
+            $decoded = base64_decode(substr($payload, 7), true);
+            $nonceLength = self::nonceLength();
+            if ($decoded === false || strlen($decoded) <= $nonceLength) {
+                return null;
+            }
+
+            $nonce = substr($decoded, 0, $nonceLength);
+            $ciphertext = substr($decoded, $nonceLength);
+            $plaintext = sodium_crypto_secretbox_open($ciphertext, $nonce, self::encryptionKey());
+
+            return $plaintext === false ? null : $plaintext;
+        }
+
+        if (str_starts_with($payload, 'plain:')) {
+            $decoded = base64_decode(substr($payload, 6), true);
+            return $decoded === false ? null : $decoded;
+        }
+
+        return null;
+    }
+
+    private static function sodiumAvailable(): bool
+    {
+        return function_exists('sodium_crypto_secretbox')
+            && function_exists('sodium_crypto_secretbox_open')
+            && function_exists('sodium_crypto_generichash')
+            && defined('SODIUM_CRYPTO_SECRETBOX_KEYBYTES');
+    }
+
+    private static function encryptionKey(): string
+    {
+        $siteKey = defined('AUTH_KEY') && AUTH_KEY !== '' ? AUTH_KEY : (defined('SECURE_AUTH_KEY') ? SECURE_AUTH_KEY : 'fp_publisher');
+        $keyLength = self::keyLength();
+
+        return sodium_crypto_generichash($siteKey, '', $keyLength);
+    }
+
+    private static function nonceLength(): int
+    {
+        return defined('SODIUM_CRYPTO_SECRETBOX_NONCEBYTES') ? SODIUM_CRYPTO_SECRETBOX_NONCEBYTES : 24;
+    }
+
+    private static function keyLength(): int
+    {
+        return defined('SODIUM_CRYPTO_SECRETBOX_KEYBYTES') ? SODIUM_CRYPTO_SECRETBOX_KEYBYTES : 32;
+    }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "fp-digital-publisher",
+  "version": "0.1.0",
+  "description": "Development tooling for the FP Digital Publisher plugin.",
+  "private": true,
+  "scripts": {
+    "build": "echo 'Build pipeline pending'",
+    "dev": "echo 'Dev pipeline pending'"
+  }
+}
