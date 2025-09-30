@@ -15,6 +15,7 @@ use FP\Publisher\Infra\Options;
 use FP\Publisher\Services\Assets\Pipeline as AssetPipeline;
 use FP\Publisher\Services\Alerts;
 use FP\Publisher\Services\GoogleBusiness\Dispatcher as GoogleBusinessDispatcher;
+use FP\Publisher\Services\Housekeeping;
 use FP\Publisher\Services\Links;
 use FP\Publisher\Services\Meta\Dispatcher as MetaDispatcher;
 use FP\Publisher\Services\TikTok\Dispatcher as TikTokDispatcher;
@@ -39,6 +40,7 @@ final class Loader
         AssetPipeline::register();
         Alerts::register();
         Links::register();
+        Housekeeping::register();
         MetaDispatcher::register();
         GoogleBusinessDispatcher::register();
         TikTokDispatcher::register();

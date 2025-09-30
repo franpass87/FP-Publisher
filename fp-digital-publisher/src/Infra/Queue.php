@@ -53,7 +53,7 @@ final class Queue
             throw new RuntimeException('Invalid channel or idempotency key provided.');
         }
 
-        $existing = self::findByIdempotency($channel, $idempotencyKey);
+        $existing = self::findByIdempotency($idempotencyKey, $channel);
         if ($existing !== null) {
             return $existing;
         }
@@ -207,12 +207,12 @@ final class Queue
         );
 
         if ($updated === false) {
-            throw new RuntimeException('Impossibile ripianificare il job.');
+            throw new RuntimeException('Unable to reschedule the job.');
         }
 
         $reloaded = self::findById($jobId);
         if ($reloaded === null) {
-            throw new RuntimeException('Job non disponibile dopo la ripianificazione.');
+            throw new RuntimeException('Job unavailable after rescheduling.');
         }
 
         return $reloaded;
@@ -313,20 +313,32 @@ final class Queue
     /**
      * @return array<string, mixed>|null
      */
-    public static function findByIdempotency(string $channel, string $idempotencyKey): ?array
+    public static function findByIdempotency(string $idempotencyKey, ?string $channel = null): ?array
     {
         global $wpdb;
 
         $sql = $wpdb->prepare(
-            "SELECT * FROM " . self::table($wpdb) . " WHERE channel = %s AND idempotency_key = %s LIMIT 1",
-            sanitize_key($channel),
+            "SELECT * FROM " . self::table($wpdb) . " WHERE idempotency_key = %s LIMIT 1",
             sanitize_text_field($idempotencyKey)
         );
 
         /** @var array<string, mixed>|null $row */
         $row = $wpdb->get_row($sql, ARRAY_A);
 
-        return $row !== null ? self::hydrate($row) : null;
+        if ($row === null) {
+            return null;
+        }
+
+        if ($channel !== null && $channel !== '') {
+            $requested = sanitize_key($channel);
+            $stored = sanitize_key((string) ($row['channel'] ?? ''));
+
+            if ($requested !== '' && $stored !== '' && $requested !== $stored) {
+                return null;
+            }
+        }
+
+        return self::hydrate($row);
     }
 
     /**

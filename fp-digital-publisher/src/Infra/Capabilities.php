@@ -48,13 +48,13 @@ final class Capabilities
 
         add_role(
             self::ROLE_ADMIN,
-            __('FP Publisher Admin', 'fp_publisher'),
+            __('FP Publisher Admin', 'fp-publisher'),
             $adminCaps
         );
 
         add_role(
             self::ROLE_EDITOR,
-            __('FP Publisher Editor', 'fp_publisher'),
+            __('FP Publisher Editor', 'fp-publisher'),
             $editorCaps
         );
 

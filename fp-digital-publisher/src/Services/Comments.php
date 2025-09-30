@@ -94,7 +94,7 @@ final class Comments
 
         $body = wp_kses_post(trim($body));
         if ($body === '') {
-            throw new InvalidArgumentException('Il commento non può essere vuoto.');
+            throw new InvalidArgumentException('The comment cannot be empty.');
         }
 
         $mentions = self::resolveMentions($body);
@@ -120,7 +120,7 @@ final class Comments
         );
 
         if (! $inserted) {
-            throw new RuntimeException('Impossibile salvare il commento.');
+            throw new RuntimeException('Unable to save the comment.');
         }
 
         $commentId = (int) $wpdb->insert_id;
@@ -186,7 +186,7 @@ final class Comments
                 continue;
             }
 
-            $subject = esc_html__('Nuovo commento FP Publisher', 'fp_publisher');
+            $subject = esc_html__('Nuovo commento FP Publisher', 'fp-publisher');
             $message = sprintf(
                 "Hai ricevuto una menzione sul piano #%d:\n\n%s\n",
                 $planId,

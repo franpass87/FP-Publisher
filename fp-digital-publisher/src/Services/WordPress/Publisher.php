@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Support\Arr;
 use FP\Publisher\Support\Dates;
+use FP\Publisher\Support\TermCache;
 use FP\Publisher\Support\Templating;
 use FP\Publisher\Support\Utm;
 use RuntimeException;
@@ -28,12 +29,10 @@ use function sanitize_text_field;
 use function set_post_thumbnail;
 use function restore_current_blog;
 use function switch_to_blog;
-use function term_exists;
 use function trim;
 use function update_post_meta;
 use function wp_http_validate_url;
 use function wp_insert_post;
-use function wp_insert_term;
 use function wp_kses_post;
 use function wp_set_post_terms;
 use function wp_strip_all_tags;
@@ -298,14 +297,7 @@ final class Publisher
             return;
         }
 
-        $ids = [];
-        foreach ($categories as $category) {
-            if (is_scalar($category) && (string) $category !== '') {
-                $ids[] = self::resolveCategoryId((string) $category);
-            }
-        }
-
-        $ids = array_filter($ids, static fn (int $id): bool => $id > 0);
+        $ids = TermCache::resolveIds('category', $categories);
         if ($ids === []) {
             return;
         }
@@ -326,54 +318,15 @@ final class Publisher
             return;
         }
 
-        $normalized = [];
-        foreach ($tags as $tag) {
-            if (! is_scalar($tag)) {
-                continue;
-            }
-
-            $value = sanitize_text_field((string) $tag);
-            if ($value !== '') {
-                $normalized[] = $value;
-            }
-        }
-
-        if ($normalized === []) {
+        $ids = TermCache::resolveIds('post_tag', $tags);
+        if ($ids === []) {
             return;
         }
 
-        $result = wp_set_post_terms($postId, $normalized, 'post_tag', false);
+        $result = wp_set_post_terms($postId, $ids, 'post_tag', false);
         if (is_wp_error($result)) {
             throw new RuntimeException(self::resolveWpErrorMessage($result));
         }
-    }
-
-    private static function resolveCategoryId(string $value): int
-    {
-        $trimmed = trim($value);
-        if ($trimmed === '') {
-            return 0;
-        }
-
-        if (is_numeric($trimmed)) {
-            return (int) $trimmed;
-        }
-
-        $existing = term_exists($trimmed, 'category');
-        if (is_array($existing) && isset($existing['term_id'])) {
-            return (int) $existing['term_id'];
-        }
-
-        if (is_int($existing)) {
-            return $existing;
-        }
-
-        $created = wp_insert_term($trimmed, 'category');
-        if (is_wp_error($created)) {
-            return 0;
-        }
-
-        return (int) ($created['term_id'] ?? 0);
     }
 
     /**

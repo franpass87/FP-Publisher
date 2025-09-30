@@ -51,7 +51,7 @@ final class Notices
         }
 
         return [
-            esc_html__('FP Digital Publisher richiede almeno un token di integrazione configurato nelle impostazioni.', 'fp_publisher'),
+            esc_html__('FP Digital Publisher requires at least one integration token configured in the settings.', 'fp-publisher'),
         ];
     }
 
@@ -62,7 +62,7 @@ final class Notices
         }
 
         return [
-            esc_html__('WP-Cron risulta disabilitato. Abilitalo oppure configura un cron esterno per elaborare le code FP Digital Publisher.', 'fp_publisher'),
+            esc_html__('WP-Cron appears to be disabled. Enable it or configure an external cron job to process FP Digital Publisher queues.', 'fp-publisher'),
         ];
     }
 }

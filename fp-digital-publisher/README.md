@@ -2,6 +2,18 @@
 
 FP Digital Publisher è un plugin WordPress progettato per orchestrare campagne editoriali su canali social e owned media con un approccio modulare e scalabile.
 
+## Table of contents
+
+- [Requisiti](#requisiti)
+- [Installazione](#installazione)
+- [Delta della fase](#delta-della-fase)
+- [Sviluppo locale](#sviluppo-locale)
+- [Testing](#testing)
+- [UI Polish Delta](#ui-polish-delta)
+- [UI Kit](#ui-kit)
+- [Documentazione](#documentazione)
+- [FAQ](#faq)
+
 ## Requisiti
 - WordPress >= 6.4
 - PHP >= 8.1
@@ -133,3 +145,13 @@ export const ModalExample = () => {
 ```
 
 _Screenshot: bottone con tooltip e modale aperta_
+
+## Documentazione
+
+- [Guide utente](docs/user/) – configurazione connettori, calendario editoriale, workflow approvazioni, replay, short link e alert.
+- [Guide developer](docs/dev/) – panoramica architetturale, schema database, QA checklist e catalogo hook.
+- [FAQ](docs/faq.md) – risposte rapide a problemi comuni su token, pubblicazioni e permessi.
+
+## FAQ
+
+Consulta la [FAQ dedicata](docs/faq.md) per approfondimenti su token scaduti, errori di pubblicazione, replay e permessi mancanti.

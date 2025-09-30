@@ -36,7 +36,7 @@ final class BestTime
                 ['time' => '14:00', 'score' => 75, 'reason' => 'Break pranzo'],
             ],
             '3' => [
-                ['time' => '11:00', 'score' => 78, 'reason' => 'Fascia metà settimana'],
+                ['time' => '11:00', 'score' => 78, 'reason' => 'Midweek slot'],
             ],
             'default' => [
                 ['time' => '10:30', 'score' => 70, 'reason' => 'Media canale'],
@@ -130,7 +130,7 @@ final class BestTime
         $timezone = Dates::timezone();
         $start = DateTimeImmutable::createFromFormat('Y-m-d', $month . '-01', $timezone);
         if (! $start instanceof DateTimeImmutable) {
-            throw new InvalidArgumentException('Impossibile determinare il mese richiesto.');
+            throw new InvalidArgumentException('Unable to determine the requested month.');
         }
 
         $end = $start->modify('last day of this month')->setTime(23, 59, 59);

@@ -96,7 +96,7 @@ final class Preflight
         if ($caption === '') {
             return [
                 'status' => 'fail',
-                'message' => __('Il testo principale è assente.', 'fp_publisher'),
+                'message' => __('The main text is missing.', 'fp-publisher'),
                 'details' => ['length' => 0, 'limit' => $limit],
             ];
         }
@@ -104,7 +104,7 @@ final class Preflight
         if ($limit !== null && $length > $limit) {
             return [
                 'status' => 'fail',
-                'message' => __('Il testo supera la lunghezza massima consentita per il canale.', 'fp_publisher'),
+                'message' => __('The text exceeds the maximum length allowed for the channel.', 'fp-publisher'),
                 'details' => ['length' => $length, 'limit' => $limit],
             ];
         }
@@ -113,7 +113,7 @@ final class Preflight
         if ($softLimit !== null && $length > $softLimit) {
             return [
                 'status' => 'warning',
-                'message' => __('Il testo è vicino al limite di caratteri consigliato.', 'fp_publisher'),
+                'message' => __('The text is close to the recommended character limit.', 'fp-publisher'),
                 'details' => ['length' => $length, 'limit' => $limit],
                 'penalty' => 5,
             ];
@@ -121,7 +121,7 @@ final class Preflight
 
         return [
             'status' => 'pass',
-            'message' => __('Lunghezza del testo entro i limiti.', 'fp_publisher'),
+            'message' => __('Text length within limits.', 'fp-publisher'),
             'details' => ['length' => $length, 'limit' => $limit],
         ];
     }
@@ -134,7 +134,7 @@ final class Preflight
         if ($assets === []) {
             return [
                 'status' => 'warning',
-                'message' => __('Nessun asset multimediale associato al piano.', 'fp_publisher'),
+                'message' => __('No media assets associated with the plan.', 'fp-publisher'),
                 'details' => ['channel' => $channel],
                 'penalty' => 6,
             ];
@@ -144,7 +144,7 @@ final class Preflight
         if (! array_key_exists($channel, $rules)) {
             return [
                 'status' => 'pass',
-                'message' => __('Nessuna regola di rapporto specifica per il canale.', 'fp_publisher'),
+                'message' => __('No ratio rule defined for the channel.', 'fp-publisher'),
                 'details' => [],
             ];
         }
@@ -178,7 +178,7 @@ final class Preflight
         if (! $checked) {
             return [
                 'status' => 'warning',
-                'message' => __('Impossibile verificare il rapporto dei media senza metadati.', 'fp_publisher'),
+                'message' => __('Unable to verify the media ratio without metadata.', 'fp-publisher'),
                 'details' => ['channel' => $channel],
                 'penalty' => 4,
             ];
@@ -187,14 +187,14 @@ final class Preflight
         if ($invalid !== []) {
             return [
                 'status' => 'fail',
-                'message' => __('Alcuni asset non rispettano il rapporto consigliato.', 'fp_publisher'),
+                'message' => __('Some assets do not meet the recommended ratio.', 'fp-publisher'),
                 'details' => ['assets' => $invalid, 'rule' => $rule],
             ];
         }
 
         return [
             'status' => 'pass',
-            'message' => __('Rapporto media conforme.', 'fp_publisher'),
+            'message' => __('Media ratio within limits.', 'fp-publisher'),
             'details' => ['rule' => $rule],
         ];
     }
@@ -212,7 +212,7 @@ final class Preflight
         if ($requirement === null) {
             return [
                 'status' => 'pass',
-                'message' => __('CTA opzionale per il canale selezionato.', 'fp_publisher'),
+                'message' => __('CTA optional for the selected channel.', 'fp-publisher'),
                 'details' => ['cta' => $cta],
             ];
         }
@@ -221,7 +221,7 @@ final class Preflight
             $status = $requirement === 'fail' ? 'fail' : 'warning';
             return [
                 'status' => $status,
-                'message' => __('Manca una call to action per il canale.', 'fp_publisher'),
+                'message' => __('A call to action is required for the channel.', 'fp-publisher'),
                 'details' => [],
                 'penalty' => $status === 'fail' ? 15 : 5,
             ];
@@ -229,7 +229,7 @@ final class Preflight
 
         return [
             'status' => 'pass',
-            'message' => __('CTA presente.', 'fp_publisher'),
+            'message' => __('CTA present.', 'fp-publisher'),
             'details' => ['cta' => $cta],
         ];
     }
@@ -242,7 +242,7 @@ final class Preflight
         if (! $hasLink && in_array($channel, $requiredChannels, true)) {
             return [
                 'status' => 'fail',
-                'message' => __('È richiesto un link per il canale selezionato.', 'fp_publisher'),
+                'message' => __('A link is required for the selected channel.', 'fp-publisher'),
                 'details' => [],
                 'penalty' => 20,
             ];
@@ -251,7 +251,7 @@ final class Preflight
         if ($targetUrl !== '' && ! wp_http_validate_url($targetUrl)) {
             return [
                 'status' => 'fail',
-                'message' => __('Il link di destinazione non è valido.', 'fp_publisher'),
+                'message' => __('The destination link is not valid.', 'fp-publisher'),
                 'details' => ['target_url' => $targetUrl],
             ];
         }
@@ -259,14 +259,14 @@ final class Preflight
         if ($url !== '' && ! wp_http_validate_url($url)) {
             return [
                 'status' => 'warning',
-                'message' => __('L’URL condiviso non è valido.', 'fp_publisher'),
+                'message' => __('The shared URL is not valid.', 'fp-publisher'),
                 'details' => ['url' => $url],
             ];
         }
 
         return [
             'status' => 'pass',
-            'message' => __('Link valido.', 'fp_publisher'),
+            'message' => __('Valid link.', 'fp-publisher'),
             'details' => ['url' => $url, 'target_url' => $targetUrl],
         ];
     }
@@ -282,7 +282,7 @@ final class Preflight
         if (in_array($channel, $required, true) && ! $hasUtm) {
             return [
                 'status' => 'fail',
-                'message' => __('Mancano i parametri UTM obbligatori.', 'fp_publisher'),
+                'message' => __('Required UTM parameters are missing.', 'fp-publisher'),
                 'details' => ['required' => $required],
                 'penalty' => 18,
             ];
@@ -291,14 +291,14 @@ final class Preflight
         if ($hasUtm) {
             return [
                 'status' => 'pass',
-                'message' => __('Parametri UTM presenti.', 'fp_publisher'),
+                'message' => __('UTM parameters present.', 'fp-publisher'),
                 'details' => ['utm' => $utm],
             ];
         }
 
         return [
             'status' => 'warning',
-            'message' => __('Parametri UTM assenti (non obbligatori).', 'fp_publisher'),
+            'message' => __('UTM parameters missing (not required).', 'fp-publisher'),
             'details' => ['utm' => $utm],
             'penalty' => 4,
         ];
@@ -312,7 +312,7 @@ final class Preflight
         if ($hashtags === []) {
             return [
                 'status' => 'warning',
-                'message' => __('Nessun hashtag definito per il contenuto.', 'fp_publisher'),
+                'message' => __('No hashtags defined for the content.', 'fp-publisher'),
                 'details' => ['channel' => $channel],
                 'penalty' => 3,
             ];
@@ -333,7 +333,7 @@ final class Preflight
         if ($duplicates !== []) {
             return [
                 'status' => 'warning',
-                'message' => __('Sono stati rilevati hashtag duplicati.', 'fp_publisher'),
+                'message' => __('Duplicate hashtags detected.', 'fp-publisher'),
                 'details' => ['duplicates' => array_values(array_unique($duplicates))],
                 'penalty' => 5,
             ];
@@ -342,7 +342,7 @@ final class Preflight
         if ($channel === 'instagram' && count($normalized) > 30) {
             return [
                 'status' => 'fail',
-                'message' => __('Numero di hashtag superiore al limite consentito su Instagram.', 'fp_publisher'),
+                'message' => __('Hashtag count exceeds the allowed Instagram limit.', 'fp-publisher'),
                 'details' => ['count' => count($normalized)],
                 'penalty' => 12,
             ];
@@ -350,7 +350,7 @@ final class Preflight
 
         return [
             'status' => 'pass',
-            'message' => __('Hashtag conformi.', 'fp_publisher'),
+            'message' => __('Hashtags within limits.', 'fp-publisher'),
             'details' => ['count' => count($normalized)],
         ];
     }
@@ -376,14 +376,14 @@ final class Preflight
         if ($missing === []) {
             return [
                 'status' => 'pass',
-                'message' => __('Testo alternativo presente per le immagini.', 'fp_publisher'),
+                'message' => __('Alternative text present for images.', 'fp-publisher'),
                 'details' => [],
             ];
         }
 
         return [
             'status' => 'warning',
-            'message' => __('Alcune immagini sono prive di testo alternativo.', 'fp_publisher'),
+            'message' => __('Some images are missing alternative text.', 'fp-publisher'),
             'details' => ['asset_ids' => $missing],
             'penalty' => 6,
         ];

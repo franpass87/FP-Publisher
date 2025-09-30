@@ -15,7 +15,7 @@ use function update_option;
 final class Migrations
 {
     private const OPTION_KEY = 'fp_publisher_db_version';
-    private const VERSION = '2024041501';
+    private const VERSION = '2024093001';
 
     public static function install(): void
     {
@@ -68,10 +68,30 @@ final class Migrations
                 updated_at DATETIME NOT NULL,
                 child_job_id BIGINT UNSIGNED DEFAULT NULL,
                 PRIMARY KEY  (id),
-                UNIQUE KEY idempotency_channel (channel, idempotency_key),
+                UNIQUE KEY idempotency (idempotency_key),
                 KEY status (status),
                 KEY run_at (run_at),
+                KEY channel (channel),
                 KEY child_job (child_job_id)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$prefix}fp_pub_jobs_archive (
+                id BIGINT UNSIGNED NOT NULL,
+                status VARCHAR(32) NOT NULL,
+                channel VARCHAR(64) NOT NULL,
+                payload_json LONGTEXT NULL,
+                run_at DATETIME NOT NULL,
+                attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+                error TEXT NULL,
+                idempotency_key VARCHAR(191) NOT NULL,
+                remote_id VARCHAR(191) DEFAULT '',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                child_job_id BIGINT UNSIGNED DEFAULT NULL,
+                archived_at DATETIME NOT NULL,
+                PRIMARY KEY  (id),
+                KEY status (status),
+                KEY channel (channel),
+                KEY archived_at (archived_at)
             ) {$charsetCollate};",
             "CREATE TABLE {$prefix}fp_pub_assets (
                 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -129,9 +149,11 @@ final class Migrations
                 clicks BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 last_click_at DATETIME NULL,
                 created_at DATETIME NOT NULL,
+                active TINYINT(1) NOT NULL DEFAULT 1,
                 PRIMARY KEY  (id),
                 UNIQUE KEY slug (slug),
-                KEY clicks (clicks)
+                KEY clicks (clicks),
+                KEY active (active)
             ) {$charsetCollate};"
         ];
 
@@ -149,6 +171,7 @@ final class Migrations
 
         return [
             "{$prefix}fp_pub_jobs",
+            "{$prefix}fp_pub_jobs_archive",
             "{$prefix}fp_pub_assets",
             "{$prefix}fp_pub_plans",
             "{$prefix}fp_pub_tokens",

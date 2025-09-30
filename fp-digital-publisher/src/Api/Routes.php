@@ -27,6 +27,7 @@ use WP_REST_Request;
 use WP_REST_Response;
 
 use function add_action;
+use function array_map;
 use function esc_html__;
 use function hash;
 use function get_current_user_id;
@@ -113,6 +114,18 @@ final class Routes
                 [
                     'methods' => 'POST',
                     'callback' => [self::class, 'ingestTrello'],
+                    'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, 'fp_publisher_manage_plans'),
+                ],
+            ]
+        );
+
+        register_rest_route(
+            self::NAMESPACE,
+            '/ingest/trello/cards',
+            [
+                [
+                    'methods' => 'POST',
+                    'callback' => [self::class, 'previewTrello'],
                     'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, 'fp_publisher_manage_plans'),
                 ],
             ]
@@ -248,13 +261,13 @@ final class Routes
         } catch (InvalidArgumentException $exception) {
             return new WP_Error(
                 'fp_publisher_link_invalid',
-                esc_html__('Parametri non validi per il collegamento breve.', 'fp_publisher'),
+                esc_html__('Invalid parameters for the short link.', 'fp-publisher'),
                 ['status' => 422, 'detail' => $exception->getMessage()]
             );
         } catch (RuntimeException $exception) {
             return new WP_Error(
                 'fp_publisher_link_error',
-                esc_html__('Impossibile salvare il collegamento richiesto.', 'fp_publisher'),
+                esc_html__('Unable to save the requested short link.', 'fp-publisher'),
                 ['status' => 500, 'detail' => $exception->getMessage()]
             );
         }
@@ -270,7 +283,7 @@ final class Routes
         if ($slug === '') {
             return new WP_Error(
                 'fp_publisher_link_not_found',
-                esc_html__('Collegamento non trovato.', 'fp_publisher'),
+                esc_html__('Short link not found.', 'fp-publisher'),
                 ['status' => 404]
             );
         }
@@ -278,7 +291,7 @@ final class Routes
         if (! Links::delete($slug)) {
             return new WP_Error(
                 'fp_publisher_link_not_found',
-                esc_html__('Collegamento non trovato.', 'fp_publisher'),
+                esc_html__('Short link not found.', 'fp-publisher'),
                 ['status' => 404]
             );
         }
@@ -296,7 +309,7 @@ final class Routes
         if ($brand === '' || $channel === '') {
             return new WP_Error(
                 'fp_publisher_besttime_missing_params',
-                esc_html__('Brand e canale sono obbligatori per le raccomandazioni.', 'fp_publisher'),
+                esc_html__('Brand and channel are required for recommendations.', 'fp-publisher'),
                 ['status' => 400]
             );
         }
@@ -306,7 +319,7 @@ final class Routes
         } catch (InvalidArgumentException $exception) {
             return new WP_Error(
                 'fp_publisher_besttime_invalid',
-                esc_html__('Impossibile calcolare suggerimenti per il periodo richiesto.', 'fp_publisher'),
+                esc_html__('Unable to calculate suggestions for the requested period.', 'fp-publisher'),
                 ['status' => 422, 'detail' => $exception->getMessage()]
             );
         }
@@ -330,7 +343,7 @@ final class Routes
         if ($planPayload === null) {
             return new WP_Error(
                 'fp_publisher_missing_plan',
-                esc_html__('Impossibile trovare il piano richiesto per il preflight.', 'fp_publisher'),
+                esc_html__('Unable to find the requested plan for preflight.', 'fp-publisher'),
                 ['status' => 400, 'plan_id' => $request->get_param('plan_id')]
             );
         }
@@ -340,7 +353,7 @@ final class Routes
         } catch (InvalidArgumentException $exception) {
             return new WP_Error(
                 'fp_publisher_invalid_plan',
-                esc_html__('Il piano fornito non è valido per il preflight.', 'fp_publisher'),
+                esc_html__('The provided plan is not valid for preflight.', 'fp-publisher'),
                 ['status' => 422, 'detail' => $exception->getMessage()]
             );
         }
@@ -354,7 +367,7 @@ final class Routes
         if ($channel === '') {
             return new WP_Error(
                 'fp_publisher_invalid_channel',
-                esc_html__('Il canale indicato non è valido.', 'fp_publisher'),
+                esc_html__('The provided channel is not valid.', 'fp-publisher'),
                 ['status' => 400]
             );
         }
@@ -377,7 +390,7 @@ final class Routes
         if ($channel === '') {
             return new WP_Error(
                 'fp_publisher_invalid_channel',
-                esc_html__('Il canale indicato non è valido.', 'fp_publisher'),
+                esc_html__('The provided channel is not valid.', 'fp-publisher'),
                 ['status' => 400]
             );
         }
@@ -393,7 +406,7 @@ final class Routes
             } catch (InvalidArgumentException $exception) {
                 return new WP_Error(
                     'fp_publisher_invalid_plan',
-                    esc_html__('Il piano fornito non è valido per la pianificazione.', 'fp_publisher'),
+                    esc_html__('The provided plan is not valid for scheduling.', 'fp-publisher'),
                     ['status' => 422, 'detail' => $exception->getMessage()]
                 );
             }
@@ -404,7 +417,7 @@ final class Routes
             if ($preflight['blocking'] !== [] && ! $override) {
                 return new WP_Error(
                     'fp_publisher_preflight_blocked',
-                    esc_html__('Preflight non superato: risolvere gli errori prima di pianificare.', 'fp_publisher'),
+                    esc_html__('Preflight failed: resolve the errors before scheduling.', 'fp-publisher'),
                     ['status' => 422, 'preflight' => $preflight]
                 );
             }
@@ -431,7 +444,7 @@ final class Routes
         } catch (RuntimeException $exception) {
             return new WP_Error(
                 'fp_publisher_queue_error',
-                esc_html__('Impossibile accodare il job richiesto.', 'fp_publisher'),
+                esc_html__('Unable to enqueue the requested job.', 'fp-publisher'),
                 ['status' => 500, 'detail' => $exception->getMessage()]
             );
         }
@@ -447,7 +460,7 @@ final class Routes
         if ($channel === '') {
             return new WP_Error(
                 'fp_publisher_invalid_channel',
-                esc_html__('Il canale indicato non è valido.', 'fp_publisher'),
+                esc_html__('The provided channel is not valid.', 'fp-publisher'),
                 ['status' => 400]
             );
         }
@@ -468,7 +481,7 @@ final class Routes
         if ($jobId <= 0) {
             return new WP_Error(
                 'fp_publisher_invalid_job',
-                esc_html__('Identificativo job non valido.', 'fp_publisher'),
+                esc_html__('Invalid job identifier.', 'fp-publisher'),
                 ['status' => 400]
             );
         }
@@ -478,7 +491,7 @@ final class Routes
         } catch (RuntimeException $exception) {
             return new WP_Error(
                 'fp_publisher_replay_failed',
-                esc_html__('Impossibile ripianificare il job richiesto.', 'fp_publisher'),
+                esc_html__('Unable to replay the requested job.', 'fp-publisher'),
                 ['status' => 422, 'detail' => $exception->getMessage()]
             );
         }
@@ -514,23 +527,51 @@ final class Routes
         $payload = self::extractPayload($request);
 
         try {
-            $plan = TrelloIngestor::ingest($payload);
+            $plans = TrelloIngestor::ingest($payload);
         } catch (InvalidArgumentException $exception) {
             return new WP_Error(
                 'fp_publisher_ingest_invalid',
-                esc_html__('Parametri Trello non validi per l\'ingestione.', 'fp_publisher'),
+                esc_html__('Parametri Trello non validi per l\'ingestione.', 'fp-publisher'),
                 ['status' => 400, 'detail' => $exception->getMessage()]
             );
         } catch (RuntimeException $exception) {
             return new WP_Error(
                 'fp_publisher_ingest_failed',
-                esc_html__('Impossibile importare la lista Trello selezionata.', 'fp_publisher'),
+                esc_html__('Unable to import the selected Trello list.', 'fp-publisher'),
                 ['status' => 502, 'detail' => $exception->getMessage()]
             );
         }
 
         return new WP_REST_Response([
-            'plan' => $plan->toArray(),
+            'plans' => array_map(
+                static fn (PostPlan $plan): array => $plan->toArray(),
+                $plans
+            ),
+        ]);
+    }
+
+    public static function previewTrello(WP_REST_Request $request)
+    {
+        $payload = self::extractPayload($request);
+
+        try {
+            $cards = TrelloIngestor::preview($payload);
+        } catch (InvalidArgumentException $exception) {
+            return new WP_Error(
+                'fp_publisher_ingest_invalid',
+                esc_html__('Parametri Trello non validi per l\'ingestione.', 'fp-publisher'),
+                ['status' => 400, 'detail' => $exception->getMessage()]
+            );
+        } catch (RuntimeException $exception) {
+            return new WP_Error(
+                'fp_publisher_ingest_failed',
+                esc_html__('Unable to import the selected Trello list.', 'fp-publisher'),
+                ['status' => 502, 'detail' => $exception->getMessage()]
+            );
+        }
+
+        return new WP_REST_Response([
+            'cards' => $cards,
         ]);
     }
 
@@ -540,7 +581,7 @@ final class Routes
         if ($planId <= 0) {
             return new WP_Error(
                 'fp_publisher_invalid_plan',
-                esc_html__('Identificativo piano non valido.', 'fp_publisher'),
+                esc_html__('Invalid plan identifier.', 'fp-publisher'),
                 ['status' => 400]
             );
         }
@@ -560,7 +601,7 @@ final class Routes
         if ($status === '') {
             return new WP_Error(
                 'fp_publisher_invalid_status',
-                esc_html__('Lo stato richiesto non è valido.', 'fp_publisher'),
+                esc_html__('The requested status is not valid.', 'fp-publisher'),
                 ['status' => 400]
             );
         }
@@ -570,7 +611,7 @@ final class Routes
         } catch (InvalidArgumentException $exception) {
             return new WP_Error(
                 'fp_publisher_transition_invalid',
-                esc_html__('Transizione non consentita per il piano selezionato.', 'fp_publisher'),
+                esc_html__('Transition not allowed for the selected plan.', 'fp-publisher'),
                 ['status' => 422, 'detail' => $exception->getMessage()]
             );
         } catch (RuntimeException $exception) {
@@ -578,7 +619,7 @@ final class Routes
 
             return new WP_Error(
                 'fp_publisher_transition_failed',
-                esc_html__('Impossibile aggiornare lo stato del piano.', 'fp_publisher'),
+                esc_html__('Unable to update the plan status.', 'fp-publisher'),
                 ['status' => $statusCode, 'detail' => $exception->getMessage()]
             );
         }
@@ -597,7 +638,7 @@ final class Routes
         if ($planId <= 0) {
             return new WP_Error(
                 'fp_publisher_invalid_plan',
-                esc_html__('Identificativo piano non valido.', 'fp_publisher'),
+                esc_html__('Invalid plan identifier.', 'fp-publisher'),
                 ['status' => 400]
             );
         }
@@ -607,7 +648,7 @@ final class Routes
         } catch (InvalidArgumentException $exception) {
             return new WP_Error(
                 'fp_publisher_comments_invalid',
-                esc_html__('Impossibile recuperare i commenti richiesti.', 'fp_publisher'),
+                esc_html__('Unable to fetch the requested comments.', 'fp-publisher'),
                 ['status' => 422, 'detail' => $exception->getMessage()]
             );
         }
@@ -624,7 +665,7 @@ final class Routes
         if ($planId <= 0) {
             return new WP_Error(
                 'fp_publisher_invalid_plan',
-                esc_html__('Identificativo piano non valido.', 'fp_publisher'),
+                esc_html__('Invalid plan identifier.', 'fp-publisher'),
                 ['status' => 400]
             );
         }
@@ -644,7 +685,7 @@ final class Routes
         if ($body === '') {
             return new WP_Error(
                 'fp_publisher_comment_missing_body',
-                esc_html__('Il contenuto del commento è obbligatorio.', 'fp_publisher'),
+                esc_html__('The comment content is required.', 'fp-publisher'),
                 ['status' => 400]
             );
         }
@@ -654,13 +695,13 @@ final class Routes
         } catch (InvalidArgumentException $exception) {
             return new WP_Error(
                 'fp_publisher_comment_invalid',
-                esc_html__('Impossibile salvare il commento richiesto.', 'fp_publisher'),
+                esc_html__('Unable to save the requested comment.', 'fp-publisher'),
                 ['status' => 422, 'detail' => $exception->getMessage()]
             );
         } catch (RuntimeException $exception) {
             return new WP_Error(
                 'fp_publisher_comment_failed',
-                esc_html__('Errore durante il salvataggio del commento.', 'fp_publisher'),
+                esc_html__('Error while saving the comment.', 'fp-publisher'),
                 ['status' => 500, 'detail' => $exception->getMessage()]
             );
         }
@@ -682,7 +723,7 @@ final class Routes
     {
         return new WP_REST_Response(
             [
-                'message' => esc_html__('Endpoint non ancora implementato.', 'fp_publisher'),
+                'message' => esc_html__('Endpoint not implemented yet.', 'fp-publisher'),
             ],
             202
         );
@@ -693,7 +734,7 @@ final class Routes
         if (! self::verifyNonce($request)) {
             return new WP_Error(
                 'fp_publisher_invalid_nonce',
-                esc_html__('Nonce non valido per la richiesta REST.', 'fp_publisher'),
+                esc_html__('Invalid nonce for the REST request.', 'fp-publisher'),
                 ['status' => 403]
             );
         }
@@ -701,7 +742,7 @@ final class Routes
         if (! Capabilities::userCan($capability)) {
             return new WP_Error(
                 'fp_publisher_forbidden',
-                esc_html__('Non hai i permessi necessari per accedere a questa risorsa.', 'fp_publisher'),
+                esc_html__('You do not have permission to access this resource.', 'fp-publisher'),
                 ['status' => 403]
             );
         }

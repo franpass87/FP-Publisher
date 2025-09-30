@@ -9,8 +9,10 @@ use FP\Publisher\Api\Meta\MetaException;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Infra\Queue;
 use FP\Publisher\Support\Dates;
+use FP\Publisher\Support\TransientErrorClassifier;
 use Throwable;
 
+use function apply_filters;
 use function add_action;
 use function do_action;
 use function hash;
@@ -42,6 +44,10 @@ final class Dispatcher
         }
 
         $payload = is_array($job['payload'] ?? null) ? $job['payload'] : [];
+        $filteredPayload = apply_filters('fp_pub_payload_pre_send', $payload, $job);
+        if (is_array($filteredPayload)) {
+            $payload = $filteredPayload;
+        }
         $type = sanitize_key((string) ($payload['type'] ?? 'publish'));
 
         try {
@@ -52,10 +58,13 @@ final class Dispatcher
 
             self::handlePublish($job, $payload, $channel);
         } catch (MetaException $exception) {
-            Queue::markFailed($job, $exception->getMessage(), $exception->isRetryable());
+            $retryable = (bool) apply_filters('fp_pub_retry_decision', $exception->isRetryable(), $exception, $job);
+            Queue::markFailed($job, $exception->getMessage(), $retryable);
         } catch (Throwable $throwable) {
+            $retryable = TransientErrorClassifier::shouldRetry($throwable);
+            $retryable = (bool) apply_filters('fp_pub_retry_decision', $retryable, $throwable, $job);
             $message = wp_strip_all_tags($throwable->getMessage());
-            Queue::markFailed($job, $message !== '' ? $message : 'Meta connector error.', true);
+            Queue::markFailed($job, $message !== '' ? $message : 'Meta connector error.', $retryable);
         }
     }
 
@@ -86,7 +95,10 @@ final class Dispatcher
             $remoteId = isset($result['id']) && is_string($result['id']) ? $result['id'] : '';
         }
 
-        Queue::markCompleted($jobId, $remoteId !== '' ? $remoteId : null);
+        $remoteId = $remoteId !== '' ? $remoteId : null;
+
+        Queue::markCompleted($jobId, $remoteId);
+        do_action('fp_pub_published', $channel, $remoteId, $job);
 
         if ($channel === self::CHANNEL_INSTAGRAM && $remoteId !== '') {
             self::maybeEnqueueFirstComment($job, $payload, $remoteId);
@@ -125,8 +137,10 @@ final class Dispatcher
 
         $result = Client::publishInstagramComment($mediaId, $message, $accessToken);
         $remoteId = isset($result['id']) && is_string($result['id']) ? $result['id'] : '';
+        $remoteId = $remoteId !== '' ? $remoteId : null;
 
-        Queue::markCompleted($jobId, $remoteId !== '' ? $remoteId : null);
+        Queue::markCompleted($jobId, $remoteId);
+        do_action('fp_pub_published', sanitize_key((string) ($job['channel'] ?? self::CHANNEL_INSTAGRAM)), $remoteId, $job);
     }
 
     /**

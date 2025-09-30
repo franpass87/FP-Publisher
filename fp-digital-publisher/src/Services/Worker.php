@@ -35,12 +35,12 @@ final class Worker
     {
         $schedules['fp_pub_1min'] = [
             'interval' => 60,
-            'display' => __('FP Publisher ogni minuto', 'fp_publisher'),
+            'display' => __('FP Publisher every minute', 'fp-publisher'),
         ];
 
         $schedules['fp_pub_5min'] = [
             'interval' => 300,
-            'display' => __('FP Publisher ogni 5 minuti', 'fp_publisher'),
+            'display' => __('FP Publisher every 5 minutes', 'fp-publisher'),
         ];
 
         return $schedules;

@@ -10,8 +10,8 @@ export interface DensityToggleProps extends React.HTMLAttributes<HTMLDivElement>
 }
 
 const DEFAULT_LABELS: Record<DensityMode, string> = {
-  comfort: __('Comfort', 'fp_publisher'),
-  compact: __('Compatta', 'fp_publisher'),
+  comfort: __('Comfort', 'fp-publisher'),
+  compact: __('Compact', 'fp-publisher'),
 };
 
 export const DensityToggle: React.FC<DensityToggleProps> = ({
@@ -37,7 +37,7 @@ export const DensityToggle: React.FC<DensityToggleProps> = ({
       {...rest}
       className={mergedClassName}
       role="group"
-      aria-label={__('Densità elenco', 'fp_publisher')}
+      aria-label={__('List density', 'fp-publisher')}
     >
       {(Object.keys(DEFAULT_LABELS) as DensityMode[]).map((key) => (
         <button

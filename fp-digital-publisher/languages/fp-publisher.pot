@@ -1,0 +1,368 @@
+# Copyright (C) 2025 Francesco Passeri
+# This file is distributed under the same license as the FP Digital Publisher plugin.
+msgid ""
+msgstr ""
+"Project-Id-Version: FP Digital Publisher 0.1.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/fp-digital-publisher\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2025-09-30T16:19:36+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: fp-publisher\n"
+
+#. Plugin Name of the plugin
+#: fp-digital-publisher.php
+msgid "FP Digital Publisher"
+msgstr ""
+
+#. Description of the plugin
+#: fp-digital-publisher.php
+msgid "Omnichannel digital publishing orchestrator for social and owned media workflows."
+msgstr ""
+
+#. Author of the plugin
+#: fp-digital-publisher.php
+msgid "Francesco Passeri"
+msgstr ""
+
+#. Author URI of the plugin
+#: fp-digital-publisher.php
+msgid "https://francescopasseri.com"
+msgstr ""
+
+#: src/Admin/Menu.php:33
+#: src/Admin/Menu.php:34
+msgid "FP Publisher"
+msgstr ""
+
+#: src/Admin/Menu.php:43
+msgid "Accounts"
+msgstr ""
+
+#: src/Admin/Menu.php:48
+msgid "Calendar"
+msgstr ""
+
+#: src/Admin/Menu.php:53
+msgid "Templates"
+msgstr ""
+
+#: src/Admin/Menu.php:58
+msgid "Alerts"
+msgstr ""
+
+#: src/Admin/Menu.php:63
+msgid "Settings"
+msgstr ""
+
+#: src/Admin/Menu.php:68
+msgid "Logs"
+msgstr ""
+
+#: src/Admin/Menu.php:91
+msgid "You do not have permission to access FP Digital Publisher."
+msgstr ""
+
+#: src/Admin/Menu.php:95
+msgid "Loading application…"
+msgstr ""
+
+#: src/Admin/Notices.php:54
+msgid "FP Digital Publisher requires at least one integration token configured in the settings."
+msgstr ""
+
+#: src/Admin/Notices.php:65
+msgid "WP-Cron appears to be disabled. Enable it or configure an external cron job to process FP Digital Publisher queues."
+msgstr ""
+
+#: src/Api/Routes.php:264
+msgid "Invalid parameters for the short link."
+msgstr ""
+
+#: src/Api/Routes.php:270
+#: src/Services/Links.php:152
+msgid "Unable to save the requested short link."
+msgstr ""
+
+#: src/Api/Routes.php:286
+#: src/Api/Routes.php:294
+msgid "Short link not found."
+msgstr ""
+
+#: src/Api/Routes.php:312
+msgid "Brand and channel are required for recommendations."
+msgstr ""
+
+#: src/Api/Routes.php:322
+msgid "Unable to calculate suggestions for the requested period."
+msgstr ""
+
+#: src/Api/Routes.php:346
+msgid "Unable to find the requested plan for preflight."
+msgstr ""
+
+#: src/Api/Routes.php:356
+msgid "The provided plan is not valid for preflight."
+msgstr ""
+
+#: src/Api/Routes.php:370
+#: src/Api/Routes.php:393
+#: src/Api/Routes.php:463
+msgid "The provided channel is not valid."
+msgstr ""
+
+#: src/Api/Routes.php:409
+msgid "The provided plan is not valid for scheduling."
+msgstr ""
+
+#: src/Api/Routes.php:420
+msgid "Preflight failed: resolve the errors before scheduling."
+msgstr ""
+
+#: src/Api/Routes.php:447
+msgid "Unable to enqueue the requested job."
+msgstr ""
+
+#: src/Api/Routes.php:484
+msgid "Invalid job identifier."
+msgstr ""
+
+#: src/Api/Routes.php:494
+msgid "Unable to replay the requested job."
+msgstr ""
+
+#: src/Api/Routes.php:534
+#: src/Api/Routes.php:562
+msgid "Parametri Trello non validi per l'ingestione."
+msgstr ""
+
+#: src/Api/Routes.php:540
+#: src/Api/Routes.php:568
+msgid "Unable to import the selected Trello list."
+msgstr ""
+
+#: src/Api/Routes.php:584
+#: src/Api/Routes.php:641
+#: src/Api/Routes.php:668
+msgid "Invalid plan identifier."
+msgstr ""
+
+#: src/Api/Routes.php:604
+msgid "The requested status is not valid."
+msgstr ""
+
+#: src/Api/Routes.php:614
+msgid "Transition not allowed for the selected plan."
+msgstr ""
+
+#: src/Api/Routes.php:622
+msgid "Unable to update the plan status."
+msgstr ""
+
+#: src/Api/Routes.php:651
+msgid "Unable to fetch the requested comments."
+msgstr ""
+
+#: src/Api/Routes.php:688
+msgid "The comment content is required."
+msgstr ""
+
+#: src/Api/Routes.php:698
+msgid "Unable to save the requested comment."
+msgstr ""
+
+#: src/Api/Routes.php:704
+msgid "Error while saving the comment."
+msgstr ""
+
+#: src/Api/Routes.php:726
+msgid "Endpoint not implemented yet."
+msgstr ""
+
+#: src/Api/Routes.php:737
+msgid "Invalid nonce for the REST request."
+msgstr ""
+
+#: src/Api/Routes.php:745
+msgid "You do not have permission to access this resource."
+msgstr ""
+
+#: src/Infra/Capabilities.php:51
+msgid "FP Publisher Admin"
+msgstr ""
+
+#: src/Infra/Capabilities.php:57
+msgid "FP Publisher Editor"
+msgstr ""
+
+#: src/Services/Alerts.php:60
+msgid "FP Publisher (daily)"
+msgstr ""
+
+#: src/Services/Alerts.php:65
+msgid "FP Publisher (weekly)"
+msgstr ""
+
+#: src/Services/Alerts.php:149
+msgid "FP Publisher tokens expiring"
+msgstr ""
+
+#: src/Services/Alerts.php:171
+msgid "Failed publishing jobs"
+msgstr ""
+
+#: src/Services/Alerts.php:193
+msgid "Missing schedules for next week"
+msgstr ""
+
+#: src/Services/Assets/Pipeline.php:109
+msgid "Canale non valido per l'upload."
+msgstr ""
+
+#: src/Services/Assets/Pipeline.php:119
+msgid "The media does not meet the requirements for the selected channel."
+msgstr ""
+
+#: src/Services/Assets/Pipeline.php:171
+msgid "Unable to prepare the temporary directory."
+msgstr ""
+
+#: src/Services/Assets/Validator.php:67
+msgid "The video aspect ratio is not supported for the selected channel."
+msgstr ""
+
+#: src/Services/Assets/Validator.php:78
+msgid "Unable to validate the media ratio: missing dimensions."
+msgstr ""
+
+#: src/Services/Assets/Validator.php:86
+msgid "The duration exceeds the maximum allowed for the channel."
+msgstr ""
+
+#: src/Services/Assets/Validator.php:96
+msgid "The file exceeds the maximum allowed size."
+msgstr ""
+
+#: src/Services/Assets/Validator.php:109
+msgid "The video bitrate is too high for the channel."
+msgstr ""
+
+#: src/Services/Comments.php:189
+msgid "Nuovo commento FP Publisher"
+msgstr ""
+
+#: src/Services/Links.php:108
+msgid "Invalid slug or URL for the short link."
+msgstr ""
+
+#: src/Services/Preflight.php:99
+msgid "The main text is missing."
+msgstr ""
+
+#: src/Services/Preflight.php:107
+msgid "The text exceeds the maximum length allowed for the channel."
+msgstr ""
+
+#: src/Services/Preflight.php:116
+msgid "The text is close to the recommended character limit."
+msgstr ""
+
+#: src/Services/Preflight.php:124
+msgid "Text length within limits."
+msgstr ""
+
+#: src/Services/Preflight.php:137
+msgid "No media assets associated with the plan."
+msgstr ""
+
+#: src/Services/Preflight.php:147
+msgid "No ratio rule defined for the channel."
+msgstr ""
+
+#: src/Services/Preflight.php:181
+msgid "Unable to verify the media ratio without metadata."
+msgstr ""
+
+#: src/Services/Preflight.php:190
+msgid "Some assets do not meet the recommended ratio."
+msgstr ""
+
+#: src/Services/Preflight.php:197
+msgid "Media ratio within limits."
+msgstr ""
+
+#: src/Services/Preflight.php:215
+msgid "CTA optional for the selected channel."
+msgstr ""
+
+#: src/Services/Preflight.php:224
+msgid "A call to action is required for the channel."
+msgstr ""
+
+#: src/Services/Preflight.php:232
+msgid "CTA present."
+msgstr ""
+
+#: src/Services/Preflight.php:245
+msgid "A link is required for the selected channel."
+msgstr ""
+
+#: src/Services/Preflight.php:254
+msgid "The destination link is not valid."
+msgstr ""
+
+#: src/Services/Preflight.php:262
+msgid "The shared URL is not valid."
+msgstr ""
+
+#: src/Services/Preflight.php:269
+msgid "Valid link."
+msgstr ""
+
+#: src/Services/Preflight.php:285
+msgid "Required UTM parameters are missing."
+msgstr ""
+
+#: src/Services/Preflight.php:294
+msgid "UTM parameters present."
+msgstr ""
+
+#: src/Services/Preflight.php:301
+msgid "UTM parameters missing (not required)."
+msgstr ""
+
+#: src/Services/Preflight.php:315
+msgid "No hashtags defined for the content."
+msgstr ""
+
+#: src/Services/Preflight.php:336
+msgid "Duplicate hashtags detected."
+msgstr ""
+
+#: src/Services/Preflight.php:345
+msgid "Hashtag count exceeds the allowed Instagram limit."
+msgstr ""
+
+#: src/Services/Preflight.php:353
+msgid "Hashtags within limits."
+msgstr ""
+
+#: src/Services/Preflight.php:379
+msgid "Alternative text present for images."
+msgstr ""
+
+#: src/Services/Preflight.php:386
+msgid "Some images are missing alternative text."
+msgstr ""
+
+#: src/Services/Worker.php:38
+msgid "FP Publisher every minute"
+msgstr ""
+
+#: src/Services/Worker.php:43
+msgid "FP Publisher every 5 minutes"
+msgstr ""
