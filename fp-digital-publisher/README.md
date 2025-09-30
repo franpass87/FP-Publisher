@@ -27,3 +27,12 @@ FP Digital Publisher è un plugin WordPress progettato per orchestrare campagne 
 - Fase 12: asset pipeline con upload diretto verso Meta/YouTube/TikTok o fallback locale sicuro con TTL, validatori media per ratio/durata/bitrate e ingest Trello per generare piani draft da board/list selezionate.
 - Fase 13: interfaccia calendario/kanban con suggerimenti orari, workflow approvazioni con commenti menzionabili e nuove API REST dedicate.
 - Fase 14: smart alerts giornalieri/settimanali, servizio short link con rewrite `/go/`, replay job falliti con idempotenza estesa e nuova documentazione di hardening.
+
+## Sviluppo locale
+- Eseguire `composer install` per predisporre il bootstrap dei test PHP.
+- Configurare un ambiente WordPress >= 6.4 e attivare il plugin dalla dashboard.
+- Per l'ambiente JavaScript sono disponibili esclusivamente asset sorgente in `assets/`; eventuali build devono restare locali (non committate).
+
+## Testing
+- `composer validate` per verificare la correttezza del `composer.json`.
+- `composer test` (dopo `composer install`) per avviare gli stub di test PHP con bootstrap e output TestDox (`./vendor/bin/phpunit --bootstrap tests/bootstrap.php --testdox tests`).
