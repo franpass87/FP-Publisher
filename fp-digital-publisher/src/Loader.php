@@ -7,6 +7,7 @@ namespace FP\Publisher;
 use FP\Publisher\Admin\Assets;
 use FP\Publisher\Admin\Menu;
 use FP\Publisher\Admin\Notices;
+use FP\Publisher\Admin\UI\Enqueue as UiEnqueue;
 use FP\Publisher\Api\Routes;
 use FP\Publisher\Infra\Capabilities;
 use FP\Publisher\Infra\DB\Migrations;
@@ -32,6 +33,7 @@ final class Loader
         Capabilities::register();
         Notices::register();
         Menu::register();
+        UiEnqueue::register();
         Assets::register();
         Routes::register();
         AssetPipeline::register();
