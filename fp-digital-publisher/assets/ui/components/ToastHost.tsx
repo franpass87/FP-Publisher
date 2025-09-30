@@ -118,7 +118,7 @@ const getToastColors = (intent: ToastIntent = 'neutral') => {
   }
 };
 
-const emptyStateText = __('Nessuna notifica al momento.', 'fp_publisher');
+const emptyStateText = __('No notifications right now.', 'fp-publisher');
 
 export const ToastHost: React.FC<ToastHostProps> = ({
   placement = 'top-end',
@@ -156,7 +156,7 @@ export const ToastHost: React.FC<ToastHostProps> = ({
     <div
       role="region"
       aria-live="polite"
-      aria-label={__('Notifiche', 'fp_publisher')}
+      aria-label={__('Notifications', 'fp-publisher')}
       className="fp-ui-toast-host"
       style={hostStyle}
     >
@@ -213,7 +213,7 @@ export const ToastHost: React.FC<ToastHostProps> = ({
               <button
                 type="button"
                 onClick={() => dismissToast(toast.id)}
-                aria-label={__('Chiudi notifica', 'fp_publisher')}
+                aria-label={__('Close notification', 'fp-publisher')}
                 style={{
                   background: 'transparent',
                   border: 'none',

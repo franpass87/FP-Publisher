@@ -36,7 +36,7 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   description,
   size = 'md',
-  closeLabel = __('Chiudi modale', 'fp_publisher'),
+  closeLabel = __('Close modal', 'fp-publisher'),
   children,
   footer,
 }) => {

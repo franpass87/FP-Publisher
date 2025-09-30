@@ -14,6 +14,7 @@ use function explode;
 use function filter_var;
 use function function_exists;
 use function get_option;
+use function in_array;
 use function is_array;
 use function is_string;
 use function preg_match;
@@ -151,8 +152,28 @@ final class Options
             ))),
             'timezone' => self::sanitizeTimezone($value),
             'queue' => self::sanitizeQueueValue($segments, $value),
+            'cleanup' => self::sanitizeCleanupValue($segments, $value),
             default => $value,
         };
+    }
+
+    private static function sanitizeCleanupValue(array $segments, mixed $value): mixed
+    {
+        $field = $segments[1] ?? '';
+
+        if (in_array($field, ['jobs_retention_days', 'assets_retention_days'], true)) {
+            $days = (int) $value;
+
+            return $days > 0 ? $days : 1;
+        }
+
+        if ($field === 'terms_cache_ttl_minutes') {
+            $minutes = (int) $value;
+
+            return $minutes > 0 ? $minutes : 60;
+        }
+
+        return $value;
     }
 
     private static function sanitizeQueueValue(array $segments, mixed $value): mixed
@@ -258,6 +279,11 @@ final class Options
                 ],
                 'blackout_windows' => [],
             ],
+            'cleanup' => [
+                'jobs_retention_days' => 180,
+                'assets_retention_days' => 7,
+                'terms_cache_ttl_minutes' => 1440,
+            ],
             'tokens' => [],
         ];
     }
@@ -334,7 +360,7 @@ final class Options
 
     private static function encryptionKey(): string
     {
-        $siteKey = defined('AUTH_KEY') && AUTH_KEY !== '' ? AUTH_KEY : (defined('SECURE_AUTH_KEY') ? SECURE_AUTH_KEY : 'fp_publisher');
+        $siteKey = defined('AUTH_KEY') && AUTH_KEY !== '' ? AUTH_KEY : (defined('SECURE_AUTH_KEY') ? SECURE_AUTH_KEY : 'fp-publisher');
         $keyLength = self::keyLength();
 
         return sodium_crypto_generichash($siteKey, '', $keyLength);

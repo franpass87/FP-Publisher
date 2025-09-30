@@ -65,8 +65,8 @@ final class Validator
                 $blocking[] = [
                     'check' => 'ratio',
                     'message' => __(
-                        'Il rapporto larghezza/altezza del video non è supportato per il canale selezionato.',
-                        'fp_publisher'
+                        'The video aspect ratio is not supported for the selected channel.',
+                        'fp-publisher'
                     ),
                     'value' => round($ratio, 3),
                     'expected' => [$rules['ratio_min'], $rules['ratio_max']],
@@ -75,7 +75,7 @@ final class Validator
         } else {
             $warnings[] = [
                 'check' => 'ratio',
-                'message' => __('Impossibile verificare il rapporto del media: dimensioni mancanti.', 'fp_publisher'),
+                'message' => __('Unable to validate the media ratio: missing dimensions.', 'fp-publisher'),
             ];
         }
 
@@ -83,7 +83,7 @@ final class Validator
         if ($duration > 0.0 && $duration > (float) $rules['duration_max']) {
             $blocking[] = [
                 'check' => 'duration',
-                'message' => __('La durata supera il massimo consentito per il canale.', 'fp_publisher'),
+                'message' => __('The duration exceeds the maximum allowed for the channel.', 'fp-publisher'),
                 'value' => $duration,
                 'expected' => $rules['duration_max'],
             ];
@@ -93,7 +93,7 @@ final class Validator
         if ($size > 0.0 && $size > (float) $rules['size_max']) {
             $blocking[] = [
                 'check' => 'size',
-                'message' => __('Il file supera le dimensioni massime consentite.', 'fp_publisher'),
+                'message' => __('The file exceeds the maximum allowed size.', 'fp-publisher'),
                 'value' => $size,
                 'expected' => $rules['size_max'],
             ];
@@ -106,7 +106,7 @@ final class Validator
         if ($bitrate > 0.0 && $bitrate > (float) $rules['bitrate_max']) {
             $blocking[] = [
                 'check' => 'bitrate',
-                'message' => __('Il bitrate del video è troppo elevato per il canale.', 'fp_publisher'),
+                'message' => __('The video bitrate is too high for the channel.', 'fp-publisher'),
                 'value' => $bitrate,
                 'expected' => $rules['bitrate_max'],
             ];

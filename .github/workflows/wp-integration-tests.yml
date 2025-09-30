@@ -1,0 +1,66 @@
+name: WordPress Integration Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - chore/playbook-impl
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.2', '8.3']
+        wp-version: ['6.4', '6.6']
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: composer
+          coverage: none
+
+      - name: Install Composer dependencies
+        working-directory: fp-digital-publisher
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Install WordPress test suite
+        working-directory: fp-digital-publisher
+        env:
+          WP_VERSION: ${{ matrix.wp-version }}
+          WP_DB_NAME: wordpress_test
+          WP_DB_USER: root
+          WP_DB_PASS: root
+          WP_DB_HOST: 127.0.0.1:3306
+          WP_TESTS_DIR: ${{ github.workspace }}/fp-digital-publisher/tests/wp-integration/.wp-tests
+        run: tests/wp-integration/bin/install-wp-tests.sh
+
+      - name: Run unit tests
+        working-directory: fp-digital-publisher
+        run: composer test
+
+      - name: Run WordPress integration tests
+        working-directory: fp-digital-publisher
+        env:
+          WP_TESTS_DIR: ${{ github.workspace }}/fp-digital-publisher/tests/wp-integration/.wp-tests/tests/phpunit
+        run: composer test:integration

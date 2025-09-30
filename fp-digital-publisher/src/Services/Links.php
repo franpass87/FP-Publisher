@@ -101,9 +101,11 @@ final class Links
             ? esc_url_raw((string) $payload['target_url'])
             : '';
         $utm = self::sanitizeUtm($payload['utm'] ?? []);
+        $active = isset($payload['active']) ? (bool) $payload['active'] : true;
+        $activeValue = $active ? 1 : 0;
 
         if ($slug === '' || $target === '' || ! wp_http_validate_url($target)) {
-            throw new \InvalidArgumentException(__('Slug o URL non validi per il collegamento corto.', 'fp_publisher'));
+            throw new \InvalidArgumentException(__('Invalid slug or URL for the short link.', 'fp-publisher'));
         }
 
         $table = $wpdb->prefix . 'fp_pub_links';
@@ -124,9 +126,10 @@ final class Links
                 [
                     'target_url' => $target,
                     'utm_json' => $utmJson,
+                    'active' => $activeValue,
                 ],
                 ['id' => absint($existing['id'])],
-                ['%s', '%s'],
+                ['%s', '%s', '%d'],
                 ['%d']
             );
         } else {
@@ -138,14 +141,15 @@ final class Links
                     'utm_json' => $utmJson,
                     'clicks' => 0,
                     'created_at' => $now,
+                    'active' => $activeValue,
                 ],
-                ['%s', '%s', '%s', '%d', '%s']
+                ['%s', '%s', '%s', '%d', '%s', '%d']
             );
         }
 
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE slug = %s", $slug), ARRAY_A);
         if (! is_array($row)) {
-            throw new \RuntimeException(__('Impossibile salvare il collegamento richiesto.', 'fp_publisher'));
+            throw new \RuntimeException(__('Unable to save the requested short link.', 'fp-publisher'));
         }
 
         return self::hydrate($row);
@@ -193,15 +197,15 @@ final class Links
     public static function resolve(string $slug): ?array
     {
         $link = self::find($slug);
-        if ($link === null) {
+        if ($link === null || ($link['active'] ?? true) === false) {
             return null;
         }
 
         $utm = is_array($link['utm'] ?? null) ? $link['utm'] : [];
         $url = Utm::appendToUrl((string) $link['target_url'], $utm, [
-            'source' => 'fp_publisher',
+            'source' => 'fp-publisher',
             'medium' => 'shortlink',
-            'campaign' => sanitize_key((string) ($link['slug'] ?? 'fp_publisher')),
+            'campaign' => sanitize_key((string) ($link['slug'] ?? 'fp-publisher')),
         ]);
 
         if ($url === '') {
@@ -261,6 +265,7 @@ final class Links
             'created_at' => isset($row['created_at'])
                 ? Dates::fromString((string) $row['created_at'], 'UTC')->setTimezone(Dates::timezone())->format(DateTimeInterface::ATOM)
                 : null,
+            'active' => absint($row['active'] ?? 1) === 1,
         ];
     }
 

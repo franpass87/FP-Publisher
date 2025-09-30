@@ -1,6 +1,6 @@
 import { __, sprintf } from '@wordpress/i18n';
 
-const TEXT_DOMAIN = 'fp_publisher';
+const TEXT_DOMAIN = 'fp-publisher';
 
 interface BootConfig {
   restBase: string;
@@ -138,125 +138,173 @@ type CalendarCellItem = {
   timestamp: number;
 };
 
+type TrelloAttachmentSummary = {
+  id: string;
+  name: string;
+  url: string;
+  mime_type: string;
+};
+
+type TrelloCardSummary = {
+  id: string;
+  name: string;
+  description?: string;
+  due?: string | null;
+  url?: string;
+  attachments: TrelloAttachmentSummary[];
+};
+
+type TrelloCredentials = {
+  apiKey: string;
+  token: string;
+  oauthToken: string;
+  listId: string;
+  brand: string;
+  channel: string;
+};
+
 const copy = {
   common: {
-    close: __('Chiudi', TEXT_DOMAIN),
+    close: __('Close', TEXT_DOMAIN),
   },
   composer: {
-    header: __('Composer contenuti', TEXT_DOMAIN),
-    subtitle: __('Completa le informazioni chiave prima della programmazione.', TEXT_DOMAIN),
-    stepperLabel: __('Progressione composer', TEXT_DOMAIN),
+    header: __('Content composer', TEXT_DOMAIN),
+    subtitle: __('Complete the key information before scheduling.', TEXT_DOMAIN),
+    stepperLabel: __('Composer progress', TEXT_DOMAIN),
     steps: {
-      content: __('Contenuto', TEXT_DOMAIN),
-      variants: __('Varianti', TEXT_DOMAIN),
+      content: __('Content', TEXT_DOMAIN),
+      variants: __('Variants', TEXT_DOMAIN),
       media: __('Media', TEXT_DOMAIN),
-      schedule: __('Programma', TEXT_DOMAIN),
+      schedule: __('Schedule', TEXT_DOMAIN),
       review: __('Review', TEXT_DOMAIN),
     },
     fields: {
       title: {
-        label: __('Titolo contenuto', TEXT_DOMAIN),
-        placeholder: __('Es. Lancio nuovo prodotto', TEXT_DOMAIN),
+        label: __('Content title', TEXT_DOMAIN),
+        placeholder: __('E.g. New product launch', TEXT_DOMAIN),
       },
       caption: {
-        label: __('Didascalia', TEXT_DOMAIN),
-        placeholder: __('Racconta la storia del contenuto e aggiungi le call-to-action.', TEXT_DOMAIN),
-        hint: __('Suggerimento: includi CTA, mention e short link.', TEXT_DOMAIN),
+        label: __('Caption', TEXT_DOMAIN),
+        placeholder: __('Tell the story of the content and add call-to-actions.', TEXT_DOMAIN),
+        hint: __('Tip: include CTAs, mentions, and short links.', TEXT_DOMAIN),
       },
       schedule: {
-        label: __('Programma', TEXT_DOMAIN),
+        label: __('Schedule', TEXT_DOMAIN),
       },
     },
     hashtagToggle: {
-      label: __('Hashtag nel primo commento (IG)', TEXT_DOMAIN),
-      description: __('Sposta automaticamente gli hashtag nel primo commento per mantenere pulita la didascalia.', TEXT_DOMAIN),
-      previewTitle: __('Anteprima commento', TEXT_DOMAIN),
+      label: __('Hashtags in the first comment (IG)', TEXT_DOMAIN),
+      description: __('Automatically move hashtags to the first comment to keep the caption clean.', TEXT_DOMAIN),
+      previewTitle: __('Comment preview', TEXT_DOMAIN),
       previewBody: __(' #marketing #launchday #fpDigitalPublisher', TEXT_DOMAIN).trimStart(),
     },
     actions: {
-      saveDraft: __('Salva bozza', TEXT_DOMAIN),
-      submit: __('Programma contenuto', TEXT_DOMAIN),
+      saveDraft: __('Save draft', TEXT_DOMAIN),
+      submit: __('Schedule content', TEXT_DOMAIN),
     },
     feedback: {
-      blocking: __('Risolvi gli elementi bloccanti prima di programmare.', TEXT_DOMAIN),
-      scheduled: __('Contenuto programmato per %s.', TEXT_DOMAIN),
-      fallbackDate: __('data da definire', TEXT_DOMAIN),
-      issuesPrefix: __('Correggi: %s', TEXT_DOMAIN),
-      noIssues: __('Nessuna criticità bloccante.', TEXT_DOMAIN),
-      draftSaved: __('Bozza salvata nei contenuti in lavorazione.', TEXT_DOMAIN),
+      blocking: __('Resolve the blocking items before scheduling.', TEXT_DOMAIN),
+      scheduled: __('Content scheduled for %s.', TEXT_DOMAIN),
+      fallbackDate: __('date to be defined', TEXT_DOMAIN),
+      issuesPrefix: __('Fix: %s', TEXT_DOMAIN),
+      noIssues: __('No blocking issues.', TEXT_DOMAIN),
+      draftSaved: __('Draft saved in work-in-progress content.', TEXT_DOMAIN),
     },
     validation: {
-      titleShort: __('Aggiungi un titolo descrittivo (minimo 5 caratteri).', TEXT_DOMAIN),
-      captionShort: __('Completa la didascalia con almeno 15 caratteri.', TEXT_DOMAIN),
-      captionDetail: __('Aggiungi ulteriori dettagli o CTA nella didascalia.', TEXT_DOMAIN),
-      scheduleInvalid: __('Imposta una data di pubblicazione futura.', TEXT_DOMAIN),
-      hashtagsOff: __('Attiva gli hashtag nel primo commento per ottimizzare la reach IG.', TEXT_DOMAIN),
+      titleShort: __('Add a descriptive title (at least 5 characters).', TEXT_DOMAIN),
+      captionShort: __('Fill the caption with at least 15 characters.', TEXT_DOMAIN),
+      captionDetail: __('Add more details or CTAs in the caption.', TEXT_DOMAIN),
+      scheduleInvalid: __('Set a future publication date.', TEXT_DOMAIN),
+      hashtagsOff: __('Enable hashtags in the first comment to optimize IG reach.', TEXT_DOMAIN),
     },
   },
   preflight: {
     chipLabel: __('Preflight', TEXT_DOMAIN),
-    modalTitle: __('Dettagli Preflight', TEXT_DOMAIN),
+    modalTitle: __('Preflight details', TEXT_DOMAIN),
   },
   shortlinks: {
-    empty: __('Nessun short link configurato. Crea il primo per iniziare a tracciare le campagne.', TEXT_DOMAIN),
+    empty: __('No short link configured. Create the first one to start tracking campaigns.', TEXT_DOMAIN),
     feedback: {
-      loading: __('Caricamento short link…', TEXT_DOMAIN),
-      empty: __('Nessun short link configurato. Crea il primo per tracciare le campagne.', TEXT_DOMAIN),
-      open: __('Apertura di %s in una nuova scheda.', TEXT_DOMAIN),
-      copySuccess: __('URL copiato negli appunti.', TEXT_DOMAIN),
-      copyError: __('Impossibile copiare negli appunti.', TEXT_DOMAIN),
-      disabling: __('Disattivazione in corso…', TEXT_DOMAIN),
-      disabledEmpty: __('Short link disattivato. Non ci sono altri link attivi.', TEXT_DOMAIN),
-      disabled: __('Short link disattivato correttamente.', TEXT_DOMAIN),
-      updated: __('Short link aggiornato correttamente.', TEXT_DOMAIN),
-      created: __('Short link creato con successo.', TEXT_DOMAIN),
+      loading: __('Loading short links…', TEXT_DOMAIN),
+      empty: __('No short link configured. Create the first one to track campaigns.', TEXT_DOMAIN),
+      open: __('Opening %s in a new tab.', TEXT_DOMAIN),
+      copySuccess: __('URL copied to the clipboard.', TEXT_DOMAIN),
+      copyError: __('Unable to copy to the clipboard.', TEXT_DOMAIN),
+      disabling: __('Disabling in progress…', TEXT_DOMAIN),
+      disabledEmpty: __('Short link disabled. There are no other active links.', TEXT_DOMAIN),
+      disabled: __('Short link disabled successfully.', TEXT_DOMAIN),
+      updated: __('Short link updated successfully.', TEXT_DOMAIN),
+      created: __('Short link created successfully.', TEXT_DOMAIN),
     },
     section: {
       title: __('Short link', TEXT_DOMAIN),
-      subtitle: __('Gestisci redirect e campagne rapide', TEXT_DOMAIN),
-      createButton: __('Nuovo short link', TEXT_DOMAIN),
+      subtitle: __('Manage redirects and quick campaigns', TEXT_DOMAIN),
+      createButton: __('New short link', TEXT_DOMAIN),
     },
     validation: {
-      slugMissing: __('Inserisci uno slug.', TEXT_DOMAIN),
-      slugFormat: __('Lo slug può contenere solo lettere, numeri e trattini.', TEXT_DOMAIN),
-      targetMissing: __('Inserisci un URL di destinazione.', TEXT_DOMAIN),
-      targetInvalid: __('Inserisci un URL valido (es. https://esempio.com).', TEXT_DOMAIN),
+      slugMissing: __('Enter a slug.', TEXT_DOMAIN),
+      slugFormat: __('The slug can contain only letters, numbers, and hyphens.', TEXT_DOMAIN),
+      targetMissing: __('Enter a destination URL.', TEXT_DOMAIN),
+      targetInvalid: __('Enter a valid URL (e.g. https://example.com).', TEXT_DOMAIN),
     },
     preview: {
       shortlinkLabel: __('Short link:', TEXT_DOMAIN),
-      utmLabel: __('Destinazione UTM:', TEXT_DOMAIN),
-      waiting: __('In attesa di un URL valido per calcolare le UTM.', TEXT_DOMAIN),
+      utmLabel: __('UTM destination:', TEXT_DOMAIN),
+      waiting: __('Waiting for a valid URL to compute the UTMs.', TEXT_DOMAIN),
     },
     errors: {
-      disable: __('Errore durante la disattivazione (%s).', TEXT_DOMAIN),
-      save: __('Errore durante il salvataggio (%s).', TEXT_DOMAIN),
+      disable: __('Error while disabling (%s).', TEXT_DOMAIN),
+      save: __('Error while saving (%s).', TEXT_DOMAIN),
     },
     table: {
       slug: __('Slug', TEXT_DOMAIN),
-      target: __('Destinazione', TEXT_DOMAIN),
-      clicks: __('Click', TEXT_DOMAIN),
-      lastClick: __('Ultimo click', TEXT_DOMAIN),
-      actions: __('Azioni', TEXT_DOMAIN),
+      target: __('Destination', TEXT_DOMAIN),
+      clicks: __('Clicks', TEXT_DOMAIN),
+      lastClick: __('Last click', TEXT_DOMAIN),
+      actions: __('Actions', TEXT_DOMAIN),
     },
     actions: {
-      open: __('Apri', TEXT_DOMAIN),
-      copy: __('Copia URL', TEXT_DOMAIN),
-      edit: __('Modifica', TEXT_DOMAIN),
-      disable: __('Disattiva', TEXT_DOMAIN),
+      open: __('Open', TEXT_DOMAIN),
+      copy: __('Copy URL', TEXT_DOMAIN),
+      edit: __('Edit', TEXT_DOMAIN),
+      disable: __('Disable', TEXT_DOMAIN),
     },
-    menuLabel: __('Azioni per %s', TEXT_DOMAIN),
+    menuLabel: __('Actions for %s', TEXT_DOMAIN),
     modal: {
-      createTitle: __('Nuovo short link', TEXT_DOMAIN),
-      editTitle: __('Modifica short link', TEXT_DOMAIN),
+      createTitle: __('New short link', TEXT_DOMAIN),
+      editTitle: __('Edit short link', TEXT_DOMAIN),
       slugLabel: __('Slug', TEXT_DOMAIN),
       slugPlaceholder: __('promo-social', TEXT_DOMAIN),
-      targetLabel: __('URL di destinazione', TEXT_DOMAIN),
-      targetPlaceholder: __('https://esempio.com/promo', TEXT_DOMAIN),
-      previewDefault: __('Compila destinazione per generare l\'anteprima UTM.', TEXT_DOMAIN),
-      cancel: __('Annulla', TEXT_DOMAIN),
-      create: __('Crea short link', TEXT_DOMAIN),
-      update: __('Aggiorna link', TEXT_DOMAIN),
+      targetLabel: __('Destination URL', TEXT_DOMAIN),
+      targetPlaceholder: __('https://example.com/promo', TEXT_DOMAIN),
+      previewDefault: __('Fill the destination to generate the UTM preview.', TEXT_DOMAIN),
+      cancel: __('Cancel', TEXT_DOMAIN),
+      create: __('Create short link', TEXT_DOMAIN),
+      update: __('Update link', TEXT_DOMAIN),
     },
+  },
+  trello: {
+    modalTitle: __('Import content from Trello', TEXT_DOMAIN),
+    listLabel: __('Trello list ID or URL', TEXT_DOMAIN),
+    listPlaceholder: __('https://trello.com/b/.../list', TEXT_DOMAIN),
+    apiKeyLabel: __('Trello API Key', TEXT_DOMAIN),
+    tokenLabel: __('Trello Token', TEXT_DOMAIN),
+    oauthLabel: __('OAuth Bearer token (optional)', TEXT_DOMAIN),
+    oauthHint: __('Fill only if you use OAuth 2.0; leave empty to use API key + token.', TEXT_DOMAIN),
+    fetch: __('Load cards', TEXT_DOMAIN),
+    import: __('Import selection', TEXT_DOMAIN),
+    loading: __('Loading Trello cards…', TEXT_DOMAIN),
+    empty: __('No cards available in the selected list.', TEXT_DOMAIN),
+    selectionHint: __('Select one or more cards to import as drafts.', TEXT_DOMAIN),
+    missingCredentials: __('Enter API key + token or an OAuth token.', TEXT_DOMAIN),
+    missingList: __('Enter a valid list ID or URL.', TEXT_DOMAIN),
+    noSelection: __('Select at least one Trello card to import.', TEXT_DOMAIN),
+    success: __('%d cards imported as drafts.', TEXT_DOMAIN),
+    errorLoading: __('Unable to fetch Trello cards: %s', TEXT_DOMAIN),
+    errorImport: __('Unable to import the selection: %s', TEXT_DOMAIN),
+    context: __('Content will be imported as drafts for %1$s · %2$s.', TEXT_DOMAIN),
+    attachmentsLabel: __('%d attachments', TEXT_DOMAIN),
+    viewCard: __('Open in Trello', TEXT_DOMAIN),
   },
 };
 
@@ -266,26 +314,26 @@ const GRIP_ICON =
 const PREFLIGHT_INSIGHTS: PreflightInsight[] = [
   {
     id: 'title',
-    label: __('Titolo', TEXT_DOMAIN),
-    description: __('Utilizza un titolo descrittivo per aiutare il team a capire il focus del contenuto.', TEXT_DOMAIN),
+    label: __('Title', TEXT_DOMAIN),
+    description: __('Use a descriptive title to help the team understand the focus of the content.', TEXT_DOMAIN),
     impact: 30,
   },
   {
     id: 'caption',
-    label: __('Didascalia', TEXT_DOMAIN),
-    description: __('Completa la didascalia con call-to-action e riferimenti di brand.', TEXT_DOMAIN),
+    label: __('Caption', TEXT_DOMAIN),
+    description: __('Complete the caption with call-to-actions and brand references.', TEXT_DOMAIN),
     impact: 30,
   },
   {
     id: 'schedule',
-    label: __('Programmazione', TEXT_DOMAIN),
-    description: __('Definisci data e orario futuri per evitare conflitti con altri contenuti.', TEXT_DOMAIN),
+    label: __('Scheduling', TEXT_DOMAIN),
+    description: __('Set a future date and time to avoid conflicts with other content.', TEXT_DOMAIN),
     impact: 25,
   },
   {
     id: 'hashtags',
-    label: __('Hashtag', TEXT_DOMAIN),
-    description: __('Conferma gli hashtag nel primo commento per aumentare la reach su Instagram.', TEXT_DOMAIN),
+    label: __('Hashtags', TEXT_DOMAIN),
+    description: __('Confirm the hashtags in the first comment to increase Instagram reach.', TEXT_DOMAIN),
     impact: 15,
   },
 ];
@@ -327,28 +375,28 @@ type AlertTabKey = 'empty-week' | 'token-expiry' | 'failed-jobs';
 
 const ALERT_TAB_CONFIG: Record<AlertTabKey, { label: string; endpoint: string; empty: string }> = {
   'empty-week': {
-    label: 'Settimana vuota',
+    label: __('Empty week', TEXT_DOMAIN),
     endpoint: 'alerts/empty-week',
-    empty: 'Nessun buco rilevato per la settimana corrente.',
+    empty: __('No gap detected for the current week.', TEXT_DOMAIN),
   },
   'token-expiry': {
-    label: 'Token in scadenza',
+    label: __('Expiring tokens', TEXT_DOMAIN),
     endpoint: 'alerts/token-expiry',
-    empty: 'Tutti i token risultano aggiornati.',
+    empty: __('All tokens are up to date.', TEXT_DOMAIN),
   },
   'failed-jobs': {
-    label: 'Job falliti',
+    label: __('Failed jobs', TEXT_DOMAIN),
     endpoint: 'alerts/failed-jobs',
-    empty: 'Nessun job in errore nelle ultime 24 ore.',
+    empty: __('No failed jobs in the last 24 hours.', TEXT_DOMAIN),
   },
 };
 
 const ALERT_BRANDS = ['brand-demo', 'brand-nord', 'brand-sud'];
 const ALERT_CHANNELS = ['instagram', 'facebook', 'linkedin', 'tiktok'];
 const ALERT_SEVERITY_LABELS: Record<AlertSeverity, string> = {
-  info: 'Informativo',
-  warning: 'Avviso',
-  critical: 'Critico',
+  info: __('Informational', TEXT_DOMAIN),
+  warning: __('Warning', TEXT_DOMAIN),
+  critical: __('Critical', TEXT_DOMAIN),
 };
 
 let activeAlertTab: AlertTabKey = 'empty-week';
@@ -356,9 +404,9 @@ let alertBrandFilter = config.brand ?? 'brand-demo';
 let alertChannelFilter: string = activeChannel;
 
 const LOG_STATUS_LABELS: Record<LogStatus, string> = {
-  ok: 'Operativo',
-  warning: 'Attenzione',
-  error: 'Errore',
+  ok: __('Operational', TEXT_DOMAIN),
+  warning: __('Warning', TEXT_DOMAIN),
+  error: __('Error', TEXT_DOMAIN),
 };
 
 const LOG_STATUS_TONES: Record<LogStatus, 'positive' | 'warning' | 'danger'> = {
@@ -380,10 +428,10 @@ const logCopyCache = new Map<string, { payload?: string | null; stack?: string |
 const adminBaseUrl = `${window.location.origin.replace(/\/$/, '')}/wp-admin/`;
 
 const APPROVAL_STATUS_LABELS: Record<ApprovalEvent['status'], string> = {
-  submitted: 'Inviato per revisione',
-  in_review: 'In revisione',
-  approved: 'Approvato',
-  changes_requested: 'Richieste modifiche',
+  submitted: __('Submitted for review', TEXT_DOMAIN),
+  in_review: __('In review', TEXT_DOMAIN),
+  approved: __('Approved', TEXT_DOMAIN),
+  changes_requested: __('Changes requested', TEXT_DOMAIN),
 };
 
 const APPROVAL_STATUS_TONES: Record<ApprovalEvent['status'], 'positive' | 'neutral' | 'warning'> = {
@@ -545,10 +593,10 @@ function resolvePlanTitle(plan: CalendarPlanPayload): string {
   }
 
   if (plan.id) {
-    return `Piano #${plan.id}`;
+    return sprintf(__('Plan #%d', TEXT_DOMAIN), plan.id);
   }
 
-  return 'Piano senza titolo';
+  return __('Untitled plan', TEXT_DOMAIN);
 }
 
 function humanizeLabel(value: string): string {
@@ -588,12 +636,12 @@ function updateAlertTabs(activeKey: AlertTabKey): void {
 function renderAlertAction(item: AlertRecord): string {
   if (item.action_href) {
     const href = escapeHtml(item.action_href);
-    const label = escapeHtml(item.action_label ?? 'Apri dettagli');
+    const label = escapeHtml(item.action_label ?? __('Open details', TEXT_DOMAIN));
     return `<a class="button fp-alerts__action" href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
   }
 
   if (item.action_type) {
-    const label = escapeHtml(item.action_label ?? 'Apri dettagli');
+    const label = escapeHtml(item.action_label ?? __('Open details', TEXT_DOMAIN));
     const targetAttr = item.action_target ? ` data-alert-target="${escapeHtml(item.action_target)}"` : '';
     return `<button type="button" class="button fp-alerts__action" data-alert-action="${item.action_type}"${targetAttr}>${label}</button>`;
   }
@@ -660,7 +708,7 @@ async function loadAlertsData(tabKey: AlertTabKey): Promise<void> {
   activeAlertTab = tabKey;
   updateAlertTabs(tabKey);
 
-  panel.innerHTML = '<p class="fp-alerts__loading">Caricamento alert…</p>';
+  panel.innerHTML = `<p class="fp-alerts__loading">${escapeHtml(__('Loading alerts…', TEXT_DOMAIN))}</p>`;
 
   const tabConfig = ALERT_TAB_CONFIG[tabKey];
   const params = new URLSearchParams();
@@ -684,10 +732,14 @@ async function loadAlertsData(tabKey: AlertTabKey): Promise<void> {
     }
 
     panel.innerHTML = renderAlertItems(items);
-    announceAlertsUpdate(`${items.length} alert aggiornati per la vista ${tabConfig.label}.`);
+    announceAlertsUpdate(
+      sprintf(__('Updated %1$d alerts for the %2$s view.', TEXT_DOMAIN), items.length, tabConfig.label)
+    );
   } catch (error) {
-    panel.innerHTML = `<p class="fp-alerts__error">Impossibile caricare gli alert (${escapeHtml((error as Error).message)}).</p>`;
-    announceAlertsUpdate('Errore durante il recupero degli alert.');
+    panel.innerHTML = `<p class="fp-alerts__error">${escapeHtml(
+      sprintf(__('Unable to load alerts (%s).', TEXT_DOMAIN), (error as Error).message)
+    )}</p>`;
+    announceAlertsUpdate(__('Error while fetching alerts.', TEXT_DOMAIN));
   }
 }
 
@@ -700,21 +752,21 @@ function renderAlertsWidget(container: HTMLElement): void {
     <section class="fp-alerts" aria-labelledby="fp-alerts-title">
       <header class="fp-alerts__header">
         <div>
-          <h2 id="fp-alerts-title">Alert operativi</h2>
-          <p class="fp-alerts__hint">Priorità della settimana per il team marketing.</p>
+          <h2 id="fp-alerts-title">${escapeHtml(__('Operational alerts', TEXT_DOMAIN))}</h2>
+          <p class="fp-alerts__hint">${escapeHtml(__('Weekly priorities for the marketing team.', TEXT_DOMAIN))}</p>
         </div>
         <div class="fp-alerts__filters">
           <label class="fp-alerts__filter">
-            <span>Brand</span>
+            <span>${escapeHtml(__('Brand', TEXT_DOMAIN))}</span>
             <select id="fp-alerts-brand">${buildSelectOptions(brandOptions, alertBrandFilter)}</select>
           </label>
           <label class="fp-alerts__filter">
-            <span>Canale</span>
+            <span>${escapeHtml(__('Channel', TEXT_DOMAIN))}</span>
             <select id="fp-alerts-channel">${buildSelectOptions(channelOptions, alertChannelFilter)}</select>
           </label>
         </div>
       </header>
-      <nav class="fp-alerts__tabs" role="tablist" aria-label="Categorie di alert">
+      <nav class="fp-alerts__tabs" role="tablist" aria-label="${escapeHtml(__('Alert categories', TEXT_DOMAIN))}">
         ${tabKeys
           .map((key) => {
             const tab = ALERT_TAB_CONFIG[key];
@@ -781,7 +833,7 @@ function handleAlertAction(button: HTMLButtonElement): void {
   if (action === 'calendar') {
     const calendar = document.getElementById('fp-calendar');
     calendar?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    announceAlertsUpdate('Calendario messo a fuoco per pianificare la settimana vuota.');
+    announceAlertsUpdate(__('Focused the calendar to schedule the empty week.', TEXT_DOMAIN));
     return;
   }
 
@@ -791,7 +843,7 @@ function handleAlertAction(button: HTMLButtonElement): void {
       ? `${adminBaseUrl}admin.php?page=fp-jobs&job=${encodeURIComponent(jobId)}`
       : `${adminBaseUrl}admin.php?page=fp-jobs`;
     window.open(url, '_blank', 'noopener');
-    announceAlertsUpdate('Job aperto in una nuova scheda.');
+    announceAlertsUpdate(__('Job opened in a new tab.', TEXT_DOMAIN));
     return;
   }
 
@@ -799,7 +851,7 @@ function handleAlertAction(button: HTMLButtonElement): void {
     const target = button.dataset.alertTarget ?? 'admin.php?page=fp-integrations';
     const url = resolveAdminUrl(target);
     window.open(url, '_blank', 'noopener');
-    announceAlertsUpdate('Pagina integrazioni aperta per il rinnovo token.');
+    announceAlertsUpdate(__('Integrations page opened to renew the token.', TEXT_DOMAIN));
   }
 }
 
@@ -811,6 +863,10 @@ function renderLogsEntries(entries: LogEntry[]): string {
       const timestamp = new Date(entry.created_at).toLocaleString();
       const payloadDisabled = !entry.payload;
       const stackDisabled = !entry.stack;
+      const payloadLabel = __('Payload', TEXT_DOMAIN);
+      const stackLabel = __('Stack trace', TEXT_DOMAIN);
+      const copyPayloadLabel = __('Copy payload', TEXT_DOMAIN);
+      const copyStackLabel = __('Copy stack', TEXT_DOMAIN);
 
       return `
         <li class="fp-logs__entry" role="listitem" data-status="${escapeHtml(entry.status)}">
@@ -825,31 +881,31 @@ function renderLogsEntries(entries: LogEntry[]): string {
           <div class="fp-logs__blocks">
             <section class="fp-logs__block">
               <header class="fp-logs__block-header">
-                <h4>Payload</h4>
+                <h4>${escapeHtml(payloadLabel)}</h4>
                 <button
                   type="button"
                   class="button fp-logs__copy"
                   data-log-copy="payload"
                   data-log-id="${escapeHtml(entry.id)}"
-                  data-label="Copia payload"
-                  aria-label="Copia payload log ${escapeHtml(entry.id)}"
+                  data-label="${escapeHtml(copyPayloadLabel)}"
+                  aria-label="${escapeHtml(sprintf(__('Copy payload for log %s', TEXT_DOMAIN), entry.id))}"
                   ${payloadDisabled ? 'disabled' : ''}
-                >Copia payload</button>
+                >${escapeHtml(copyPayloadLabel)}</button>
               </header>
               <pre class="fp-logs__code">${entry.payload ? escapeHtml(entry.payload) : '—'}</pre>
             </section>
             <section class="fp-logs__block">
               <header class="fp-logs__block-header">
-                <h4>Stack trace</h4>
+                <h4>${escapeHtml(stackLabel)}</h4>
                 <button
                   type="button"
                   class="button fp-logs__copy"
                   data-log-copy="stack"
                   data-log-id="${escapeHtml(entry.id)}"
-                  data-label="Copia stack"
-                  aria-label="Copia stack log ${escapeHtml(entry.id)}"
+                  data-label="${escapeHtml(copyStackLabel)}"
+                  aria-label="${escapeHtml(sprintf(__('Copy stack trace for log %s', TEXT_DOMAIN), entry.id))}"
                   ${stackDisabled ? 'disabled' : ''}
-                >Copia stack</button>
+                >${escapeHtml(copyStackLabel)}</button>
               </header>
               <pre class="fp-logs__code">${entry.stack ? escapeHtml(entry.stack) : '—'}</pre>
             </section>
@@ -868,7 +924,7 @@ async function loadLogs(): Promise<void> {
     return;
   }
 
-  list.innerHTML = '<p class="fp-logs__loading">Caricamento log…</p>';
+  list.innerHTML = `<p class="fp-logs__loading">${escapeHtml(__('Loading logs…', TEXT_DOMAIN))}</p>`;
 
   const params = new URLSearchParams();
   if (config.brand) {
@@ -891,8 +947,8 @@ async function loadLogs(): Promise<void> {
     const items = Array.isArray(data.items) ? data.items : [];
 
     if (!items.length) {
-      list.innerHTML = '<p class="fp-logs__empty">Nessun log trovato con i filtri correnti.</p>';
-      announceLogsUpdate('Nessun log disponibile per i filtri selezionati.');
+      list.innerHTML = `<p class="fp-logs__empty">${escapeHtml(__('No logs found for the selected filters.', TEXT_DOMAIN))}</p>`;
+      announceLogsUpdate(__('No logs available for the selected filters.', TEXT_DOMAIN));
       logCopyCache.clear();
       return;
     }
@@ -903,23 +959,28 @@ async function loadLogs(): Promise<void> {
     });
 
     list.innerHTML = renderLogsEntries(items);
-    announceLogsUpdate(`${items.length} log caricati.`);
+    announceLogsUpdate(sprintf(__('%d logs loaded.', TEXT_DOMAIN), items.length));
   } catch (error) {
-    list.innerHTML = `<p class="fp-logs__error">Impossibile caricare i log (${escapeHtml((error as Error).message)}).</p>`;
-    announceLogsUpdate('Errore durante il recupero dei log.');
+    list.innerHTML = `<p class="fp-logs__error">${escapeHtml(
+      sprintf(__('Unable to load logs (%s).', TEXT_DOMAIN), (error as Error).message),
+    )}</p>`;
+    announceLogsUpdate(__('Error while fetching logs.', TEXT_DOMAIN));
   }
 }
 
 function renderLogsWidget(container: HTMLElement): void {
   const channelButtons = LOG_CHANNEL_OPTIONS.map((value) => {
     const isActive = value === logsChannelFilter;
-    const label = value === 'all' ? 'Tutti i canali' : humanizeLabel(value);
+    const label = value === 'all' ? __('All channels', TEXT_DOMAIN) : humanizeLabel(value);
     return `<button type="button" class="fp-logs__filter${isActive ? ' is-active' : ''}" data-log-channel="${value}" aria-pressed="${isActive ? 'true' : 'false'}">${label}</button>`;
   }).join('');
 
   const statusButtons = LOG_STATUS_OPTIONS.map((value) => {
     const isActive = value === logsStatusFilter;
-    const label = value === 'all' ? 'Tutti gli stati' : LOG_STATUS_LABELS[value] ?? humanizeLabel(String(value));
+    const label =
+      value === 'all'
+        ? __('All statuses', TEXT_DOMAIN)
+        : LOG_STATUS_LABELS[value] ?? humanizeLabel(String(value));
     return `<button type="button" class="fp-logs__filter${isActive ? ' is-active' : ''}" data-log-status="${value}" aria-pressed="${isActive ? 'true' : 'false'}">${label}</button>`;
   }).join('');
 
@@ -927,18 +988,27 @@ function renderLogsWidget(container: HTMLElement): void {
     <section class="fp-logs" aria-labelledby="fp-logs-title">
       <header class="fp-logs__header">
         <div>
-          <h2 id="fp-logs-title">Log operativi</h2>
-          <p class="fp-logs__hint">Monitoraggio job e diagnostica in tempo reale.</p>
+          <h2 id="fp-logs-title">${escapeHtml(__('Operational logs', TEXT_DOMAIN))}</h2>
+          <p class="fp-logs__hint">${escapeHtml(__('Monitoring jobs and diagnostics in real time.', TEXT_DOMAIN))}</p>
         </div>
         <form class="fp-logs__search" role="search">
-          <label class="screen-reader-text" for="fp-logs-search">Cerca nei log</label>
-          <input type="search" id="fp-logs-search" placeholder="Cerca per messaggio o ID" value="${escapeHtml(logsSearchTerm)}" />
+          <label class="screen-reader-text" for="fp-logs-search">${escapeHtml(__('Search logs', TEXT_DOMAIN))}</label>
+          <input
+            type="search"
+            id="fp-logs-search"
+            placeholder="${escapeHtml(__('Search by message or ID', TEXT_DOMAIN))}"
+            value="${escapeHtml(logsSearchTerm)}"
+          />
         </form>
       </header>
-      <div class="fp-logs__filters" data-log-filter="channel" role="group" aria-label="Filtra per canale">
+      <div class="fp-logs__filters" data-log-filter="channel" role="group" aria-label="${escapeHtml(
+        __('Filter by channel', TEXT_DOMAIN),
+      )}">
         ${channelButtons}
       </div>
-      <div class="fp-logs__filters" data-log-filter="status" role="group" aria-label="Filtra per stato">
+      <div class="fp-logs__filters" data-log-filter="status" role="group" aria-label="${escapeHtml(
+        __('Filter by status', TEXT_DOMAIN),
+      )}">
         ${statusButtons}
       </div>
       <div id="fp-logs-list" class="fp-logs__list" aria-live="polite"></div>
@@ -1043,13 +1113,14 @@ async function copyLogField(button: HTMLButtonElement, field: 'payload' | 'stack
   try {
     await writeClipboardText(value);
     button.classList.add('is-copied');
-    button.textContent = 'Copiato';
-    announceLogsUpdate(`${field === 'payload' ? 'Payload' : 'Stack'} copiato negli appunti.`);
+    button.textContent = __('Copied', TEXT_DOMAIN);
+    const label = field === 'payload' ? __('Payload', TEXT_DOMAIN) : __('Stack trace', TEXT_DOMAIN);
+    announceLogsUpdate(sprintf(__('%s copied to the clipboard.', TEXT_DOMAIN), label));
   } catch (error) {
-    console.error('Impossibile copiare il log', error);
+    console.error(__('Unable to copy log', TEXT_DOMAIN), error);
     button.classList.add('has-error');
-    button.textContent = 'Errore copia';
-    announceLogsUpdate('Impossibile copiare negli appunti.');
+    button.textContent = __('Copy error', TEXT_DOMAIN);
+    announceLogsUpdate(__('Unable to copy to the clipboard.', TEXT_DOMAIN));
   } finally {
     window.setTimeout(() => {
       button.classList.remove('is-copied', 'has-error');
@@ -1494,8 +1565,10 @@ async function renderCalendar(container: HTMLElement): Promise<void> {
 
     renderCalendarGrid(container, items);
   } catch (error) {
-    const message = (error as Error)?.message ?? 'Errore sconosciuto';
-    container.innerHTML = `<p class="fp-calendar__error">Impossibile caricare il calendario (${escapeHtml(message)}).</p>`;
+    const message = (error as Error)?.message ?? __('Unknown error', TEXT_DOMAIN);
+    container.innerHTML = `<p class="fp-calendar__error">${escapeHtml(
+      sprintf(__('Unable to load the calendar (%s).', TEXT_DOMAIN), message),
+    )}</p>`;
   }
 }
 
@@ -1509,7 +1582,7 @@ function renderCalendarSkeleton(container: HTMLElement): void {
 
   container.innerHTML = `
     <div class="fp-calendar__skeleton" role="status" aria-live="polite">
-      <span class="screen-reader-text">Caricamento pianificazioni…</span>
+      <span class="screen-reader-text">${escapeHtml(__('Loading schedules…', TEXT_DOMAIN))}</span>
       ${placeholders}
     </div>
   `;
@@ -1518,9 +1591,11 @@ function renderCalendarSkeleton(container: HTMLElement): void {
 function renderCalendarEmpty(container: HTMLElement): void {
   container.innerHTML = `
     <div class="fp-calendar__empty" role="alert">
-      <h3>Calendario vuoto</h3>
-      <p>Importa le pianificazioni da Trello per iniziare.</p>
-      <button type="button" class="button button-primary" data-action="calendar-import">Importa da Trello</button>
+      <h3>${escapeHtml(__('Empty calendar', TEXT_DOMAIN))}</h3>
+      <p>${escapeHtml(__('Import schedules from Trello to get started.', TEXT_DOMAIN))}</p>
+      <button type="button" class="button button-primary" data-action="calendar-import">${escapeHtml(
+        __('Import from Trello', TEXT_DOMAIN),
+      )}</button>
     </div>
   `;
 }
@@ -1579,7 +1654,15 @@ function renderCalendarGrid(container: HTMLElement, plans: CalendarPlanPayload[]
   const itemsByDate = collectCalendarItems(plans);
   const current = new Date(now.getFullYear(), now.getMonth(), 1);
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const weekdays = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+  const weekdays = [
+    __('Mon', TEXT_DOMAIN),
+    __('Tue', TEXT_DOMAIN),
+    __('Wed', TEXT_DOMAIN),
+    __('Thu', TEXT_DOMAIN),
+    __('Fri', TEXT_DOMAIN),
+    __('Sat', TEXT_DOMAIN),
+    __('Sun', TEXT_DOMAIN),
+  ];
 
   let html = '<table class="fp-publisher-calendar"><thead><tr>';
   html += weekdays.map((day) => `<th scope="col">${day}</th>`).join('');
@@ -1616,9 +1699,14 @@ function renderCalendarGrid(container: HTMLElement, plans: CalendarPlanPayload[]
         .join('');
 
       const actionMarkup = `
-        <button type="button" class="fp-calendar__slot-action" data-date="${iso}" aria-label="Suggerisci orario per il ${escapeHtml(
-        formatHumanDate(cellDate),
-      )}">Suggerisci orario</button>
+        <button
+          type="button"
+          class="fp-calendar__slot-action"
+          data-date="${iso}"
+          aria-label="${escapeHtml(
+            sprintf(__('Suggest a time for %s', TEXT_DOMAIN), formatHumanDate(cellDate)),
+          )}"
+        >${escapeHtml(__('Suggest time', TEXT_DOMAIN))}</button>
       `;
 
       html += `
@@ -1684,7 +1772,7 @@ async function handleSlotSuggestion(button: HTMLButtonElement, date: string): Pr
 
   const originalLabel = button.textContent ?? '';
   button.disabled = true;
-  button.textContent = 'Caricamento…';
+  button.textContent = __('Loading…', TEXT_DOMAIN);
 
   try {
     await loadSuggestions(date);
@@ -1695,41 +1783,358 @@ async function handleSlotSuggestion(button: HTMLButtonElement, date: string): Pr
   }
 }
 
-async function importCalendarFromTrello(button: HTMLButtonElement): Promise<void> {
-  const originalLabel = button.textContent ?? '';
-  button.disabled = true;
-  button.textContent = 'Importazione…';
+function importCalendarFromTrello(button: HTMLButtonElement): void {
+  openTrelloImportModal(button);
+}
 
-  try {
-    await fetchJSON(`${config.restBase}/ingest/trello`, {
-      method: 'POST',
-      body: JSON.stringify({ month: monthKey, channel: activeChannel }),
-    });
-    button.textContent = 'Importazione completata';
-    const calendarContainer = document.getElementById('fp-calendar');
-    if (calendarContainer) {
-      await renderCalendar(calendarContainer);
-    }
-  } catch (error) {
-    console.error('Impossibile importare da Trello', error);
-    button.textContent = 'Errore, riprova';
-  } finally {
-    window.setTimeout(() => {
-      button.textContent = originalLabel;
-      button.disabled = false;
-    }, 1600);
+function openTrelloImportModal(trigger: HTMLElement): void {
+  const existing = document.getElementById('fp-trello-modal');
+  if (existing) {
+    existing.remove();
   }
+
+  const modal = document.createElement('div');
+  modal.className = 'fp-modal';
+  modal.id = 'fp-trello-modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'fp-trello-modal-title');
+
+  modal.innerHTML = `
+    <div class="fp-modal__backdrop" data-trello-modal-overlay></div>
+    <div class="fp-modal__dialog" role="document">
+      <header class="fp-modal__header">
+        <h2 id="fp-trello-modal-title">${escapeHtml(copy.trello.modalTitle)}</h2>
+        <button type="button" class="fp-modal__close" data-trello-modal-close aria-label="${escapeHtml(copy.common.close)}">×</button>
+      </header>
+      <form id="fp-trello-modal-form" class="fp-trello__form" novalidate>
+        <p class="fp-trello__context">${escapeHtml(sprintf(copy.trello.context, config.brand ?? 'brand-demo', activeChannel))}</p>
+        <label class="fp-trello__field">
+          <span>${escapeHtml(copy.trello.listLabel)}</span>
+          <input type="text" name="list_id" placeholder="${escapeHtml(copy.trello.listPlaceholder)}" autocomplete="off" required />
+        </label>
+        <label class="fp-trello__field">
+          <span>${escapeHtml(copy.trello.apiKeyLabel)}</span>
+          <input type="text" name="api_key" autocomplete="off" />
+        </label>
+        <label class="fp-trello__field">
+          <span>${escapeHtml(copy.trello.tokenLabel)}</span>
+          <input type="text" name="token" autocomplete="off" />
+        </label>
+        <label class="fp-trello__field">
+          <span>${escapeHtml(copy.trello.oauthLabel)}</span>
+          <input type="text" name="oauth_token" autocomplete="off" />
+          <small class="fp-trello__hint">${escapeHtml(copy.trello.oauthHint)}</small>
+        </label>
+        <footer class="fp-modal__footer fp-trello__actions">
+          <button type="button" class="button" data-trello-modal-close>${escapeHtml(copy.common.close)}</button>
+          <button type="button" class="button" data-trello-fetch>${escapeHtml(copy.trello.fetch)}</button>
+          <button type="button" class="button button-primary" data-trello-import disabled>${escapeHtml(copy.trello.import)}</button>
+        </footer>
+        <p id="fp-trello-modal-feedback" class="fp-trello__feedback" role="status" aria-live="polite" hidden></p>
+        <div id="fp-trello-modal-cards" class="fp-trello__cards" role="group" aria-live="polite"></div>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const returnFocus = trigger instanceof HTMLElement ? trigger : null;
+  const closeModal = (): void => {
+    modal.remove();
+    if (returnFocus) {
+      returnFocus.focus();
+    }
+  };
+
+  modal.querySelectorAll('[data-trello-modal-close], [data-trello-modal-overlay]').forEach((element) => {
+    element.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeModal();
+    });
+  });
+
+  const form = modal.querySelector<HTMLFormElement>('#fp-trello-modal-form');
+  const fetchButton = modal.querySelector<HTMLButtonElement>('[data-trello-fetch]');
+  const importButton = modal.querySelector<HTMLButtonElement>('[data-trello-import]');
+  const feedback = modal.querySelector<HTMLParagraphElement>('#fp-trello-modal-feedback');
+  const cardsContainer = modal.querySelector<HTMLDivElement>('#fp-trello-modal-cards');
+  const listInput = modal.querySelector<HTMLInputElement>('input[name="list_id"]');
+
+  listInput?.focus();
+
+  if (!form || !fetchButton || !importButton || !feedback || !cardsContainer) {
+    return;
+  }
+
+  let cards: TrelloCardSummary[] = [];
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+  });
+
+  const resetCards = (): void => {
+    cards = [];
+    renderTrelloCardsList(cardsContainer, cards);
+    importButton.disabled = true;
+  };
+
+  fetchButton.addEventListener('click', async (event) => {
+    event.preventDefault();
+    const credentials = collectTrelloCredentials(form);
+    if (!credentials.listId) {
+      setTrelloFeedback(feedback, copy.trello.missingList, 'error');
+      resetCards();
+      return;
+    }
+    if (!credentials.oauthToken && (credentials.apiKey === '' || credentials.token === '')) {
+      setTrelloFeedback(feedback, copy.trello.missingCredentials, 'error');
+      resetCards();
+      return;
+    }
+
+    setTrelloFeedback(feedback, copy.trello.loading, 'info');
+    fetchButton.disabled = true;
+    importButton.disabled = true;
+
+    try {
+      cards = await fetchTrelloCards(credentials);
+      renderTrelloCardsList(cardsContainer, cards);
+      if (cards.length === 0) {
+        setTrelloFeedback(feedback, copy.trello.empty, 'info');
+        importButton.disabled = true;
+      } else {
+        setTrelloFeedback(feedback, '', 'info');
+        importButton.disabled = false;
+      }
+    } catch (error) {
+      const message = (error as Error)?.message ?? __('Error', TEXT_DOMAIN);
+      setTrelloFeedback(feedback, sprintf(copy.trello.errorLoading, message), 'error');
+      resetCards();
+    } finally {
+      fetchButton.disabled = false;
+    }
+  });
+
+  importButton.addEventListener('click', async (event) => {
+    event.preventDefault();
+
+    const selectedIds = Array.from(
+      cardsContainer.querySelectorAll<HTMLInputElement>('input[name="trello-card"]:checked')
+    ).map((input) => input.value);
+
+    if (selectedIds.length === 0) {
+      setTrelloFeedback(feedback, copy.trello.noSelection, 'error');
+      return;
+    }
+
+    const credentials = collectTrelloCredentials(form);
+    if (!credentials.listId && listInput) {
+      credentials.listId = resolveTrelloListId(listInput.value ?? '');
+    }
+
+    setTrelloFeedback(feedback, copy.trello.loading, 'info');
+    importButton.disabled = true;
+    fetchButton.disabled = true;
+
+    try {
+      const plans = await importSelectedTrelloCards(credentials, selectedIds);
+      setTrelloFeedback(feedback, sprintf(copy.trello.success, plans.length), 'success');
+      const calendarContainer = document.getElementById('fp-calendar');
+      if (calendarContainer) {
+        await renderCalendar(calendarContainer);
+      }
+      window.setTimeout(() => {
+        closeModal();
+      }, 1200);
+    } catch (error) {
+      const message = (error as Error)?.message ?? __('Error', TEXT_DOMAIN);
+      setTrelloFeedback(feedback, sprintf(copy.trello.errorImport, message), 'error');
+    } finally {
+      importButton.disabled = false;
+      fetchButton.disabled = false;
+    }
+  });
+}
+
+function collectTrelloCredentials(form: HTMLFormElement): TrelloCredentials {
+  const apiKey = (form.querySelector<HTMLInputElement>('input[name="api_key"]')?.value ?? '').trim();
+  const token = (form.querySelector<HTMLInputElement>('input[name="token"]')?.value ?? '').trim();
+  const oauthToken = (form.querySelector<HTMLInputElement>('input[name="oauth_token"]')?.value ?? '').trim();
+  const listValue = (form.querySelector<HTMLInputElement>('input[name="list_id"]')?.value ?? '').trim();
+
+  return {
+    apiKey,
+    token,
+    oauthToken,
+    listId: resolveTrelloListId(listValue),
+    brand: (config.brand ?? 'brand-demo').trim(),
+    channel: activeChannel,
+  };
+}
+
+function resolveTrelloListId(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return '';
+  }
+
+  const listMatch = trimmed.match(/\/lists?\/([a-zA-Z0-9]+)/);
+  if (listMatch) {
+    return listMatch[1];
+  }
+
+  const segments = trimmed.split(/[/?#]/).filter((segment) => segment !== '');
+  if (segments.length > 0) {
+    return segments[segments.length - 1];
+  }
+
+  return trimmed;
+}
+
+function renderTrelloCardsList(container: HTMLElement, cards: TrelloCardSummary[]): void {
+  if (cards.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const items = cards
+    .map((card) => {
+      const dueLabel = formatTrelloDueLabel(card.due ?? null);
+      const attachmentsCount = Array.isArray(card.attachments) ? card.attachments.length : 0;
+      const attachmentsLabel = attachmentsCount > 0 ? sprintf(copy.trello.attachmentsLabel, attachmentsCount) : '';
+      const description = typeof card.description === 'string' && card.description.trim() !== ''
+        ? `<p>${escapeHtml(card.description)}</p>`
+        : '';
+      const metaParts: string[] = [];
+      if (dueLabel) {
+        metaParts.push(escapeHtml(dueLabel));
+      }
+      if (attachmentsLabel) {
+        metaParts.push(escapeHtml(attachmentsLabel));
+      }
+      if (card.url) {
+        metaParts.push(`<a href="${escapeHtml(card.url)}" target="_blank" rel="noreferrer">${escapeHtml(copy.trello.viewCard)}</a>`);
+      }
+      const meta = metaParts.length > 0
+        ? `<p class="fp-trello__card-meta">${metaParts.join(' · ')}</p>`
+        : '';
+
+      return `
+        <li class="fp-trello__card">
+          <label>
+            <input type="checkbox" name="trello-card" value="${escapeHtml(card.id)}" />
+            <span class="fp-trello__card-body">
+              <strong>${escapeHtml(card.name)}</strong>
+              ${meta}
+              ${description}
+            </span>
+          </label>
+        </li>
+      `;
+    })
+    .join('');
+
+  container.innerHTML = `
+    <p class="fp-trello__hint">${escapeHtml(copy.trello.selectionHint)}</p>
+    <ul class="fp-trello__cards-list">${items}</ul>
+  `;
+}
+
+function formatTrelloDueLabel(due: string | null): string {
+  if (!due) {
+    return '';
+  }
+
+  const date = new Date(due);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const datePart = date.toLocaleDateString();
+  const timePart = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  return `${datePart} · ${timePart}`;
+}
+
+function setTrelloFeedback(element: HTMLElement, message: string, tone: 'info' | 'error' | 'success'): void {
+  const trimmed = message.trim();
+  if (trimmed === '') {
+    element.textContent = '';
+    element.setAttribute('hidden', '');
+    element.removeAttribute('data-tone');
+    return;
+  }
+
+  element.textContent = trimmed;
+  element.dataset.tone = tone;
+  element.removeAttribute('hidden');
+}
+
+async function fetchTrelloCards(credentials: TrelloCredentials): Promise<TrelloCardSummary[]> {
+  const payload: Record<string, unknown> = {
+    list_id: credentials.listId,
+  };
+
+  if (credentials.apiKey !== '') {
+    payload.api_key = credentials.apiKey;
+  }
+  if (credentials.token !== '') {
+    payload.token = credentials.token;
+  }
+  if (credentials.oauthToken !== '') {
+    payload.oauth_token = credentials.oauthToken;
+  }
+
+  const data = await fetchJSON<{ cards?: TrelloCardSummary[] }>(`${config.restBase}/ingest/trello/cards`, {
+    method: 'POST',
+    body: JSON.stringify({ payload }),
+  });
+
+  const cards = Array.isArray(data.cards) ? data.cards : [];
+
+  return cards.map((card) => ({
+    ...card,
+    attachments: Array.isArray(card.attachments) ? card.attachments : [],
+    description: typeof card.description === 'string' ? card.description : '',
+  }));
+}
+
+async function importSelectedTrelloCards(credentials: TrelloCredentials, cardIds: string[]): Promise<CalendarPlanPayload[]> {
+  const payload: Record<string, unknown> = {
+    brand: credentials.brand,
+    channel: credentials.channel,
+    list_id: credentials.listId,
+    card_ids: cardIds,
+  };
+
+  if (credentials.apiKey !== '') {
+    payload.api_key = credentials.apiKey;
+  }
+  if (credentials.token !== '') {
+    payload.token = credentials.token;
+  }
+  if (credentials.oauthToken !== '') {
+    payload.oauth_token = credentials.oauthToken;
+  }
+
+  const data = await fetchJSON<{ plans?: CalendarPlanPayload[] }>(`${config.restBase}/ingest/trello`, {
+    method: 'POST',
+    body: JSON.stringify({ payload }),
+  });
+
+  return Array.isArray(data.plans) ? data.plans : [];
 }
 
 function renderKanban(container: HTMLElement): void {
   const columns = ['draft', 'ready', 'approved', 'scheduled', 'published', 'failed'];
   const columnTitles: Record<string, string> = {
-    draft: 'Bozze',
-    ready: 'Pronti',
-    approved: 'Approvati',
-    scheduled: 'Pianificati',
-    published: 'Pubblicati',
-    failed: 'Falliti',
+    draft: __('Drafts', TEXT_DOMAIN),
+    ready: __('Ready', TEXT_DOMAIN),
+    approved: __('Approved', TEXT_DOMAIN),
+    scheduled: __('Scheduled', TEXT_DOMAIN),
+    published: __('Published', TEXT_DOMAIN),
+    failed: __('Failed', TEXT_DOMAIN),
   };
 
   container.innerHTML = columns
@@ -1756,7 +2161,9 @@ function hydrateKanban(): void {
     <article class="fp-kanban-card">
       <h4>Demo Instagram Reel</h4>
       <p class="fp-kanban-card__meta">${monthKey} · ${activeChannel}</p>
-      <button type="button" class="button button-small" data-action="besttime">Suggerisci orario</button>
+      <button type="button" class="button button-small" data-action="besttime">${escapeHtml(
+        __('Suggest time', TEXT_DOMAIN),
+      )}</button>
     </article>
   `;
 }
@@ -1766,12 +2173,18 @@ function renderComments(container: HTMLElement): void {
     <section class="fp-approvals">
       <header class="fp-approvals__header">
         <div>
-          <h3>Workflow approvazioni</h3>
-          <p class="fp-approvals__hint">Monitora le decisioni chiave e chiudile con un clic.</p>
+          <h3>${escapeHtml(__('Approvals workflow', TEXT_DOMAIN))}</h3>
+          <p class="fp-approvals__hint">${escapeHtml(
+            __('Monitor key decisions and close them with one click.', TEXT_DOMAIN),
+          )}</p>
         </div>
         <div class="fp-approvals__actions">
-          <button type="button" class="button button-primary" id="fp-approvals-approve">Approva e invia</button>
-          <button type="button" class="button" id="fp-approvals-request">Richiedi modifiche</button>
+          <button type="button" class="button button-primary" id="fp-approvals-approve">${escapeHtml(
+            __('Approve and send', TEXT_DOMAIN),
+          )}</button>
+          <button type="button" class="button" id="fp-approvals-request">${escapeHtml(
+            __('Request changes', TEXT_DOMAIN),
+          )}</button>
         </div>
       </header>
       <ol id="fp-approvals-timeline" class="fp-approvals__timeline" aria-live="polite"></ol>
@@ -1781,30 +2194,42 @@ function renderComments(container: HTMLElement): void {
     <section class="fp-comments__section">
       <header class="fp-comments__header">
         <div>
-          <h3>Commenti piano</h3>
-          <p class="fp-comments__hint" id="fp-comments-hint">Usa @ per menzionare un collega e notificare il tuo feedback.</p>
+          <h3>${escapeHtml(__('Plan comments', TEXT_DOMAIN))}</h3>
+          <p class="fp-comments__hint" id="fp-comments-hint">${escapeHtml(
+            __('Use @ to mention a teammate and notify your feedback.', TEXT_DOMAIN),
+          )}</p>
         </div>
-        <button type="button" class="button" id="fp-refresh-comments">Aggiorna</button>
+        <button type="button" class="button" id="fp-refresh-comments">${escapeHtml(
+          __('Refresh', TEXT_DOMAIN),
+        )}</button>
       </header>
       <div id="fp-comments-list" class="fp-comments__list" aria-live="polite"></div>
       <form id="fp-comments-form" class="fp-comments__form">
         <label class="fp-comments__field">
-          <span class="screen-reader-text">Nuovo commento</span>
+          <span class="screen-reader-text">${escapeHtml(__('New comment', TEXT_DOMAIN))}</span>
           <textarea
             name="body"
             rows="3"
             required
-            placeholder="Scrivi un commento…"
+            placeholder="${escapeHtml(__('Write a comment…', TEXT_DOMAIN))}"
             aria-autocomplete="list"
             aria-expanded="false"
             aria-owns="fp-mentions-list"
             aria-describedby="fp-comments-hint"
           ></textarea>
         </label>
-        <ul id="fp-mentions-list" class="fp-comments__mentions" role="listbox" aria-label="Suggerimenti menzioni" hidden></ul>
+        <ul
+          id="fp-mentions-list"
+          class="fp-comments__mentions"
+          role="listbox"
+          aria-label="${escapeHtml(__('Mention suggestions', TEXT_DOMAIN))}"
+          hidden
+        ></ul>
         <div class="fp-comments__submit">
-          <span class="fp-comments__hint">I commenti vengono notificati al team editoriale.</span>
-          <button type="submit" class="button button-primary">Invia</button>
+          <span class="fp-comments__hint">${escapeHtml(
+            __('Comments notify the editorial team.', TEXT_DOMAIN),
+          )}</span>
+          <button type="submit" class="button button-primary">${escapeHtml(__('Send', TEXT_DOMAIN))}</button>
         </div>
         <div id="fp-comments-announcer" class="screen-reader-text" aria-live="polite"></div>
       </form>
@@ -1842,20 +2267,24 @@ async function loadApprovalsTimeline(): Promise<void> {
     return;
   }
 
-  timeline.innerHTML = '<li class="fp-approvals__placeholder">Caricamento workflow…</li>';
+  timeline.innerHTML = `<li class="fp-approvals__placeholder">${escapeHtml(__('Loading workflow…', TEXT_DOMAIN))}</li>`;
   try {
     const data = await fetchJSON<{ items: ApprovalEvent[] }>(`${config.restBase}/plans/1/approvals`);
     if (!data.items.length) {
-      timeline.innerHTML = '<li class="fp-approvals__placeholder">Nessuna attività registrata nel workflow.</li>';
-      announceApprovalsUpdate('Nessuna attività nel workflow di approvazione.');
+      timeline.innerHTML = `<li class="fp-approvals__placeholder">${escapeHtml(
+        __('No activity recorded in the workflow.', TEXT_DOMAIN),
+      )}</li>`;
+      announceApprovalsUpdate(__('No activity in the approvals workflow.', TEXT_DOMAIN));
       return;
     }
 
     timeline.innerHTML = data.items.map(renderApprovalEvent).join('');
-    announceApprovalsUpdate('Workflow approvazioni aggiornato.');
+    announceApprovalsUpdate(__('Approvals workflow updated.', TEXT_DOMAIN));
   } catch (error) {
-    timeline.innerHTML = `<li class="fp-approvals__placeholder fp-approvals__placeholder--error">Impossibile recuperare il workflow (${escapeHtml((error as Error).message)}).</li>`;
-    announceApprovalsUpdate('Impossibile aggiornare il workflow approvazioni.');
+    timeline.innerHTML = `<li class="fp-approvals__placeholder fp-approvals__placeholder--error">${escapeHtml(
+      sprintf(__('Unable to fetch the workflow (%s).', TEXT_DOMAIN), (error as Error).message),
+    )}</li>`;
+    announceApprovalsUpdate(__('Unable to refresh the approvals workflow.', TEXT_DOMAIN));
   }
 }
 
@@ -1916,7 +2345,9 @@ function renderMentionSuggestionsList(): void {
   }
 
   if (!suggestions.length) {
-    list.innerHTML = '<li class="fp-comments__mention fp-comments__mention--empty" role="option" aria-disabled="true">Nessun utente trovato.</li>';
+    list.innerHTML = `<li class="fp-comments__mention fp-comments__mention--empty" role="option" aria-disabled="true">${escapeHtml(
+      __('No user found.', TEXT_DOMAIN),
+    )}</li>`;
     list.hidden = false;
     textarea?.setAttribute('aria-expanded', 'true');
     textarea?.removeAttribute('aria-activedescendant');
@@ -1976,7 +2407,9 @@ async function requestMentionSuggestions(query: string): Promise<void> {
 
   const requestId = ++mentionRequestId;
   list.hidden = false;
-  list.innerHTML = '<li class="fp-comments__mention fp-comments__mention--loading" role="option" aria-disabled="true">Ricerca utenti…</li>';
+  list.innerHTML = `<li class="fp-comments__mention fp-comments__mention--loading" role="option" aria-disabled="true">${escapeHtml(
+    __('Searching users…', TEXT_DOMAIN),
+  )}</li>`;
   textarea.setAttribute('aria-expanded', 'true');
 
   try {
@@ -1988,14 +2421,18 @@ async function requestMentionSuggestions(query: string): Promise<void> {
     mentionState.activeIndex = suggestions.length ? 0 : -1;
     renderMentionSuggestionsList();
     if (suggestions.length) {
-      announceCommentUpdate(`${suggestions.length} suggerimenti trovati.`);
+      announceCommentUpdate(
+        sprintf(__('%d suggestions found.', TEXT_DOMAIN), suggestions.length),
+      );
     }
   } catch (error) {
     if (requestId !== mentionRequestId) {
       return;
     }
-    list.innerHTML = `<li class="fp-comments__mention fp-comments__mention--error" role="option" aria-disabled="true">Errore durante la ricerca (${escapeHtml((error as Error).message)}).</li>`;
-    announceCommentUpdate('Impossibile recuperare le menzioni.');
+    list.innerHTML = `<li class="fp-comments__mention fp-comments__mention--error" role="option" aria-disabled="true">${escapeHtml(
+      sprintf(__('Error while searching (%s).', TEXT_DOMAIN), (error as Error).message),
+    )}</li>`;
+    announceCommentUpdate(__('Unable to fetch mentions.', TEXT_DOMAIN));
   }
 }
 
@@ -2015,7 +2452,7 @@ function applyMentionSuggestion(index: number): void {
   textarea.value = `${before}${mentionText} ${after.replace(/^\s*/, '')}`;
   const newCaret = before.length + mentionText.length + 1;
   textarea.setSelectionRange(newCaret, newCaret);
-  announceCommentUpdate(`${suggestion.name} aggiunto al commento.`);
+  announceCommentUpdate(sprintf(__('%s added to the comment.', TEXT_DOMAIN), suggestion.name));
   hideMentionSuggestions();
 }
 
@@ -2058,7 +2495,9 @@ function handleMentionInput(event: Event): void {
     mentionState.suggestions = [];
     mentionState.activeIndex = -1;
     list.hidden = false;
-    list.innerHTML = '<li class="fp-comments__mention fp-comments__mention--hint" role="option" aria-disabled="true">Digita almeno due caratteri per cercare un utente.</li>';
+    list.innerHTML = `<li class="fp-comments__mention fp-comments__mention--hint" role="option" aria-disabled="true">${escapeHtml(
+      __('Type at least two characters to search for a user.', TEXT_DOMAIN),
+    )}</li>`;
     textarea.setAttribute('aria-expanded', 'true');
     textarea.removeAttribute('aria-activedescendant');
     return;
@@ -2159,12 +2598,14 @@ async function handleApprovalAction(action: 'approved' | 'changes_requested'): P
     });
     await loadApprovalsTimeline();
     if (action === 'approved') {
-      announceApprovalsUpdate('Piano approvato e inviato al team.');
+      announceApprovalsUpdate(__('Plan approved and sent to the team.', TEXT_DOMAIN));
     } else {
-      announceApprovalsUpdate('Richiesta di modifiche inviata agli autori.');
+      announceApprovalsUpdate(__('Change request sent to the authors.', TEXT_DOMAIN));
     }
   } catch (error) {
-    announceApprovalsUpdate(`Errore durante l\'aggiornamento del workflow: ${(error as Error).message}`);
+    announceApprovalsUpdate(
+      sprintf(__('Error while updating the workflow: %s', TEXT_DOMAIN), (error as Error).message),
+    );
   } finally {
     approveBtn?.removeAttribute('disabled');
     requestBtn?.removeAttribute('disabled');
@@ -2178,14 +2619,16 @@ function renderSuggestions(
 ): void {
   if (suggestions.length === 0) {
     const emptyLabel = contextLabel
-      ? `Nessun suggerimento disponibile per ${escapeHtml(contextLabel)}.`
-      : 'Nessun suggerimento disponibile per il periodo selezionato.';
-    container.innerHTML = `<p class="fp-besttime__empty">${emptyLabel}</p>`;
+      ? sprintf(__('No suggestions available for %s.', TEXT_DOMAIN), contextLabel)
+      : __('No suggestions available for the selected period.', TEXT_DOMAIN);
+    container.innerHTML = `<p class="fp-besttime__empty">${escapeHtml(emptyLabel)}</p>`;
     return;
   }
 
   const contextMarkup = contextLabel
-    ? `<p class="fp-besttime__context">Suggerimenti per ${escapeHtml(contextLabel)}</p>`
+    ? `<p class="fp-besttime__context">${escapeHtml(
+        sprintf(__('Suggestions for %s', TEXT_DOMAIN), contextLabel),
+      )}</p>`
     : '';
 
   const itemsMarkup = suggestions
@@ -2195,7 +2638,9 @@ function renderSuggestions(
         <article class="fp-besttime__item">
           <h4>${new Date(item.datetime).toLocaleString()}</h4>
           <p>${item.reason}</p>
-          <span class="fp-besttime__score">Score ${item.score}</span>
+          <span class="fp-besttime__score">${escapeHtml(
+            sprintf(__('Score %d', TEXT_DOMAIN), item.score),
+          )}</span>
         </article>
       `,
     )
@@ -2237,7 +2682,7 @@ async function loadSuggestions(day?: string): Promise<void> {
     return;
   }
 
-  container.innerHTML = '<p class="fp-besttime__loading">Calcolo suggerimenti…</p>';
+  container.innerHTML = `<p class="fp-besttime__loading">${escapeHtml(__('Calculating suggestions…', TEXT_DOMAIN))}</p>`;
 
   const params = new URLSearchParams({
     brand: config.brand ?? 'brand-demo',
@@ -2260,8 +2705,10 @@ async function loadSuggestions(day?: string): Promise<void> {
     );
     renderSuggestions(container, data.suggestions, contextLabel);
   } catch (error) {
-    const message = (error as Error)?.message ?? 'Errore sconosciuto';
-    container.innerHTML = `<p class="fp-besttime__error">Impossibile recuperare i suggerimenti (${escapeHtml(message)}).</p>`;
+    const message = (error as Error)?.message ?? __('Unknown error', TEXT_DOMAIN);
+    container.innerHTML = `<p class="fp-besttime__error">${escapeHtml(
+      sprintf(__('Unable to fetch suggestions (%s).', TEXT_DOMAIN), message),
+    )}</p>`;
   }
 }
 
@@ -2271,12 +2718,12 @@ async function loadComments(): Promise<void> {
     return;
   }
 
-  list.innerHTML = '<p class="fp-comments__loading">Caricamento commenti…</p>';
+  list.innerHTML = `<p class="fp-comments__loading">${escapeHtml(__('Loading comments…', TEXT_DOMAIN))}</p>`;
   try {
     const data = await fetchJSON<{ items: CommentItem[] }>(`${config.restBase}/plans/1/comments`);
     if (!data.items.length) {
-      list.innerHTML = '<p class="fp-comments__empty">Nessun commento disponibile.</p>';
-      announceCommentUpdate('Nessun commento presente.');
+      list.innerHTML = `<p class="fp-comments__empty">${escapeHtml(__('No comments available.', TEXT_DOMAIN))}</p>`;
+      announceCommentUpdate(__('No comments available.', TEXT_DOMAIN));
       return;
     }
 
@@ -2293,10 +2740,12 @@ async function loadComments(): Promise<void> {
         `,
       )
       .join('');
-    announceCommentUpdate('Commenti aggiornati.');
+    announceCommentUpdate(__('Comments updated.', TEXT_DOMAIN));
   } catch (error) {
-    list.innerHTML = `<p class="fp-comments__error">Impossibile caricare i commenti (${(error as Error).message}).</p>`;
-    announceCommentUpdate('Errore durante il caricamento dei commenti.');
+    list.innerHTML = `<p class="fp-comments__error">${escapeHtml(
+      sprintf(__('Unable to load comments (%s).', TEXT_DOMAIN), (error as Error).message),
+    )}</p>`;
+    announceCommentUpdate(__('Error while loading comments.', TEXT_DOMAIN));
   }
 }
 
@@ -2325,7 +2774,7 @@ async function loadShortLinks(): Promise<void> {
     shortLinks = [];
     renderShortLinkTable();
     setShortLinkFeedback(
-      `Impossibile caricare i link (${(error as Error).message}).`,
+      sprintf(__('Unable to load links (%s).', TEXT_DOMAIN), (error as Error).message),
       'error',
     );
   } finally {
@@ -2639,7 +3088,7 @@ function updateShortLinkModalPreview(): void {
   let utmPreview = '';
   if (destination) {
     const utmUrl = new URL(destination.toString());
-    utmUrl.searchParams.set('utm_source', 'fp_publisher');
+    utmUrl.searchParams.set('utm_source', 'fp-publisher');
     utmUrl.searchParams.set('utm_medium', 'social');
     utmUrl.searchParams.set('utm_campaign', slugValue || 'shortlink');
     utmPreview = utmUrl.toString();
@@ -2876,7 +3325,7 @@ function bindInteractions(): void {
 
     const body = textarea.value.trim();
     if (!body) {
-      announceCommentUpdate('Compilare il commento prima di inviare.');
+      announceCommentUpdate(__('Fill the comment before sending.', TEXT_DOMAIN));
       return;
     }
 
@@ -2887,14 +3336,16 @@ function bindInteractions(): void {
       });
       textarea.value = '';
       hideMentionSuggestions();
-      announceCommentUpdate('Commento inviato correttamente.');
+      announceCommentUpdate(__('Comment sent successfully.', TEXT_DOMAIN));
       await loadComments();
     } catch (error) {
       const list = document.getElementById('fp-comments-list');
       if (list) {
-        list.innerHTML = `<p class="fp-comments__error">Errore durante l\'invio (${(error as Error).message}).</p>`;
+        list.innerHTML = `<p class="fp-comments__error">${escapeHtml(
+          sprintf(__('Error while sending (%s).', TEXT_DOMAIN), (error as Error).message),
+        )}</p>`;
       }
-      announceCommentUpdate('Impossibile inviare il commento.');
+      announceCommentUpdate(__('Unable to send the comment.', TEXT_DOMAIN));
     }
   });
 
@@ -2982,7 +3433,9 @@ function renderApp(container: HTMLElement, status: { version?: string }): void {
       <header class="fp-publisher-shell__header">
         <div>
           <h1 class="fp-publisher-shell__title">FP Digital Publisher</h1>
-          <p class="fp-publisher-shell__subtitle">Planning workflow &amp; suggerimenti orari</p>
+          <p class="fp-publisher-shell__subtitle">${escapeHtml(
+            __('Planning workflow & time suggestions', TEXT_DOMAIN),
+          )}</p>
         </div>
         <span class="fp-publisher-shell__version">v${status.version ?? config.version}</span>
       </header>
@@ -2991,24 +3444,29 @@ function renderApp(container: HTMLElement, status: { version?: string }): void {
         <article class="fp-widget">
           <header class="fp-widget__header">
             <div class="fp-widget__heading">
-              <h2>Calendario editoriale</h2>
+              <h2>${escapeHtml(__('Editorial calendar', TEXT_DOMAIN))}</h2>
               <span>${monthKey}</span>
             </div>
-            <div class="fp-calendar__toolbar" id="fp-calendar-toolbar" role="group" aria-label="Densità calendario">
+            <div
+              class="fp-calendar__toolbar"
+              id="fp-calendar-toolbar"
+              role="group"
+              aria-label="${escapeHtml(__('Calendar density', TEXT_DOMAIN))}"
+            >
               <button
                 type="button"
                 class="fp-calendar__density-button is-active"
                 data-calendar-density="comfort"
                 aria-pressed="true"
                 aria-controls="fp-calendar"
-              >Comfort</button>
+              >${escapeHtml(__('Comfort', TEXT_DOMAIN))}</button>
               <button
                 type="button"
                 class="fp-calendar__density-button"
                 data-calendar-density="compact"
                 aria-pressed="false"
                 aria-controls="fp-calendar"
-              >Compatta</button>
+              >${escapeHtml(__('Compact', TEXT_DOMAIN))}</button>
             </div>
           </header>
           <div id="fp-calendar"></div>
@@ -3016,16 +3474,18 @@ function renderApp(container: HTMLElement, status: { version?: string }): void {
 
         <article class="fp-widget fp-kanban" aria-live="polite">
           <header class="fp-widget__header">
-            <h2>Stato pianificazioni</h2>
-            <span>Drag &amp; drop (demo)</span>
+            <h2>${escapeHtml(__('Scheduling status', TEXT_DOMAIN))}</h2>
+            <span>${escapeHtml(__('Drag & drop (demo)', TEXT_DOMAIN))}</span>
           </header>
           <div id="fp-kanban"></div>
         </article>
 
         <article class="fp-widget" id="fp-besttime-section">
           <header class="fp-widget__header">
-            <h2>Miglior orario di pubblicazione</h2>
-            <button type="button" class="button" id="fp-besttime-trigger">Suggerisci orario</button>
+            <h2>${escapeHtml(__('Best time to publish', TEXT_DOMAIN))}</h2>
+            <button type="button" class="button" id="fp-besttime-trigger">${escapeHtml(
+              __('Suggest time', TEXT_DOMAIN),
+            )}</button>
           </header>
           <div id="fp-besttime-results" class="fp-besttime"></div>
         </article>
@@ -3187,7 +3647,9 @@ async function boot(): Promise<void> {
         <span class="fp-publisher-shell__version">v${config.version}</span>
       </header>
       <section class="fp-publisher-shell__content">
-        <p class="fp-publisher-shell__message">Caricamento stato applicazione…</p>
+        <p class="fp-publisher-shell__message">${escapeHtml(
+          __('Loading application status…', TEXT_DOMAIN),
+        )}</p>
       </section>
     </main>
   `;
@@ -3208,7 +3670,9 @@ async function boot(): Promise<void> {
           <h1 class="fp-publisher-shell__title">FP Digital Publisher</h1>
         </header>
         <section class="fp-publisher-shell__content">
-          <p class="fp-publisher-shell__message">Errore nel recupero dello stato: ${(error as Error).message}</p>
+          <p class="fp-publisher-shell__message">${escapeHtml(
+            sprintf(__('Error while fetching the status: %s', TEXT_DOMAIN), (error as Error).message),
+          )}</p>
         </section>
       </main>
     `;

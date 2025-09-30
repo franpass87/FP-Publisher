@@ -10,6 +10,8 @@ use DirectoryIterator;
 use FP\Publisher\Api\Meta\Client as MetaClient;
 use FP\Publisher\Api\TikTok\Client as TikTokClient;
 use FP\Publisher\Api\YouTube\Client as YouTubeClient;
+use FP\Publisher\Infra\Options;
+use FP\Publisher\Services\Housekeeping;
 use FP\Publisher\Support\Dates;
 use RuntimeException;
 use WP_Error;
@@ -37,9 +39,8 @@ use function wp_upload_dir;
 
 final class Pipeline
 {
-    private const CLEANUP_HOOK = 'fp_pub_assets_cleanup';
+    private const CLEANUP_HOOK = 'fp_pub_assets_cleanup_hourly';
     private const TEMP_SUBDIR = 'fp-temp';
-    private const DEFAULT_TTL_MINUTES = 360;
 
     /**
      * @var array<int, string>
@@ -63,6 +64,8 @@ final class Pipeline
 
     public static function purgeExpired(): void
     {
+        Housekeeping::purgeExpiredAssets();
+
         $uploadDir = wp_upload_dir();
         if (! empty($uploadDir['error'])) {
             return;
@@ -73,9 +76,9 @@ final class Pipeline
             return;
         }
 
-        $lifetime = (int) apply_filters('fp_publisher_assets_ttl', self::DEFAULT_TTL_MINUTES);
+        $lifetime = (int) apply_filters('fp_publisher_assets_ttl', self::resolveTtlMinutes());
         if ($lifetime <= 0) {
-            $lifetime = self::DEFAULT_TTL_MINUTES;
+            $lifetime = self::resolveTtlMinutes();
         }
 
         $expiry = Dates::now('UTC')->sub(new DateInterval('PT' . $lifetime . 'M'));
@@ -106,7 +109,7 @@ final class Pipeline
     {
         $channel = sanitize_key((string) ($payload['channel'] ?? ''));
         if ($channel === '') {
-            return new WP_Error('fp_publisher_invalid_channel', __('Canale non valido per l\'upload.', 'fp_publisher'));
+            return new WP_Error('fp_publisher_invalid_channel', __('Canale non valido per l\'upload.', 'fp-publisher'));
         }
 
         $media = is_array($payload['media'] ?? null) ? $payload['media'] : [];
@@ -116,7 +119,7 @@ final class Pipeline
         if ($validation['blocking'] !== []) {
             return new WP_Error(
                 'fp_publisher_invalid_media',
-                __('Il media non soddisfa i requisiti per il canale selezionato.', 'fp_publisher'),
+                __('The media does not meet the requirements for the selected channel.', 'fp-publisher'),
                 ['issues' => $validation]
             );
         }
@@ -168,7 +171,7 @@ final class Pipeline
         $baseUrl = trailingslashit($uploadDir['baseurl']) . self::TEMP_SUBDIR;
 
         if (! is_dir($baseDir) && ! wp_mkdir_p($baseDir)) {
-            throw new RuntimeException(__('Impossibile preparare la directory temporanea.', 'fp_publisher'));
+            throw new RuntimeException(__('Unable to prepare the temporary directory.', 'fp-publisher'));
         }
 
         $filename = isset($media['filename']) && is_string($media['filename'])
@@ -182,17 +185,26 @@ final class Pipeline
         $unique = wp_unique_filename($baseDir, $filename);
         $path = $baseDir . '/' . $unique;
 
+        $expiresAt = Dates::now('UTC')
+            ->add(new DateInterval('PT' . self::resolveTtlMinutes() . 'M'))
+            ->format(DateTimeImmutable::ATOM);
+
         return [
             'strategy' => 'local',
             'path' => $path,
             'url' => trailingslashit($baseUrl) . $unique,
-            'expires_at' => Dates::now('UTC')
-                ->add(new DateInterval('PT' . self::DEFAULT_TTL_MINUTES . 'M'))
-                ->format(DateTimeImmutable::ATOM),
+            'expires_at' => $expiresAt,
             'metadata' => [
                 'mime' => isset($media['mime']) && is_string($media['mime']) ? sanitize_text_field($media['mime']) : '',
                 'bytes' => isset($media['bytes']) ? abs((int) $media['bytes']) : 0,
             ],
         ];
+    }
+
+    private static function resolveTtlMinutes(): int
+    {
+        $retentionDays = max(1, (int) Options::get('cleanup.assets_retention_days', 7));
+
+        return $retentionDays * 24 * 60;
     }
 }

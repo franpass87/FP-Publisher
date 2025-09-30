@@ -78,30 +78,24 @@ const UiShowcase: React.FC = () => {
   const [densityMode, setDensityMode] = React.useState<DensityMode>('comfort');
   const [isModalOpen, setIsModalOpen] = React.useState(false);
 
-  const heading = __(
-    'Vetrina componenti FP Digital Publisher',
-    'fp_publisher'
-  );
+  const heading = __('FP Digital Publisher component showcase', 'fp-publisher');
   const intro = __(
-    'Panoramica rapida dei design token condivisi e dei componenti riutilizzabili dell’admin SPA.',
-    'fp_publisher'
+    'Quick overview of the shared design tokens and reusable components of the admin SPA.',
+    'fp-publisher'
   );
 
   const handleToast = (intent: 'neutral' | 'success' | 'warning' | 'danger') => {
     pushToast({
-      title: sprintf(__('Toast %s', 'fp_publisher'), intent),
-      description: __(
-        'Questo è un esempio di notifica transiente con annuncio aria-live.',
-        'fp_publisher'
-      ),
+      title: sprintf(__('Toast %s', 'fp-publisher'), intent),
+      description: __('This is an example of a transient notification with aria-live announcement.', 'fp-publisher'),
       intent,
       action:
         intent === 'danger'
           ? {
-              label: __('Annulla', 'fp_publisher'),
+              label: __('Cancel', 'fp-publisher'),
               onClick: () => {
                 pushToast({
-                  title: __('Azione annullata', 'fp_publisher'),
+                  title: __('Action cancelled', 'fp-publisher'),
                   intent: 'neutral',
                 });
               },
@@ -132,24 +126,24 @@ const UiShowcase: React.FC = () => {
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
           <DensityToggle mode={densityMode} onChange={setDensityMode} />
-          <Tooltip content={__('Apri modale dimostrativa', 'fp_publisher')}>
+          <Tooltip content={__('Open showcase modal', 'fp-publisher')}>
             <button
               type="button"
               style={toolbarButtonStyle}
               onClick={() => setIsModalOpen(true)}
             >
               <Icon name="calendar" size={16} aria-hidden />
-              <span>{__('Mostra modale', 'fp_publisher')}</span>
+              <span>{__('Show modal', 'fp-publisher')}</span>
             </button>
           </Tooltip>
-          <Tooltip content={__('Invia un toast di esempio', 'fp_publisher')}>
+          <Tooltip content={__('Send a sample toast', 'fp-publisher')}>
             <button
               type="button"
               style={{ ...toolbarButtonStyle, backgroundColor: 'var(--primary)', color: '#fff', borderColor: 'var(--primary)' }}
               onClick={() => handleToast('success')}
             >
               <Icon name="clock" size={16} aria-hidden />
-              <span>{__('Toast rapido', 'fp_publisher')}</span>
+              <span>{__('Quick toast', 'fp-publisher')}</span>
             </button>
           </Tooltip>
         </div>
@@ -158,10 +152,10 @@ const UiShowcase: React.FC = () => {
       <section style={cardStyle} aria-labelledby="tokens-title">
         <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
           <h2 id="tokens-title" style={{ margin: 0, fontSize: 'var(--font-size-xl)' }}>
-            {__('Design token', 'fp_publisher')}
+            {__('Design tokens', 'fp-publisher')}
           </h2>
           <p style={{ margin: 0, color: 'var(--muted)' }}>
-            {__('Palette, spaziatura e tipografia condividono la stessa sorgente CSS (`tokens.css`).', 'fp_publisher')}
+            {__('Palette, spacing, and typography share the same CSS source (`tokens.css`).', 'fp-publisher')}
           </p>
         </div>
         <div style={tokenPreviewStyle}>
@@ -193,10 +187,10 @@ const UiShowcase: React.FC = () => {
       <section style={cardStyle} aria-labelledby="badge-title">
         <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
           <h2 id="badge-title" style={{ margin: 0, fontSize: 'var(--font-size-xl)' }}>
-            {__('Badge di stato', 'fp_publisher')}
+            {__('Status badges', 'fp-publisher')}
           </h2>
           <p style={{ margin: 0, color: 'var(--muted)' }}>
-            {__('Ogni stato applica tonalità coerenti e testo leggibile.', 'fp_publisher')}
+            {__('Each status applies consistent tones and readable text.', 'fp-publisher')}
           </p>
         </div>
         <div style={badgeWrapStyle}>
@@ -209,10 +203,10 @@ const UiShowcase: React.FC = () => {
       <section style={cardStyle} aria-labelledby="layout-title">
         <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
           <h2 id="layout-title" style={{ margin: 0, fontSize: 'var(--font-size-xl)' }}>
-            {__('Layout ed empty state', 'fp_publisher')}
+            {__('Layouts and empty states', 'fp-publisher')}
           </h2>
           <p style={{ margin: 0, color: 'var(--muted)' }}>
-            {__('Componenti card, skeleton ed empty state coprono loading e vuoti di contenuto.', 'fp_publisher')}
+            {__('Card, skeleton, and empty state components cover loading states and content gaps.', 'fp-publisher')}
           </p>
         </div>
         <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
@@ -222,14 +216,14 @@ const UiShowcase: React.FC = () => {
             ))}
           </div>
           <EmptyState
-            title={__('Nessun contenuto programmato', 'fp_publisher')}
-            hint={__('Importa una board Trello o crea un nuovo post dal Composer.', 'fp_publisher')}
+            title={__('No scheduled content', 'fp-publisher')}
+            hint={__('Import a Trello board or create a new post from the Composer.', 'fp-publisher')}
             primaryAction={{
-              label: __('Apri Composer', 'fp_publisher'),
+              label: __('Open Composer', 'fp-publisher'),
               onClick: () => handleToast('neutral'),
             }}
             secondaryAction={{
-              label: __('Importa da Trello', 'fp_publisher'),
+              label: __('Import from Trello', 'fp-publisher'),
               onClick: () => handleToast('warning'),
             }}
           />
@@ -239,10 +233,10 @@ const UiShowcase: React.FC = () => {
       <section style={cardStyle} aria-labelledby="toast-title">
         <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
           <h2 id="toast-title" style={{ margin: 0, fontSize: 'var(--font-size-xl)' }}>
-            {__('Notifiche contestuali', 'fp_publisher')}
+            {__('Contextual notifications', 'fp-publisher')}
           </h2>
           <p style={{ margin: 0, color: 'var(--muted)' }}>
-            {__('Il ToastHost diffonde notifiche polite con azioni opzionali.', 'fp_publisher')}
+            {__('The ToastHost delivers polite notifications with optional actions.', 'fp-publisher')}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
@@ -258,7 +252,7 @@ const UiShowcase: React.FC = () => {
               }}
               onClick={() => handleToast(intent)}
             >
-              {__('Toast', 'fp_publisher')} {intent}
+              {__('Toast', 'fp-publisher')} {intent}
             </button>
           ))}
         </div>
@@ -267,8 +261,8 @@ const UiShowcase: React.FC = () => {
       <Modal
         isOpen={isModalOpen}
         onDismiss={() => setIsModalOpen(false)}
-        title={__('Modal dimostrativa', 'fp_publisher')}
-        description={__('Modale con focus trap, ESC e overlay per chiusura.', 'fp_publisher')}
+        title={__('Demo modal', 'fp-publisher')}
+        description={__('Modal with focus trap, ESC handling, and overlay close.', 'fp-publisher')}
         footer={
           <button
             type="button"
@@ -280,25 +274,25 @@ const UiShowcase: React.FC = () => {
               borderColor: 'var(--primary)',
             }}
           >
-            {__('Chiudi', 'fp_publisher')}
+            {__('Close', 'fp-publisher')}
           </button>
         }
       >
         <p style={{ margin: 0, color: 'var(--text)' }}>
-          {__('Questa modale illustra le dimensioni medie con gestione accessibile della messa a fuoco.', 'fp_publisher')}
+          {__('This modal showcases medium sizing with accessible focus management.', 'fp-publisher')}
         </p>
         <p style={{ margin: 0, color: 'var(--muted)', fontSize: 'var(--font-size-sm)' }}>
-          {__('Utilizzare ESC o clic sull’overlay per chiudere.', 'fp_publisher')}
+          {__('Use ESC or click the overlay to close.', 'fp-publisher')}
         </p>
       </Modal>
 
       <section style={cardStyle} aria-labelledby="density-title">
         <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
           <h2 id="density-title" style={{ margin: 0, fontSize: 'var(--font-size-xl)' }}>
-            {__('Anteprima densità elenco', 'fp_publisher')}
+            {__('List density preview', 'fp-publisher')}
           </h2>
           <p style={{ margin: 0, color: 'var(--muted)' }}>
-            {__('Il toggle applica classi di densità su liste e tabelle per accomodare calendari affollati.', 'fp_publisher')}
+            {__('The toggle applies density classes to lists and tables to accommodate busy calendars.', 'fp-publisher')}
           </p>
         </div>
         <div
@@ -316,7 +310,11 @@ const UiShowcase: React.FC = () => {
               gap: densityMode === 'compact' ? 'var(--space-1)' : 'var(--space-2)',
             }}
           >
-            {['Calendario editoriale', 'Composer', 'Approvals'].map((label) => (
+            {[
+              __('Editorial calendar', 'fp-publisher'),
+              __('Composer', 'fp-publisher'),
+              __('Approvals', 'fp-publisher'),
+            ].map((label) => (
               <div
                 key={label}
                 role="listitem"

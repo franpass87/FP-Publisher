@@ -30,8 +30,8 @@ final class Menu
     public static function addMenu(): void
     {
         add_menu_page(
-            esc_html__('FP Publisher', 'fp_publisher'),
-            esc_html__('FP Publisher', 'fp_publisher'),
+            esc_html__('FP Publisher', 'fp-publisher'),
+            esc_html__('FP Publisher', 'fp-publisher'),
             'fp_publisher_manage_plans',
             self::MENU_SLUG,
             [self::class, 'renderApp'],
@@ -40,32 +40,32 @@ final class Menu
         );
 
         self::addSubmenu(
-            esc_html__('Accounts', 'fp_publisher'),
+            esc_html__('Accounts', 'fp-publisher'),
             'fp_publisher_manage_accounts',
             'accounts'
         );
         self::addSubmenu(
-            esc_html__('Calendario', 'fp_publisher'),
+            esc_html__('Calendar', 'fp-publisher'),
             'fp_publisher_manage_plans',
             'calendar'
         );
         self::addSubmenu(
-            esc_html__('Template', 'fp_publisher'),
+            esc_html__('Templates', 'fp-publisher'),
             'fp_publisher_manage_templates',
             'templates'
         );
         self::addSubmenu(
-            esc_html__('Avvisi', 'fp_publisher'),
+            esc_html__('Alerts', 'fp-publisher'),
             'fp_publisher_manage_alerts',
             'alerts'
         );
         self::addSubmenu(
-            esc_html__('Impostazioni', 'fp_publisher'),
+            esc_html__('Settings', 'fp-publisher'),
             'fp_publisher_manage_settings',
             'settings'
         );
         self::addSubmenu(
-            esc_html__('Log', 'fp_publisher'),
+            esc_html__('Logs', 'fp-publisher'),
             'fp_publisher_view_logs',
             'logs'
         );
@@ -88,11 +88,11 @@ final class Menu
     public static function renderApp(): void
     {
         if (! Capabilities::userCan('fp_publisher_manage_plans')) {
-            wp_die(esc_html__('Non hai i permessi necessari per accedere a FP Digital Publisher.', 'fp_publisher'));
+            wp_die(esc_html__('You do not have permission to access FP Digital Publisher.', 'fp-publisher'));
         }
 
         echo '<div class="wrap fp-publisher-admin"><div id="fp-publisher-admin-app" class="fp-publisher-admin__mount">';
-        esc_html_e('Caricamento applicazione…', 'fp_publisher');
+        esc_html_e('Loading application…', 'fp-publisher');
         echo '</div></div>';
     }
 }

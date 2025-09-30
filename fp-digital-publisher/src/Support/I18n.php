@@ -19,7 +19,7 @@ final class I18n
     public static function load(): void
     {
         load_plugin_textdomain(
-            'fp_publisher',
+            'fp-publisher',
             false,
             dirname(plugin_basename(FP_PUBLISHER_PATH . 'fp-digital-publisher.php')) . '/languages'
         );

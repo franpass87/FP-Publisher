@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<ruleset name="FP Publisher Coding Standard">
+    <description>Lightweight coding standard for automated checks.</description>
+    <file>fp-digital-publisher.php</file>
+    <file>src</file>
+    <file>templates</file>
+    <exclude-pattern>tests/*</exclude-pattern>
+    <rule ref="Generic.PHP.Syntax"/>
+</ruleset>

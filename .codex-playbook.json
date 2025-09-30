@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "current_branch": "chore/playbook-impl",
+  "steps": [
+    {
+      "id": "S1",
+      "title": "Ampliare test unitari (queue, connectors, support)",
+      "weight": 25,
+      "status": "done",
+      "notes": "Test estesi per coda/scheduler, dispatcher social/WordPress e support con stub WordPress e client fittizi."
+    },
+    {
+      "id": "S2",
+      "title": "Test integrazione WordPress (attivazione, migrazioni, cron, capabilities)",
+      "weight": 15,
+      "status": "done",
+      "notes": "Installer WP basato su sorgenti GitHub con setup MariaDB locale, variabili WP_TESTS_DIR e bootstrap aggiornato; test integrazione ora eseguibili senza skip"
+    },
+    {
+      "id": "S3",
+      "title": "Retry granolare per errori transitori WP/API",
+      "weight": 10,
+      "status": "done",
+      "notes": "Classifier transitori centralizzato e dispatcher aggiornati a distinguere retry WP/API con test granulari."
+    },
+    {
+      "id": "S4",
+      "title": "Housekeeping DB & performance (archiviazione job/log, indici)",
+      "weight": 10,
+      "status": "done",
+      "notes": "Aggiornati schema e indici con tabella archivio, cleanup giornaliero configurabile e purge asset/temp con test WP."
+    },
+    {
+      "id": "S5",
+      "title": "Ingest Trello avanzato (selezione card multiple) + OAuth opzionale",
+      "weight": 8,
+      "status": "done",
+      "notes": "Modalità di ingest Trello aggiornata con selezione multipla, supporto OAuth facoltativo, endpoint di anteprima e UI modal che importa bozze aggiornando il calendario."
+    },
+    {
+      "id": "S6",
+      "title": "i18n: base EN, pacchetto IT, generazione POT",
+      "weight": 7,
+      "status": "done",
+      "notes": "Stringhe admin/SPA convertite all'inglese, POT/PO rigenerati e pacchetto it_IT aggiornato con MO ricompilato."
+    },
+    {
+      "id": "S7",
+      "title": "Documentazione utente & developer (Guide + FAQ)",
+      "weight": 8,
+      "status": "done",
+      "notes": "Guide utente/dev e FAQ aggiunte con README aggiornato per indirizzare la nuova documentazione."
+    },
+    {
+      "id": "S8",
+      "title": "Hook/filtri di estendibilità in punti chiave",
+      "weight": 5,
+      "status": "done",
+      "notes": "Aggiunti hook di estendibilità per payload, retry e pubblicazione con test e documentazione aggiornata."
+    },
+    {
+      "id": "S9",
+      "title": "Asset pipeline cleanup (TTL cron) + caching termini batch",
+      "weight": 5,
+      "status": "done",
+      "notes": "Cron orario fp_pub_assets_cleanup_hourly che pulisce file/record scaduti e cache termini categorie/tag con TTL configurabile."
+    },
+    {
+      "id": "S10",
+      "title": "GitHub Actions: builder ZIP + test matrix + phpcs",
+      "weight": 7,
+      "status": "done",
+      "notes": "Workflow di build/release GitHub Actions con matrice PHP, lint PHPCS e script di packaging zip."
+    }
+  ],
+  "history": [
+    {
+      "step_id": "S1",
+      "status": "partial",
+      "timestamp": "2025-09-30T14:20:15.641013Z",
+      "notes": "Preparato branch, dipendenze e changelog per espansione test."
+    },
+    {
+      "step_id": "S1",
+      "status": "done",
+      "timestamp": "2025-09-30T14:32:48Z",
+      "notes": "Aggiunti suite PHPUnit con stubs WP/clienti per copertura queue, dispatcher e support."
+    },
+    {
+      "step_id": "S2",
+      "status": "partial",
+      "timestamp": "2025-09-30T14:46:39+00:00",
+      "notes": "Suite WP integration predisposta con workflow GitHub e script installazione; ambiente corrente senza MySQL -> test skip."
+    },
+    {
+      "step_id": "S2",
+      "status": "done",
+      "timestamp": "2025-09-30T15:00:39Z",
+      "notes": "Install script rivisto (download GitHub, autoload composer), configurata suite WP con MariaDB e rewrite test stabile."
+    },
+    {
+      "step_id": "S3",
+      "status": "done",
+      "timestamp": "2025-09-30T15:11:26Z",
+      "notes": "TransientErrorClassifier applicato ai dispatcher e test su deadlock/timeouts/HTTP 4xx-5xx."
+    },
+    {
+      "step_id": "S4",
+      "status": "done",
+      "timestamp": "2025-09-30T15:21:48Z",
+      "notes": "Tabella archivio job, nuovi indici/constraint, cron housekeeping e test integrazione per archiviazione e purge asset."
+    },
+    {
+      "step_id": "S5",
+      "status": "done",
+      "timestamp": "2025-09-30T15:38:17Z",
+      "notes": "Ingest Trello multi-card con preview REST, supporto OAuth e import in bozza dalla nuova modal admin."
+    },
+    {
+      "step_id": "S6",
+      "status": "partial",
+      "timestamp": "2025-09-30T15:56:26.589320Z",
+      "notes": "Text domain updated, translation tooling added, initial POT/PO generated. SPA copy translation pending."
+    },
+    {
+      "step_id": "S6",
+      "status": "done",
+      "timestamp": "2025-09-30T16:20:08Z",
+      "notes": "Copertura i18n completata: SPA tradotta, POT/PO aggiornati e pacchetto it_IT rigenerato."
+    },
+    {
+      "step_id": "S7",
+      "status": "done",
+      "timestamp": "2025-09-30T16:27:45Z",
+      "notes": "Documentazione utente e developer strutturata con FAQ e README collegato."
+    },
+    {
+      "step_id": "S8",
+      "status": "done",
+      "timestamp": "2025-09-30T16:39:02Z",
+      "notes": "Hook pre-send, retry e published esposti con coverage PHPUnit e guida aggiornata."
+    },
+    {
+      "step_id": "S9",
+      "status": "done",
+      "timestamp": "2025-09-30T17:05:00Z",
+      "notes": "Cron assets oraria e cache termini batch implementati con test e TTL configurabile."
+    },
+    {
+      "step_id": "S10",
+      "status": "done",
+      "timestamp": "2025-09-30T17:45:08Z",
+      "notes": "Configurata pipeline CI/CD con test matrix, phpcs e builder zip scriptato."
+    },
+    {
+      "step_id": "summary",
+      "status": "done",
+      "timestamp": "2025-09-30T17:53:22Z",
+      "notes": "Ripresa playbook: nessuno step pending/partial. PR aggiornata con riepilogo finale."
+    }
+  ]
+}

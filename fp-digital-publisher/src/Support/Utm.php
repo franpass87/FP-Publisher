@@ -104,7 +104,7 @@ final class Utm
 
         $source = isset($context['source']) && is_scalar($context['source'])
             ? sanitize_key((string) $context['source'])
-            : ($channelKey !== '' ? $channelKey : 'fp_publisher');
+            : ($channelKey !== '' ? $channelKey : 'fp-publisher');
 
         $medium = isset($context['medium']) && is_scalar($context['medium'])
             ? sanitize_text_field((string) $context['medium'])
@@ -116,10 +116,10 @@ final class Utm
 
         $campaign = isset($context['campaign']) && is_scalar($context['campaign'])
             ? sanitize_text_field((string) $context['campaign'])
-            : ($brand !== '' ? $brand : 'fp_publisher');
+            : ($brand !== '' ? $brand : 'fp-publisher');
 
         if ($source === '') {
-            $source = 'fp_publisher';
+            $source = 'fp-publisher';
         }
 
         if ($medium === '') {
@@ -127,7 +127,7 @@ final class Utm
         }
 
         if ($campaign === '') {
-            $campaign = 'fp_publisher';
+            $campaign = 'fp-publisher';
         }
 
         return [

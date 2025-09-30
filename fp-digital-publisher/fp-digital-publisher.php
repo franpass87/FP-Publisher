@@ -5,7 +5,7 @@
  * Version: 0.1.0
  * Author: Francesco Passeri
  * Author URI: https://francescopasseri.com
- * Text Domain: fp_publisher
+ * Text Domain: fp-publisher
  * Requires at least: 6.4
  * Requires PHP: 8.1
  */
@@ -26,32 +26,45 @@ if (is_readable($autoload)) {
     require_once $autoload;
 }
 
-register_activation_hook(__FILE__, static function (): void {
-    if (! class_exists('\\FP\\Publisher\\Infra\\Options')) {
-        return;
+if (! function_exists('fp_publisher_activate')) {
+    function fp_publisher_activate(): void
+    {
+        if (! class_exists('\\FP\\Publisher\\Infra\\Options')) {
+            return;
+        }
+
+        \FP\Publisher\Infra\Options::bootstrap();
+
+        if (class_exists('\\FP\\Publisher\\Infra\\DB\\Migrations')) {
+            \FP\Publisher\Infra\DB\Migrations::install();
+        }
+
+        if (class_exists('\\FP\\Publisher\\Infra\\Capabilities')) {
+            \FP\Publisher\Infra\Capabilities::activate();
+        }
     }
+}
 
-    \FP\Publisher\Infra\Options::bootstrap();
+if (! function_exists('fp_publisher_uninstall')) {
+    function fp_publisher_uninstall(): void
+    {
+        if (! class_exists('\\FP\\Publisher\\Infra\\DB\\Migrations')) {
+            return;
+        }
 
-    if (class_exists('\\FP\\Publisher\\Infra\\DB\\Migrations')) {
-        \FP\Publisher\Infra\DB\Migrations::install();
+        \FP\Publisher\Infra\DB\Migrations::uninstall();
     }
+}
 
-    if (class_exists('\\FP\\Publisher\\Infra\\Capabilities')) {
-        \FP\Publisher\Infra\Capabilities::activate();
+if (! function_exists('fp_publisher_plugins_loaded')) {
+    function fp_publisher_plugins_loaded(): void
+    {
+        if (class_exists('\\FP\\Publisher\\Loader')) {
+            \FP\Publisher\Loader::init();
+        }
     }
-});
+}
 
-register_uninstall_hook(__FILE__, static function (): void {
-    if (! class_exists('\\FP\\Publisher\\Infra\\DB\\Migrations')) {
-        return;
-    }
-
-    \FP\Publisher\Infra\DB\Migrations::uninstall();
-});
-
-add_action('plugins_loaded', static function (): void {
-    if (class_exists('\\FP\\Publisher\\Loader')) {
-        \FP\Publisher\Loader::init();
-    }
-});
+register_activation_hook(__FILE__, 'fp_publisher_activate');
+register_uninstall_hook(__FILE__, 'fp_publisher_uninstall');
+add_action('plugins_loaded', 'fp_publisher_plugins_loaded');

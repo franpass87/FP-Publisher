@@ -100,7 +100,7 @@ final class Approvals
         );
 
         if ($updated === false) {
-            throw new RuntimeException('Impossibile aggiornare lo stato del piano.');
+            throw new RuntimeException('Unable to update the plan status.');
         }
 
         return [

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.6/phpunit.xsd"
+         bootstrap="tests/wp-integration/bootstrap.php"
+         colors="true">
+    <php>
+        <env name="WP_TESTS_DIR" value=".wp-tests/tests/phpunit"/>
+    </php>
+    <testsuites>
+        <testsuite name="FP Publisher WordPress Integration">
+            <directory>tests/wp-integration</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

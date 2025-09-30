@@ -57,12 +57,12 @@ final class Alerts
     {
         $schedules['fp_pub_daily'] = [
             'interval' => DAY_IN_SECONDS,
-            'display' => __('FP Publisher (quotidiano)', 'fp_publisher'),
+            'display' => __('FP Publisher (daily)', 'fp-publisher'),
         ];
 
         $schedules['fp_pub_weekly'] = [
             'interval' => WEEK_IN_SECONDS,
-            'display' => __('FP Publisher (settimanale)', 'fp_publisher'),
+            'display' => __('FP Publisher (weekly)', 'fp-publisher'),
         ];
 
         return $schedules;
@@ -146,7 +146,7 @@ final class Alerts
             return;
         }
 
-        $subject = esc_html__('Token in scadenza per FP Publisher', 'fp_publisher');
+        $subject = esc_html__('FP Publisher tokens expiring', 'fp-publisher');
         $body = self::renderTemplate('token-expiring.php', ['tokens' => $tokens]);
         if ($body === '') {
             return;
@@ -168,7 +168,7 @@ final class Alerts
             return;
         }
 
-        $subject = esc_html__('Job di pubblicazione falliti', 'fp_publisher');
+        $subject = esc_html__('Failed publishing jobs', 'fp-publisher');
         $body = self::renderTemplate('failed-jobs.php', ['jobs' => $failed]);
         if ($body === '') {
             return;
@@ -190,7 +190,7 @@ final class Alerts
             return;
         }
 
-        $subject = esc_html__('Pianificazioni mancanti per la prossima settimana', 'fp_publisher');
+        $subject = esc_html__('Missing schedules for next week', 'fp-publisher');
         $body = self::renderTemplate('weekly-gaps.php', ['gaps' => $gaps]);
         if ($body === '') {
             return;

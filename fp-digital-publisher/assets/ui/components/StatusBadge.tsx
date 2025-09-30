@@ -23,7 +23,7 @@ type StatusConfig = {
 
 const STATUS_MAP: Record<StatusKey, StatusConfig> = {
   draft: {
-    label: _x('Bozza', 'content status', 'fp_publisher'),
+    label: _x('Draft', 'content status', 'fp-publisher'),
     tone: {
       background: 'rgba(95, 107, 124, 0.12)',
       border: 'rgba(95, 107, 124, 0.32)',
@@ -31,7 +31,7 @@ const STATUS_MAP: Record<StatusKey, StatusConfig> = {
     },
   },
   ready: {
-    label: _x('Pronto', 'content status', 'fp_publisher'),
+    label: _x('Ready', 'content status', 'fp-publisher'),
     tone: {
       background: 'rgba(59, 130, 246, 0.12)',
       border: 'rgba(59, 130, 246, 0.32)',
@@ -39,7 +39,7 @@ const STATUS_MAP: Record<StatusKey, StatusConfig> = {
     },
   },
   approved: {
-    label: _x('Approvato', 'content status', 'fp_publisher'),
+    label: _x('Approved', 'content status', 'fp-publisher'),
     tone: {
       background: 'rgba(5, 150, 105, 0.12)',
       border: 'rgba(5, 150, 105, 0.28)',
@@ -47,7 +47,7 @@ const STATUS_MAP: Record<StatusKey, StatusConfig> = {
     },
   },
   scheduled: {
-    label: _x('Programmato', 'content status', 'fp_publisher'),
+    label: _x('Scheduled', 'content status', 'fp-publisher'),
     tone: {
       background: 'rgba(37, 99, 235, 0.12)',
       border: 'rgba(37, 99, 235, 0.32)',
@@ -55,7 +55,7 @@ const STATUS_MAP: Record<StatusKey, StatusConfig> = {
     },
   },
   published: {
-    label: _x('Pubblicato', 'content status', 'fp_publisher'),
+    label: _x('Published', 'content status', 'fp-publisher'),
     tone: {
       background: 'rgba(5, 150, 105, 0.16)',
       border: 'rgba(5, 150, 105, 0.32)',
@@ -63,7 +63,7 @@ const STATUS_MAP: Record<StatusKey, StatusConfig> = {
     },
   },
   failed: {
-    label: _x('Fallito', 'content status', 'fp_publisher'),
+    label: _x('Failed', 'content status', 'fp-publisher'),
     tone: {
       background: 'rgba(220, 38, 38, 0.12)',
       border: 'rgba(220, 38, 38, 0.36)',
@@ -71,7 +71,7 @@ const STATUS_MAP: Record<StatusKey, StatusConfig> = {
     },
   },
   retrying: {
-    label: _x('Nuovo tentativo', 'content status', 'fp_publisher'),
+    label: _x('Retry', 'content status', 'fp-publisher'),
     tone: {
       background: 'rgba(217, 119, 6, 0.12)',
       border: 'rgba(217, 119, 6, 0.36)',
@@ -98,7 +98,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     .filter(Boolean)
     .join(' ');
 
-  const fallbackLabel = config?.label ?? __(status, 'fp_publisher');
+  const fallbackLabel = config?.label ?? __(status, 'fp-publisher');
 
   const badgeStyle: React.CSSProperties = {
     display: 'inline-flex',
