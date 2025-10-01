@@ -44,7 +44,7 @@ FP Digital Publisher è un plugin WordPress progettato per orchestrare campagne 
 ## Sviluppo locale
 - Eseguire `composer install` per predisporre il bootstrap dei test PHP.
 - Configurare un ambiente WordPress >= 6.4 e attivare il plugin dalla dashboard.
-- Per l'ambiente JavaScript sono disponibili esclusivamente asset sorgente in `assets/`; eventuali build devono restare locali (non committate).
+- Installare le dipendenze JavaScript con `npm install` ed eseguire `npm run dev` per lo sviluppo (watch) o `npm run build` per generare i bundle ESM in `assets/dist/`.
 
 ## Testing
 - `composer validate` per verificare la correttezza del `composer.json`.

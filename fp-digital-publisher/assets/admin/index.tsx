@@ -7,6 +7,8 @@ interface BootConfig {
   nonce: string;
   version: string;
   brand?: string;
+  brands?: string[];
+  channels?: string[];
 }
 
 type AdminWindow = Window & {
@@ -30,7 +32,8 @@ type CommentItem = {
 
 type ApprovalEvent = {
   id: number;
-  status: 'submitted' | 'in_review' | 'approved' | 'changes_requested';
+  status: string;
+  from?: string;
   note?: string | null;
   actor: {
     display_name: string;
@@ -114,14 +117,20 @@ type PreflightInsight = {
 type CalendarSlotPayload = {
   channel?: string;
   scheduled_at?: string;
+  publish_until?: string | null;
+  duration_minutes?: number | null;
 };
 
 type CalendarPlanPayload = {
   id?: number;
   title?: string;
   status?: string;
+  brand?: string;
+  channels?: string[];
   template?: { name?: string } | null;
   slots?: CalendarSlotPayload[];
+  created_at?: string;
+  updated_at?: string;
 };
 
 type CalendarResponse = {
@@ -130,6 +139,7 @@ type CalendarResponse = {
 
 type CalendarCellItem = {
   id: string;
+  planId: number | null;
   title: string;
   status: string;
   channel: string;
@@ -162,6 +172,24 @@ type TrelloCredentials = {
   brand: string;
   channel: string;
 };
+
+function sanitizeString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function sanitizeStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => sanitizeString(item))
+    .filter((item) => item !== '');
+}
+
+function uniqueList(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value !== '')));
+}
 
 const copy = {
   common: {
@@ -361,14 +389,44 @@ const config: BootConfig = adminWindow.fpPublisherAdmin ?? {
   restBase: '',
   nonce: '',
   version: '0.0.0',
-  brand: 'brand-demo',
+  brand: '',
+  brands: [],
+  channels: [],
 };
+
+const SELECT_PLAN_MESSAGE = __('Select a plan from the calendar or kanban to inspect details.', TEXT_DOMAIN);
+const STATUS_SUMMARY_TEMPLATE = __('%1$s — Status: %2$s', TEXT_DOMAIN);
+const NEXT_SLOT_TEMPLATE = __('Next slot %s', TEXT_DOMAIN);
+const ADVANCE_STATUS_TEMPLATE = __('Advance to %s', TEXT_DOMAIN);
+const PLAN_ADVANCED_TEMPLATE = __('Plan advanced to %s.', TEXT_DOMAIN);
+const PLAN_CONTEXT_TEMPLATE = __('Plan #%1$d — %2$s', TEXT_DOMAIN);
+const APPROVALS_SELECT_MESSAGE = __('Select a plan to review the approvals workflow.', TEXT_DOMAIN);
+const COMMENTS_SELECT_MESSAGE = __('Select a plan to read the latest comments.', TEXT_DOMAIN);
+const APPROVAL_ADVANCE_ERROR_TEMPLATE = __('Unable to advance the plan (%s).', TEXT_DOMAIN);
+const STATUS_CHANGE_TEMPLATE = __('Status changed from %1$s to %2$s.', TEXT_DOMAIN);
+const STATUS_SET_TEMPLATE = __('Status set to %s.', TEXT_DOMAIN);
+const APPROVALS_UPDATED_TEMPLATE = __('Approvals workflow updated for plan #%d.', TEXT_DOMAIN);
+const COMMENTS_UPDATED_TEMPLATE = __('Comments updated for plan #%d.', TEXT_DOMAIN);
+const COMMENTS_EMPTY_TEMPLATE = __('No comments available for plan #%d.', TEXT_DOMAIN);
+const COMMENT_SENT_TEMPLATE = __('Comment sent for plan #%d.', TEXT_DOMAIN);
+const NO_ACTIONS_MESSAGE = __('No further approval actions available for the selected plan.', TEXT_DOMAIN);
+
+const planStore = new Map<number, CalendarPlanPayload>();
+let activePlanId: number | null = null;
+
+const configBrands = sanitizeStringList(config.brands);
+const configChannels = sanitizeStringList(config.channels);
+const defaultBrand = sanitizeString(config.brand) || configBrands[0] || '';
+const activeChannel = configChannels[0] || 'instagram';
+
+config.brand = defaultBrand;
+config.brands = configBrands;
+config.channels = configChannels;
 
 const mount = document.getElementById('fp-publisher-admin-app');
 
 const now = new Date();
 const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-const activeChannel = 'instagram';
 let calendarDensity: 'comfort' | 'compact' = 'comfort';
 
 type AlertTabKey = 'empty-week' | 'token-expiry' | 'failed-jobs';
@@ -391,16 +449,18 @@ const ALERT_TAB_CONFIG: Record<AlertTabKey, { label: string; endpoint: string; e
   },
 };
 
-const ALERT_BRANDS = ['brand-demo', 'brand-nord', 'brand-sud'];
-const ALERT_CHANNELS = ['instagram', 'facebook', 'linkedin', 'tiktok'];
+const ALERT_BRANDS = uniqueList([defaultBrand, ...configBrands]);
+const ALERT_CHANNELS = uniqueList([activeChannel, ...configChannels]);
 const ALERT_SEVERITY_LABELS: Record<AlertSeverity, string> = {
   info: __('Informational', TEXT_DOMAIN),
   warning: __('Warning', TEXT_DOMAIN),
   critical: __('Critical', TEXT_DOMAIN),
 };
 
+const FALLBACK_BRAND_LABEL = __('All brands', TEXT_DOMAIN);
+
 let activeAlertTab: AlertTabKey = 'empty-week';
-let alertBrandFilter = config.brand ?? 'brand-demo';
+let alertBrandFilter = defaultBrand;
 let alertChannelFilter: string = activeChannel;
 
 const LOG_STATUS_LABELS: Record<LogStatus, string> = {
@@ -415,7 +475,7 @@ const LOG_STATUS_TONES: Record<LogStatus, 'positive' | 'warning' | 'danger'> = {
   error: 'danger',
 };
 
-const LOG_CHANNEL_OPTIONS = ['all', 'instagram', 'facebook', 'linkedin', 'tiktok'];
+const LOG_CHANNEL_OPTIONS = Array.from(new Set(['all', activeChannel, ...configChannels]));
 const LOG_STATUS_OPTIONS: (LogStatus | 'all')[] = ['all', 'ok', 'warning', 'error'];
 
 let logsChannelFilter: string = 'all';
@@ -427,17 +487,23 @@ const logCopyCache = new Map<string, { payload?: string | null; stack?: string |
 
 const adminBaseUrl = `${window.location.origin.replace(/\/$/, '')}/wp-admin/`;
 
-const APPROVAL_STATUS_LABELS: Record<ApprovalEvent['status'], string> = {
-  submitted: __('Submitted for review', TEXT_DOMAIN),
-  in_review: __('In review', TEXT_DOMAIN),
+const APPROVAL_STATUS_LABELS: Record<string, string> = {
+  draft: __('Draft', TEXT_DOMAIN),
+  ready: __('Ready for review', TEXT_DOMAIN),
   approved: __('Approved', TEXT_DOMAIN),
+  scheduled: __('Scheduled', TEXT_DOMAIN),
+  published: __('Published', TEXT_DOMAIN),
+  failed: __('Needs revision', TEXT_DOMAIN),
   changes_requested: __('Changes requested', TEXT_DOMAIN),
 };
 
-const APPROVAL_STATUS_TONES: Record<ApprovalEvent['status'], 'positive' | 'neutral' | 'warning'> = {
-  submitted: 'neutral',
-  in_review: 'neutral',
+const APPROVAL_STATUS_TONES: Record<string, 'positive' | 'neutral' | 'warning'> = {
+  draft: 'neutral',
+  ready: 'neutral',
   approved: 'positive',
+  scheduled: 'positive',
+  published: 'positive',
+  failed: 'warning',
   changes_requested: 'warning',
 };
 
@@ -622,6 +688,368 @@ function buildSelectOptions(values: string[], current: string): string {
     .join('');
 }
 
+function normalizeStatus(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function getPlanId(plan: CalendarPlanPayload | undefined): number | null {
+  if (!plan || typeof plan.id !== 'number' || !Number.isFinite(plan.id)) {
+    return null;
+  }
+
+  return plan.id;
+}
+
+function planPrimaryTimestamp(plan: CalendarPlanPayload): number {
+  const slots = Array.isArray(plan.slots) ? plan.slots : [];
+  const timestamps = slots
+    .map((slot) => {
+      if (!slot || typeof slot.scheduled_at !== 'string' || slot.scheduled_at === '') {
+        return Number.POSITIVE_INFINITY;
+      }
+      const date = new Date(slot.scheduled_at);
+      return Number.isNaN(date.getTime()) ? Number.POSITIVE_INFINITY : date.getTime();
+    })
+    .filter((timestamp) => Number.isFinite(timestamp))
+    .sort((a, b) => a - b);
+
+  return timestamps[0] ?? Number.POSITIVE_INFINITY;
+}
+
+function getPlanChannels(plan: CalendarPlanPayload): string[] {
+  if (Array.isArray(plan.channels) && plan.channels.length > 0) {
+    return plan.channels.filter((channel): channel is string => typeof channel === 'string' && channel.trim() !== '');
+  }
+
+  if (Array.isArray(plan.slots)) {
+    const channels = plan.slots
+      .map((slot) => (slot && typeof slot.channel === 'string' ? slot.channel : ''))
+      .filter((channel) => channel !== '');
+    if (channels.length > 0) {
+      return channels;
+    }
+  }
+
+  return [];
+}
+
+function getPlanChannelsLabel(plan: CalendarPlanPayload): string {
+  const channels = uniqueList(getPlanChannels(plan).map((channel) => normalizeStatus(channel)));
+  if (channels.length === 0) {
+    return __('Channels pending', TEXT_DOMAIN);
+  }
+
+  return channels.map((channel) => humanizeLabel(channel)).join(', ');
+}
+
+function getPlanScheduleLabel(plan: CalendarPlanPayload): string {
+  const timestamp = planPrimaryTimestamp(plan);
+  if (!Number.isFinite(timestamp)) {
+    return __('Schedule TBD', TEXT_DOMAIN);
+  }
+
+  return sprintf(NEXT_SLOT_TEMPLATE, new Date(timestamp).toLocaleString());
+}
+
+function getPlanSummary(plan: CalendarPlanPayload): string {
+  const parts = [resolvePlanTitle(plan)];
+  const brand = plan.brand ? humanizeLabel(plan.brand) : '';
+  if (brand) {
+    parts.push(brand);
+  }
+  const channels = getPlanChannelsLabel(plan);
+  if (channels) {
+    parts.push(channels);
+  }
+  const schedule = getPlanScheduleLabel(plan);
+  if (schedule) {
+    parts.push(schedule);
+  }
+  return parts.filter(Boolean).join(' · ');
+}
+
+function updatePlanStore(plans: CalendarPlanPayload[]): void {
+  const seen = new Set<number>();
+
+  plans.forEach((plan) => {
+    const id = getPlanId(plan);
+    if (id === null) {
+      return;
+    }
+    seen.add(id);
+    planStore.set(id, { ...plan });
+  });
+
+  Array.from(planStore.keys()).forEach((id) => {
+    if (!seen.has(id)) {
+      planStore.delete(id);
+    }
+  });
+
+  if (activePlanId !== null && planStore.has(activePlanId)) {
+    return;
+  }
+
+  activePlanId = selectDefaultPlanId();
+}
+
+function selectDefaultPlanId(): number | null {
+  let candidate: { id: number; timestamp: number } | null = null;
+
+  planStore.forEach((plan, id) => {
+    const timestamp = planPrimaryTimestamp(plan);
+    if (candidate === null || timestamp < candidate.timestamp) {
+      candidate = { id, timestamp };
+    }
+  });
+
+  return candidate?.id ?? null;
+}
+
+function getActivePlanId(): number | null {
+  return activePlanId !== null && planStore.has(activePlanId) ? activePlanId : null;
+}
+
+function getActivePlan(): CalendarPlanPayload | undefined {
+  const id = getActivePlanId();
+  return id !== null ? planStore.get(id) : undefined;
+}
+
+function parsePlanId(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizePlanStatusValue(status: string | undefined): string {
+  return normalizeStatus(status ?? '');
+}
+
+function updatePlanStatus(planId: number, status: string): void {
+  if (!planStore.has(planId)) {
+    return;
+  }
+
+  const normalized = normalizePlanStatusValue(status);
+  const current = planStore.get(planId);
+  if (!current) {
+    return;
+  }
+
+  planStore.set(planId, { ...current, status: normalized });
+}
+
+function setActivePlan(planId: number | null, force = false): void {
+  const previousId = getActivePlanId();
+  let nextId: number | null = null;
+
+  if (planId !== null && planStore.has(planId)) {
+    nextId = planId;
+  } else if (planStore.size > 0) {
+    nextId = selectDefaultPlanId();
+  }
+
+  const changed = previousId !== nextId;
+
+  if (changed) {
+    activePlanId = nextId;
+  } else if (force) {
+    activePlanId = nextId;
+  } else {
+    refreshPlanUI();
+    if (nextId === null) {
+      void loadApprovalsTimeline();
+      void loadComments();
+    }
+    return;
+  }
+
+  refreshPlanUI();
+  void loadApprovalsTimeline();
+  void loadComments();
+}
+
+function highlightCalendarSelection(): void {
+  document.querySelectorAll<HTMLElement>('.fp-calendar__item').forEach((item) => {
+    const planId = parsePlanId(item.dataset.planId ?? null);
+    const isActive = planId !== null && planId === getActivePlanId();
+    item.classList.toggle('is-active', isActive);
+    if (item.hasAttribute('role')) {
+      item.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    }
+  });
+}
+
+function updateKanban(): void {
+  const container = document.getElementById('fp-kanban');
+  if (!container) {
+    return;
+  }
+
+  const statuses = ['draft', 'ready', 'approved', 'scheduled', 'published', 'failed'];
+
+  statuses.forEach((status) => {
+    const column = container.querySelector<HTMLElement>(`.fp-kanban-column[data-status="${status}"]`);
+    if (!column) {
+      return;
+    }
+
+    const count = column.querySelector<HTMLElement>(`[data-count="${status}"]`);
+    const list = column.querySelector<HTMLElement>('.fp-kanban-column__list');
+    if (!list || !count) {
+      return;
+    }
+
+    const plans = Array.from(planStore.values()).filter((plan) => normalizePlanStatusValue(plan.status) === status);
+    count.textContent = String(plans.length);
+
+    if (plans.length === 0) {
+      list.innerHTML = `<p class="fp-kanban__empty">${escapeHtml(__('No plans in this status.', TEXT_DOMAIN))}</p>`;
+      return;
+    }
+
+    list.innerHTML = plans
+      .sort((a, b) => planPrimaryTimestamp(a) - planPrimaryTimestamp(b))
+      .map((plan) => buildKanbanCard(plan))
+      .join('');
+  });
+}
+
+function buildKanbanCard(plan: CalendarPlanPayload): string {
+  const planId = getPlanId(plan);
+  if (planId === null) {
+    return '';
+  }
+
+  const normalizedStatus = normalizePlanStatusValue(plan.status);
+  const statusLabel = APPROVAL_STATUS_LABELS[normalizedStatus] ?? humanizeLabel(normalizedStatus);
+  const classes = ['fp-kanban-card'];
+  if (planId === getActivePlanId()) {
+    classes.push('is-active');
+  }
+
+  return `
+    <article class="${classes.join(' ')}" data-plan-id="${planId}" data-status="${escapeHtml(normalizedStatus)}" role="button" tabindex="0">
+      <h4>${escapeHtml(resolvePlanTitle(plan))}</h4>
+      <p class="fp-kanban-card__meta">${escapeHtml(getPlanChannelsLabel(plan))}</p>
+      <p class="fp-kanban-card__meta">${escapeHtml(getPlanScheduleLabel(plan))}</p>
+      <span class="fp-kanban-card__status">${escapeHtml(statusLabel)}</span>
+    </article>
+  `;
+}
+
+function updatePlanContext(): void {
+  const plan = getActivePlan();
+  const approvalsPlan = document.getElementById('fp-plan-context');
+  const commentsPlan = document.getElementById('fp-comments-plan');
+  const commentForm = document.getElementById('fp-comments-form') as HTMLFormElement | null;
+  const commentTextarea = commentForm?.querySelector<HTMLTextAreaElement>('textarea');
+  const commentSubmit = commentForm?.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+  if (!plan) {
+    if (approvalsPlan) {
+      approvalsPlan.textContent = APPROVALS_SELECT_MESSAGE;
+    }
+    if (commentsPlan) {
+      commentsPlan.textContent = COMMENTS_SELECT_MESSAGE;
+    }
+    if (commentForm) {
+      commentForm.setAttribute('aria-disabled', 'true');
+    }
+    if (commentTextarea) {
+      commentTextarea.setAttribute('disabled', 'true');
+    }
+    if (commentSubmit) {
+      commentSubmit.setAttribute('disabled', 'true');
+      commentSubmit.removeAttribute('aria-busy');
+    }
+    return;
+  }
+
+  const status = APPROVAL_STATUS_LABELS[normalizePlanStatusValue(plan.status)] ?? humanizeLabel(plan.status ?? '');
+  const summary = sprintf(STATUS_SUMMARY_TEMPLATE, getPlanSummary(plan), status);
+  const planId = getPlanId(plan);
+  const context = planId !== null ? sprintf(PLAN_CONTEXT_TEMPLATE, planId, summary) : summary;
+
+  if (approvalsPlan) {
+    approvalsPlan.textContent = context;
+  }
+  if (commentsPlan) {
+    commentsPlan.textContent = context;
+  }
+  if (commentForm) {
+    commentForm.removeAttribute('aria-disabled');
+  }
+  if (commentTextarea) {
+    commentTextarea.removeAttribute('disabled');
+  }
+  if (commentSubmit) {
+    commentSubmit.removeAttribute('disabled');
+    commentSubmit.removeAttribute('aria-busy');
+  }
+}
+
+const APPROVAL_TRANSITIONS: Record<string, string> = {
+  draft: 'ready',
+  ready: 'approved',
+  approved: 'scheduled',
+};
+
+function getNextApprovalStatus(plan: CalendarPlanPayload | undefined): string | null {
+  const status = normalizePlanStatusValue(plan?.status ?? '');
+  return APPROVAL_TRANSITIONS[status] ?? null;
+}
+
+function updateApprovalActions(): void {
+  const button = document.getElementById('fp-approvals-advance') as HTMLButtonElement | null;
+  const hint = document.getElementById('fp-approvals-action-hint');
+  const plan = getActivePlan();
+
+  if (!button) {
+    return;
+  }
+
+  if (!plan) {
+    button.disabled = true;
+    button.textContent = APPROVALS_SELECT_MESSAGE;
+    button.removeAttribute('aria-busy');
+    delete button.dataset.nextStatus;
+    if (hint) {
+      hint.textContent = APPROVALS_SELECT_MESSAGE;
+    }
+    return;
+  }
+
+  const nextStatus = getNextApprovalStatus(plan);
+  if (!nextStatus) {
+    button.disabled = true;
+    button.textContent = NO_ACTIONS_MESSAGE;
+    delete button.dataset.nextStatus;
+    if (hint) {
+      hint.textContent = NO_ACTIONS_MESSAGE;
+    }
+    return;
+  }
+
+  const label = APPROVAL_STATUS_LABELS[nextStatus] ?? humanizeLabel(nextStatus);
+  button.disabled = false;
+  button.textContent = sprintf(ADVANCE_STATUS_TEMPLATE, label);
+  button.dataset.nextStatus = nextStatus;
+  if (hint) {
+    hint.textContent = '';
+  }
+}
+
+function refreshPlanUI(): void {
+  updateKanban();
+  highlightCalendarSelection();
+  updatePlanContext();
+  updateApprovalActions();
+}
+
 function updateAlertTabs(activeKey: AlertTabKey): void {
   const buttons = document.querySelectorAll<HTMLButtonElement>('[data-alert-tab]');
   buttons.forEach((button) => {
@@ -744,8 +1172,8 @@ async function loadAlertsData(tabKey: AlertTabKey): Promise<void> {
 }
 
 function renderAlertsWidget(container: HTMLElement): void {
-  const brandOptions = Array.from(new Set([alertBrandFilter, config.brand ?? '', ...ALERT_BRANDS])).filter(Boolean);
-  const channelOptions = Array.from(new Set([alertChannelFilter, activeChannel, ...ALERT_CHANNELS])).filter(Boolean);
+  const brandOptions = uniqueList([alertBrandFilter, config.brand ?? '', ...ALERT_BRANDS]);
+  const channelOptions = uniqueList([alertChannelFilter, activeChannel, ...ALERT_CHANNELS]);
   const tabKeys = Object.keys(ALERT_TAB_CONFIG) as AlertTabKey[];
 
   container.innerHTML = `
@@ -1549,21 +1977,28 @@ async function renderCalendar(container: HTMLElement): Promise<void> {
   renderCalendarSkeleton(container);
 
   const params = new URLSearchParams({
-    brand: config.brand ?? 'brand-demo',
     channel: activeChannel,
     month: monthKey,
   });
+  if (config.brand) {
+    params.set('brand', config.brand);
+  }
 
   try {
     const data = await fetchJSON<CalendarResponse>(`${config.restBase}/plans?${params.toString()}`);
     const items = Array.isArray(data.items) ? data.items : [];
 
     if (items.length === 0) {
+      planStore.clear();
+      activePlanId = null;
       renderCalendarEmpty(container);
+      setActivePlan(null, true);
       return;
     }
 
+    updatePlanStore(items);
     renderCalendarGrid(container, items);
+    setActivePlan(getActivePlanId(), true);
   } catch (error) {
     const message = (error as Error)?.message ?? __('Unknown error', TEXT_DOMAIN);
     container.innerHTML = `<p class="fp-calendar__error">${escapeHtml(
@@ -1609,8 +2044,9 @@ function collectCalendarItems(plans: CalendarPlanPayload[]): Map<string, Calenda
     }
 
     const slots = Array.isArray(plan.slots) ? plan.slots : [];
+    const planId = getPlanId(plan);
     const title = resolvePlanTitle(plan);
-    const status = typeof plan.status === 'string' && plan.status.trim() !== '' ? plan.status : 'draft';
+    const status = normalizePlanStatusValue(plan.status ?? '');
 
     slots.forEach((slot, index) => {
       if (!slot || typeof slot.scheduled_at !== 'string' || slot.scheduled_at === '') {
@@ -1626,6 +2062,7 @@ function collectCalendarItems(plans: CalendarPlanPayload[]): Map<string, Calenda
       const channel = typeof slot.channel === 'string' && slot.channel !== '' ? slot.channel : activeChannel;
       const entry: CalendarCellItem = {
         id: `${plan.id ?? 'plan'}-${index}`,
+        planId,
         title,
         status,
         channel,
@@ -1686,8 +2123,12 @@ function renderCalendarGrid(container: HTMLElement, plans: CalendarPlanPayload[]
         .map((item) => {
           const tooltip = `${item.title} — ${item.channel} • ${item.timeLabel}`;
           const meta = `${item.channel} · ${item.timeLabel}`;
+          const isActive = item.planId !== null && item.planId === getActivePlanId();
+          const planAttr = item.planId !== null ? ` data-plan-id="${item.planId}"` : '';
+          const interactiveAttrs = item.planId !== null ? ' role="button" tabindex="0"' : '';
+          const classes = ['fp-calendar__item', isActive ? 'is-active' : ''].filter(Boolean).join(' ');
           return `
-            <article class="fp-calendar__item" data-status="${escapeHtml(item.status)}" title="${escapeHtml(tooltip)}">
+            <article class="${classes}" data-status="${escapeHtml(item.status)}"${planAttr}${interactiveAttrs} title="${escapeHtml(tooltip)}">
               <span class="fp-calendar__item-handle" aria-hidden="true">${GRIP_ICON}</span>
               <div class="fp-calendar__item-body">
                 <span class="fp-calendar__item-title">${escapeHtml(item.title)}</span>
@@ -1800,6 +2241,8 @@ function openTrelloImportModal(trigger: HTMLElement): void {
   modal.setAttribute('aria-modal', 'true');
   modal.setAttribute('aria-labelledby', 'fp-trello-modal-title');
 
+  const brandLabel = config.brand || FALLBACK_BRAND_LABEL;
+
   modal.innerHTML = `
     <div class="fp-modal__backdrop" data-trello-modal-overlay></div>
     <div class="fp-modal__dialog" role="document">
@@ -1808,7 +2251,7 @@ function openTrelloImportModal(trigger: HTMLElement): void {
         <button type="button" class="fp-modal__close" data-trello-modal-close aria-label="${escapeHtml(copy.common.close)}">×</button>
       </header>
       <form id="fp-trello-modal-form" class="fp-trello__form" novalidate>
-        <p class="fp-trello__context">${escapeHtml(sprintf(copy.trello.context, config.brand ?? 'brand-demo', activeChannel))}</p>
+        <p class="fp-trello__context">${escapeHtml(sprintf(copy.trello.context, brandLabel, activeChannel))}</p>
         <label class="fp-trello__field">
           <span>${escapeHtml(copy.trello.listLabel)}</span>
           <input type="text" name="list_id" placeholder="${escapeHtml(copy.trello.listPlaceholder)}" autocomplete="off" required />
@@ -1968,7 +2411,7 @@ function collectTrelloCredentials(form: HTMLFormElement): TrelloCredentials {
     token,
     oauthToken,
     listId: resolveTrelloListId(listValue),
-    brand: (config.brand ?? 'brand-demo').trim(),
+    brand: sanitizeString(config.brand),
     channel: activeChannel,
   };
 }
@@ -2152,22 +2595,6 @@ function renderKanban(container: HTMLElement): void {
     .join('');
 }
 
-function hydrateKanban(): void {
-  const list = document.querySelector<HTMLElement>('.fp-kanban-column__list');
-  if (!list) {
-    return;
-  }
-  list.innerHTML = `
-    <article class="fp-kanban-card">
-      <h4>Demo Instagram Reel</h4>
-      <p class="fp-kanban-card__meta">${monthKey} · ${activeChannel}</p>
-      <button type="button" class="button button-small" data-action="besttime">${escapeHtml(
-        __('Suggest time', TEXT_DOMAIN),
-      )}</button>
-    </article>
-  `;
-}
-
 function renderComments(container: HTMLElement): void {
   container.innerHTML = `
     <section class="fp-approvals">
@@ -2177,16 +2604,15 @@ function renderComments(container: HTMLElement): void {
           <p class="fp-approvals__hint">${escapeHtml(
             __('Monitor key decisions and close them with one click.', TEXT_DOMAIN),
           )}</p>
+          <p id="fp-plan-context" class="fp-approvals__plan" aria-live="polite"></p>
         </div>
         <div class="fp-approvals__actions">
-          <button type="button" class="button button-primary" id="fp-approvals-approve">${escapeHtml(
-            __('Approve and send', TEXT_DOMAIN),
-          )}</button>
-          <button type="button" class="button" id="fp-approvals-request">${escapeHtml(
-            __('Request changes', TEXT_DOMAIN),
+          <button type="button" class="button button-primary" id="fp-approvals-advance">${escapeHtml(
+            __('Advance status', TEXT_DOMAIN),
           )}</button>
         </div>
       </header>
+      <p id="fp-approvals-action-hint" class="fp-approvals__hint" aria-live="polite"></p>
       <ol id="fp-approvals-timeline" class="fp-approvals__timeline" aria-live="polite"></ol>
       <div id="fp-approvals-announcer" class="screen-reader-text" aria-live="polite"></div>
     </section>
@@ -2198,6 +2624,7 @@ function renderComments(container: HTMLElement): void {
           <p class="fp-comments__hint" id="fp-comments-hint">${escapeHtml(
             __('Use @ to mention a teammate and notify your feedback.', TEXT_DOMAIN),
           )}</p>
+          <p id="fp-comments-plan" class="fp-comments__plan" aria-live="polite"></p>
         </div>
         <button type="button" class="button" id="fp-refresh-comments">${escapeHtml(
           __('Refresh', TEXT_DOMAIN),
@@ -2238,12 +2665,19 @@ function renderComments(container: HTMLElement): void {
 }
 
 function approvalTone(status: ApprovalEvent['status']): 'positive' | 'neutral' | 'warning' {
-  return APPROVAL_STATUS_TONES[status] ?? 'neutral';
+  const normalized = normalizePlanStatusValue(status);
+  return APPROVAL_STATUS_TONES[normalized] ?? 'neutral';
 }
 
 function renderApprovalEvent(event: ApprovalEvent): string {
+  const normalizedStatus = normalizePlanStatusValue(event.status);
   const tone = approvalTone(event.status);
-  const badgeLabel = APPROVAL_STATUS_LABELS[event.status] ?? event.status;
+  const badgeLabel = APPROVAL_STATUS_LABELS[normalizedStatus] ?? humanizeLabel(normalizedStatus);
+  const fromStatus = event.from ? normalizePlanStatusValue(event.from) : '';
+  const fromLabel = fromStatus ? APPROVAL_STATUS_LABELS[fromStatus] ?? humanizeLabel(fromStatus) : '';
+  const summaryLabel = fromLabel && fromLabel !== badgeLabel
+    ? sprintf(STATUS_CHANGE_TEMPLATE, fromLabel, badgeLabel)
+    : sprintf(STATUS_SET_TEMPLATE, badgeLabel);
   const note = event.note ? `<p class="fp-approvals__note">${escapeHtml(event.note)}</p>` : '';
 
   return `
@@ -2254,7 +2688,8 @@ function renderApprovalEvent(event: ApprovalEvent): string {
           <strong>${escapeHtml(event.actor.display_name)}</strong>
           <time>${new Date(event.occurred_at).toLocaleString()}</time>
         </header>
-        <span class="fp-approvals__badge" data-tone="${tone}">${badgeLabel}</span>
+        <span class="fp-approvals__badge" data-tone="${tone}">${escapeHtml(badgeLabel)}</span>
+        <p class="fp-approvals__summary">${escapeHtml(summaryLabel)}</p>
         ${note}
       </div>
     </li>
@@ -2267,10 +2702,32 @@ async function loadApprovalsTimeline(): Promise<void> {
     return;
   }
 
+  const planId = getActivePlanId();
+  if (planId === null) {
+    timeline.innerHTML = `<li class="fp-approvals__placeholder">${escapeHtml(APPROVALS_SELECT_MESSAGE)}</li>`;
+    announceApprovalsUpdate(APPROVALS_SELECT_MESSAGE);
+    return;
+  }
+
+  const requestedPlan = planId;
   timeline.innerHTML = `<li class="fp-approvals__placeholder">${escapeHtml(__('Loading workflow…', TEXT_DOMAIN))}</li>`;
+
   try {
-    const data = await fetchJSON<{ items: ApprovalEvent[] }>(`${config.restBase}/plans/1/approvals`);
-    if (!data.items.length) {
+    const data = await fetchJSON<{ plan_id?: number; status?: string; items?: ApprovalEvent[] }>(
+      `${config.restBase}/plans/${requestedPlan}/approvals`,
+    );
+
+    if (getActivePlanId() !== requestedPlan) {
+      return;
+    }
+
+    if (typeof data.status === 'string' && data.status !== '') {
+      updatePlanStatus(requestedPlan, data.status);
+      refreshPlanUI();
+    }
+
+    const events = Array.isArray(data.items) ? data.items : [];
+    if (!events.length) {
       timeline.innerHTML = `<li class="fp-approvals__placeholder">${escapeHtml(
         __('No activity recorded in the workflow.', TEXT_DOMAIN),
       )}</li>`;
@@ -2278,9 +2735,13 @@ async function loadApprovalsTimeline(): Promise<void> {
       return;
     }
 
-    timeline.innerHTML = data.items.map(renderApprovalEvent).join('');
-    announceApprovalsUpdate(__('Approvals workflow updated.', TEXT_DOMAIN));
+    timeline.innerHTML = events.map(renderApprovalEvent).join('');
+    announceApprovalsUpdate(sprintf(APPROVALS_UPDATED_TEMPLATE, requestedPlan));
   } catch (error) {
+    if (getActivePlanId() !== requestedPlan) {
+      return;
+    }
+
     timeline.innerHTML = `<li class="fp-approvals__placeholder fp-approvals__placeholder--error">${escapeHtml(
       sprintf(__('Unable to fetch the workflow (%s).', TEXT_DOMAIN), (error as Error).message),
     )}</li>`;
@@ -2585,30 +3046,74 @@ function initMentionAutocomplete(textarea: HTMLTextAreaElement, list: HTMLUListE
   });
 }
 
-async function handleApprovalAction(action: 'approved' | 'changes_requested'): Promise<void> {
-  const approveBtn = document.getElementById('fp-approvals-approve') as HTMLButtonElement | null;
-  const requestBtn = document.getElementById('fp-approvals-request') as HTMLButtonElement | null;
-  approveBtn?.setAttribute('disabled', 'true');
-  requestBtn?.setAttribute('disabled', 'true');
+async function handleApprovalAction(): Promise<void> {
+  const button = document.getElementById('fp-approvals-advance') as HTMLButtonElement | null;
+  const hint = document.getElementById('fp-approvals-action-hint');
+  if (!button) {
+    return;
+  }
+
+  const planId = getActivePlanId();
+  if (planId === null) {
+    announceApprovalsUpdate(APPROVALS_SELECT_MESSAGE);
+    return;
+  }
+
+  const plan = getActivePlan();
+  const nextStatus = getNextApprovalStatus(plan);
+  if (!nextStatus) {
+    announceApprovalsUpdate(NO_ACTIONS_MESSAGE);
+    return;
+  }
+
+  const label = APPROVAL_STATUS_LABELS[nextStatus] ?? humanizeLabel(nextStatus);
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  if (hint) {
+    hint.textContent = '';
+  }
 
   try {
-    await fetchJSON(`${config.restBase}/plans/1/approvals`, {
-      method: 'POST',
-      body: JSON.stringify({ status: action }),
-    });
-    await loadApprovalsTimeline();
-    if (action === 'approved') {
-      announceApprovalsUpdate(__('Plan approved and sent to the team.', TEXT_DOMAIN));
-    } else {
-      announceApprovalsUpdate(__('Change request sent to the authors.', TEXT_DOMAIN));
-    }
-  } catch (error) {
-    announceApprovalsUpdate(
-      sprintf(__('Error while updating the workflow: %s', TEXT_DOMAIN), (error as Error).message),
+    const data = await fetchJSON<{ status?: string; approvals?: ApprovalEvent[] }>(
+      `${config.restBase}/plans/${planId}/status`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ status: nextStatus }),
+      },
     );
+
+    const responseStatus = typeof data.status === 'string' && data.status !== '' ? data.status : nextStatus;
+    updatePlanStatus(planId, responseStatus);
+    refreshPlanUI();
+
+    const events = Array.isArray(data.approvals) ? data.approvals : null;
+    if (events) {
+      const timeline = document.getElementById('fp-approvals-timeline');
+      if (timeline && getActivePlanId() === planId) {
+        if (events.length === 0) {
+          timeline.innerHTML = `<li class="fp-approvals__placeholder">${escapeHtml(
+            __('No activity recorded in the workflow.', TEXT_DOMAIN),
+          )}</li>`;
+        } else {
+          timeline.innerHTML = events.map(renderApprovalEvent).join('');
+        }
+      }
+    } else {
+      await loadApprovalsTimeline();
+    }
+
+    announceApprovalsUpdate(sprintf(PLAN_ADVANCED_TEMPLATE, label));
+  } catch (error) {
+    const message = (error as Error).message ?? __('Unknown error', TEXT_DOMAIN);
+    const formatted = sprintf(APPROVAL_ADVANCE_ERROR_TEMPLATE, message);
+    if (hint) {
+      hint.textContent = formatted;
+    }
+    announceApprovalsUpdate(formatted);
   } finally {
-    approveBtn?.removeAttribute('disabled');
-    requestBtn?.removeAttribute('disabled');
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    updateApprovalActions();
   }
 }
 
@@ -2685,10 +3190,12 @@ async function loadSuggestions(day?: string): Promise<void> {
   container.innerHTML = `<p class="fp-besttime__loading">${escapeHtml(__('Calculating suggestions…', TEXT_DOMAIN))}</p>`;
 
   const params = new URLSearchParams({
-    brand: config.brand ?? 'brand-demo',
     channel: activeChannel,
     month: monthKey,
   });
+  if (config.brand) {
+    params.set('brand', config.brand);
+  }
 
   let contextLabel: string | undefined;
   if (day) {
@@ -2718,30 +3225,52 @@ async function loadComments(): Promise<void> {
     return;
   }
 
+  const planId = getActivePlanId();
+  if (planId === null) {
+    list.innerHTML = `<p class="fp-comments__empty">${escapeHtml(COMMENTS_SELECT_MESSAGE)}</p>`;
+    announceCommentUpdate(COMMENTS_SELECT_MESSAGE);
+    return;
+  }
+
+  const requestedPlan = planId;
   list.innerHTML = `<p class="fp-comments__loading">${escapeHtml(__('Loading comments…', TEXT_DOMAIN))}</p>`;
+
   try {
-    const data = await fetchJSON<{ items: CommentItem[] }>(`${config.restBase}/plans/1/comments`);
-    if (!data.items.length) {
-      list.innerHTML = `<p class="fp-comments__empty">${escapeHtml(__('No comments available.', TEXT_DOMAIN))}</p>`;
-      announceCommentUpdate(__('No comments available.', TEXT_DOMAIN));
+    const data = await fetchJSON<{ items?: CommentItem[] }>(`${config.restBase}/plans/${requestedPlan}/comments`);
+
+    if (getActivePlanId() !== requestedPlan) {
       return;
     }
 
-    list.innerHTML = data.items
-      .map(
-        (item) => `
+    const items = Array.isArray(data.items) ? data.items : [];
+    if (!items.length) {
+      const emptyMessage = sprintf(COMMENTS_EMPTY_TEMPLATE, requestedPlan);
+      list.innerHTML = `<p class="fp-comments__empty">${escapeHtml(emptyMessage)}</p>`;
+      announceCommentUpdate(emptyMessage);
+      return;
+    }
+
+    list.innerHTML = items
+      .map((item) => {
+        const author = escapeHtml(item.author.display_name);
+        const timestamp = escapeHtml(new Date(item.created_at).toLocaleString());
+        return `
           <article class="fp-comments__item">
             <header>
-              <strong>${item.author.display_name}</strong>
-              <time>${new Date(item.created_at).toLocaleString()}</time>
+              <strong>${author}</strong>
+              <time>${timestamp}</time>
             </header>
             <p>${formatCommentBody(item.body)}</p>
           </article>
-        `,
-      )
+        `;
+      })
       .join('');
-    announceCommentUpdate(__('Comments updated.', TEXT_DOMAIN));
+    announceCommentUpdate(sprintf(COMMENTS_UPDATED_TEMPLATE, requestedPlan));
   } catch (error) {
+    if (getActivePlanId() !== requestedPlan) {
+      return;
+    }
+
     list.innerHTML = `<p class="fp-comments__error">${escapeHtml(
       sprintf(__('Unable to load comments (%s).', TEXT_DOMAIN), (error as Error).message),
     )}</p>`;
@@ -3284,6 +3813,16 @@ function bindInteractions(): void {
       return;
     }
 
+    const planItem = target.closest<HTMLElement>('.fp-calendar__item[data-plan-id]');
+    if (planItem) {
+      const planId = parsePlanId(planItem.getAttribute('data-plan-id'));
+      if (planId !== null) {
+        event.preventDefault();
+        setActivePlan(planId);
+      }
+      return;
+    }
+
     const importButton = target.closest<HTMLButtonElement>('[data-action="calendar-import"]');
     if (importButton) {
       event.preventDefault();
@@ -3291,24 +3830,61 @@ function bindInteractions(): void {
     }
   });
 
-  const kanban = document.querySelector('.fp-kanban');
-  kanban?.addEventListener('click', (event) => {
-    const target = event.target as HTMLElement;
-    if (target?.dataset?.action === 'besttime') {
+  calendarContainer?.addEventListener('keydown', (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>('.fp-calendar__item[data-plan-id]');
+    if (!target) {
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
       event.preventDefault();
-      document.getElementById('fp-besttime-section')?.scrollIntoView({ behavior: 'smooth' });
-      void loadSuggestions();
+      const planId = parsePlanId(target.getAttribute('data-plan-id'));
+      if (planId !== null) {
+        setActivePlan(planId);
+      }
     }
   });
 
-  document.getElementById('fp-approvals-approve')?.addEventListener('click', (event) => {
-    event.preventDefault();
-    void handleApprovalAction('approved');
+  const kanban = document.querySelector('.fp-kanban');
+  kanban?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const bestTimeButton = target.closest<HTMLButtonElement>('[data-action="besttime"]');
+    if (bestTimeButton) {
+      event.preventDefault();
+      document.getElementById('fp-besttime-section')?.scrollIntoView({ behavior: 'smooth' });
+      void loadSuggestions();
+      return;
+    }
+
+    const card = target.closest<HTMLElement>('.fp-kanban-card[data-plan-id]');
+    if (card) {
+      const planId = parsePlanId(card.getAttribute('data-plan-id'));
+      if (planId !== null) {
+        event.preventDefault();
+        setActivePlan(planId);
+      }
+    }
   });
 
-  document.getElementById('fp-approvals-request')?.addEventListener('click', (event) => {
+  kanban?.addEventListener('keydown', (event) => {
+    const card = (event.target as HTMLElement).closest<HTMLElement>('.fp-kanban-card[data-plan-id]');
+    if (!card) {
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault();
+      const planId = parsePlanId(card.getAttribute('data-plan-id'));
+      if (planId !== null) {
+        setActivePlan(planId);
+      }
+    }
+  });
+
+  const advanceButton = document.getElementById('fp-approvals-advance') as HTMLButtonElement | null;
+  advanceButton?.addEventListener('click', (event) => {
     event.preventDefault();
-    void handleApprovalAction('changes_requested');
+    void handleApprovalAction();
   });
 
   document.getElementById('fp-refresh-comments')?.addEventListener('click', () => {
@@ -3319,7 +3895,8 @@ function bindInteractions(): void {
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const textarea = form.querySelector('textarea');
-    if (!textarea) {
+    const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (!textarea || !submitButton) {
       return;
     }
 
@@ -3329,14 +3906,23 @@ function bindInteractions(): void {
       return;
     }
 
+    const planId = getActivePlanId();
+    if (planId === null) {
+      announceCommentUpdate(COMMENTS_SELECT_MESSAGE);
+      return;
+    }
+
+    submitButton.disabled = true;
+    submitButton.setAttribute('aria-busy', 'true');
+
     try {
-      await fetchJSON(`${config.restBase}/plans/1/comments`, {
+      await fetchJSON(`${config.restBase}/plans/${planId}/comments`, {
         method: 'POST',
         body: JSON.stringify({ body }),
       });
       textarea.value = '';
       hideMentionSuggestions();
-      announceCommentUpdate(__('Comment sent successfully.', TEXT_DOMAIN));
+      announceCommentUpdate(sprintf(COMMENT_SENT_TEMPLATE, planId));
       await loadComments();
     } catch (error) {
       const list = document.getElementById('fp-comments-list');
@@ -3345,7 +3931,12 @@ function bindInteractions(): void {
           sprintf(__('Error while sending (%s).', TEXT_DOMAIN), (error as Error).message),
         )}</p>`;
       }
-      announceCommentUpdate(__('Unable to send the comment.', TEXT_DOMAIN));
+      announceCommentUpdate(
+        sprintf(__('Unable to send the comment (%s).', TEXT_DOMAIN), (error as Error).message),
+      );
+    } finally {
+      submitButton.disabled = false;
+      submitButton.removeAttribute('aria-busy');
     }
   });
 
@@ -3604,7 +4195,7 @@ function renderApp(container: HTMLElement, status: { version?: string }): void {
   const kanbanContainer = document.getElementById('fp-kanban');
   if (kanbanContainer) {
     renderKanban(kanbanContainer);
-    hydrateKanban();
+    updateKanban();
   }
 
   const composerContainer = document.getElementById('fp-composer');
@@ -3632,6 +4223,8 @@ function renderApp(container: HTMLElement, status: { version?: string }): void {
 
   void loadShortLinks();
   bindInteractions();
+  refreshPlanUI();
+  updateApprovalActions();
 }
 
 async function boot(): Promise<void> {

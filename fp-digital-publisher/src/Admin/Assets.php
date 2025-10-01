@@ -37,14 +37,32 @@ final class Assets
             return;
         }
 
+        $scriptRelativePath = 'assets/dist/admin/index.js';
+        $scriptAbsolutePath = FP_PUBLISHER_PATH . $scriptRelativePath;
+
+        if (! file_exists($scriptAbsolutePath)) {
+            return;
+        }
+
+        $scriptVersion = filemtime($scriptAbsolutePath) ?: FP_PUBLISHER_VERSION;
+
         wp_register_script(
             self::SCRIPT_HANDLE,
-            FP_PUBLISHER_URL . 'assets/admin/index.tsx',
-            [],
-            FP_PUBLISHER_VERSION,
+            FP_PUBLISHER_URL . $scriptRelativePath,
+            ['wp-i18n'],
+            $scriptVersion,
             true
         );
-        wp_script_add_data(self::SCRIPT_HANDLE, 'type', 'module');
+
+        $brands = array_values(array_filter(array_map(
+            static fn ($brand) => is_string($brand) ? trim($brand) : '',
+            (array) Options::get('brands', [])
+        )));
+
+        $channels = array_values(array_filter(array_map(
+            static fn ($channel) => is_string($channel) ? trim($channel) : '',
+            (array) Options::get('channels', [])
+        )));
 
         wp_localize_script(
             self::SCRIPT_HANDLE,
@@ -53,15 +71,31 @@ final class Assets
                 'restBase' => esc_url_raw(rest_url(Routes::NAMESPACE)),
                 'nonce' => wp_create_nonce('wp_rest'),
                 'version' => FP_PUBLISHER_VERSION,
-                'brand' => (string) (Options::get('brands', [])[0] ?? 'brand-demo'),
+                'brand' => $brands[0] ?? '',
+                'brands' => $brands,
+                'channels' => $channels,
             ]
         );
 
+        $styleRelativePath = 'assets/dist/admin/index.css';
+        $styleAbsolutePath = FP_PUBLISHER_PATH . $styleRelativePath;
+
+        if (! file_exists($styleAbsolutePath)) {
+            $styleRelativePath = 'assets/admin/index.css';
+            $styleAbsolutePath = FP_PUBLISHER_PATH . $styleRelativePath;
+        }
+
+        if (! file_exists($styleAbsolutePath)) {
+            return;
+        }
+
+        $styleVersion = filemtime($styleAbsolutePath) ?: FP_PUBLISHER_VERSION;
+
         wp_register_style(
             self::STYLE_HANDLE,
-            FP_PUBLISHER_URL . 'assets/admin/index.css',
+            FP_PUBLISHER_URL . $styleRelativePath,
             [],
-            FP_PUBLISHER_VERSION
+            $styleVersion
         );
 
         wp_enqueue_script(self::SCRIPT_HANDLE);

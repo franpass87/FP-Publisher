@@ -21,6 +21,7 @@ if (! class_exists('wpdb')) {
 }
 
 if (! class_exists('WP_User')) {
+    #[\AllowDynamicProperties]
     class WP_User
     {
     }
@@ -63,6 +64,20 @@ if (! function_exists('wp_stub_reset')) {
     $GLOBALS['wp_stub_update_option_failures'] = [];
     $GLOBALS['wp_stub_nonce_result'] = 0;
     $GLOBALS['wp_stub_transients'] = [];
+    $GLOBALS['wp_stub_rest_routes'] = [];
+
+    function wp_stub_rest_reset(): void
+    {
+        $GLOBALS['wp_stub_rest_routes'] = [];
+    }
+
+    /**
+     * @return array<int, array{namespace: string, route: string, args: array}>
+     */
+    function wp_stub_rest_routes(): array
+    {
+        return $GLOBALS['wp_stub_rest_routes'];
+    }
 
     function wp_stub_reset(): void
     {
@@ -73,6 +88,7 @@ if (! function_exists('wp_stub_reset')) {
         $GLOBALS['wp_stub_fail_insert_post'] = false;
         $GLOBALS['wp_stub_insert_post_error'] = 'WP insert error.';
         wp_stub_http_reset();
+        wp_stub_rest_reset();
         $GLOBALS['wp_stub_filter_callbacks'] = [];
         $GLOBALS['wp_stub_terms'] = [];
         $GLOBALS['wp_stub_term_calls'] = [
@@ -93,6 +109,7 @@ if (! function_exists('wp_stub_reset')) {
         $GLOBALS['wp_stub_nonce_result'] = 0;
         $GLOBALS['wp_stub_update_option_failures'] = [];
         $GLOBALS['wp_stub_transients'] = [];
+        $GLOBALS['wp_stub_rest_routes'] = [];
     }
 
     function wp_stub_terms_reset(): void
@@ -150,6 +167,10 @@ if (! function_exists('wp_stub_reset')) {
 
         $GLOBALS['wp_stub_users']['login:' . strtolower($user['user_login'])] = $user;
         $GLOBALS['wp_stub_users']['slug:' . strtolower($user['user_nicename'] ?: $user['user_login'])] = $user;
+        $userId = (int) $user['ID'];
+        if ($userId > 0) {
+            $GLOBALS['wp_stub_users']['id:' . $userId] = $user;
+        }
     }
 
     function wp_stub_last_mail(): array
@@ -606,6 +627,17 @@ if (! function_exists('add_action')) {
     }
 }
 
+if (! function_exists('register_rest_route')) {
+    function register_rest_route(string $namespace, string $route, array $args): void
+    {
+        $GLOBALS['wp_stub_rest_routes'][] = [
+            'namespace' => $namespace,
+            'route' => $route,
+            'args' => $args,
+        ];
+    }
+}
+
 if (! function_exists('add_filter')) {
     function add_filter(string $hook, callable $callback, int $priority = 10, int $acceptedArgs = 1): void
     {
@@ -965,6 +997,8 @@ if (! function_exists('get_user_by')) {
             $user = $GLOBALS['wp_stub_users']['login:' . $key] ?? null;
         } elseif ($field === 'slug') {
             $user = $GLOBALS['wp_stub_users']['slug:' . $key] ?? null;
+        } elseif ($field === 'id') {
+            $user = $GLOBALS['wp_stub_users']['id:' . (int) $key] ?? null;
         }
 
         if ($user === null) {
