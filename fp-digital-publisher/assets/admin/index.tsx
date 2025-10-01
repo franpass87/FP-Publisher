@@ -2422,7 +2422,12 @@ function resolveTrelloListId(value: string): string {
     return '';
   }
 
-  const listMatch = trimmed.match(/\/lists?\/([a-zA-Z0-9]+)/);
+  const listFromQuery = extractListIdFromQuery(trimmed);
+  if (listFromQuery) {
+    return listFromQuery;
+  }
+
+  const listMatch = trimmed.match(/\/lists?\/([a-zA-Z0-9]+)/i);
   if (listMatch) {
     return listMatch[1];
   }
@@ -2434,6 +2439,82 @@ function resolveTrelloListId(value: string): string {
 
   return trimmed;
 }
+
+function extractListIdFromQuery(value: string): string {
+  const fromSearchParams = (input: string): string => {
+    if (!input) {
+      return '';
+    }
+
+    const params = new URLSearchParams(input.startsWith('?') ? input.slice(1) : input);
+    const listParam = params.get('list');
+    return listParam ? listParam.trim() : '';
+  };
+
+  try {
+    const url = new URL(value);
+    const fromSearch = fromSearchParams(url.search);
+    if (fromSearch) {
+      return fromSearch;
+    }
+
+    if (url.hash) {
+      const fromHash = fromSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash);
+      if (fromHash) {
+        return fromHash;
+      }
+    }
+
+    return '';
+  } catch (error) {
+    const [beforeHash, ...hashParts] = value.split('#');
+    const fromSearch = fromSearchParams(beforeHash.includes('?') ? beforeHash.split('?')[1] : '');
+    if (fromSearch) {
+      return fromSearch;
+    }
+
+    if (hashParts.length > 0) {
+      const fromHash = fromSearchParams(hashParts.join('#'));
+      if (fromHash) {
+        return fromHash;
+      }
+    }
+  }
+
+  return '';
+}
+
+function runResolveTrelloListIdChecks(): void {
+  const testCases: Array<{ input: string; expected: string }> = [
+    {
+      input: 'https://trello.com/b/abc123/demo-board?list=64a84efc1234567890abcdef',
+      expected: '64a84efc1234567890abcdef',
+    },
+    {
+      input: 'https://trello.com/b/abc123/demo-board#?list=64a84efc1234567890abcdef',
+      expected: '64a84efc1234567890abcdef',
+    },
+    {
+      input: 'https://trello.com/lists/64a84efc1234567890abcdef/demo-list',
+      expected: '64a84efc1234567890abcdef',
+    },
+    {
+      input: '64a84efc1234567890abcdef',
+      expected: '64a84efc1234567890abcdef',
+    },
+  ];
+
+  const failures = testCases
+    .map(({ input, expected }) => ({ input, expected, actual: resolveTrelloListId(input) }))
+    .filter((result) => result.actual !== result.expected);
+
+  if (failures.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn('resolveTrelloListId checks failed', failures);
+  }
+}
+
+runResolveTrelloListIdChecks();
 
 function renderTrelloCardsList(container: HTMLElement, cards: TrelloCardSummary[]): void {
   if (cards.length === 0) {
@@ -3170,10 +3251,53 @@ async function sendRequest(url: string, options: RequestInit = {}): Promise<Resp
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+    let message = `HTTP ${response.status}`;
+    try {
+      const json = await response.clone().json();
+      const errorMessage = extractErrorMessage(json);
+      if (errorMessage) {
+        message = errorMessage;
+      }
+    } catch (jsonError) {
+      try {
+        const text = await response.clone().text();
+        if (text.trim() !== '') {
+          message = text.trim();
+        }
+      } catch (textError) {
+        // keep default HTTP status message
+      }
+    }
+
+    throw new Error(message || `HTTP ${response.status}`);
   }
 
   return response;
+}
+
+function extractErrorMessage(payload: unknown): string {
+  if (typeof payload === 'string') {
+    return payload.trim();
+  }
+
+  if (payload && typeof payload === 'object') {
+    const data = payload as Record<string, unknown>;
+    const candidates = [
+      data.message,
+      data.error,
+      data.detail,
+      data.data && typeof data.data === 'object' ? (data.data as Record<string, unknown>).detail : undefined,
+      data.data && typeof data.data === 'object' ? (data.data as Record<string, unknown>).message : undefined,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim() !== '') {
+        return candidate.trim();
+      }
+    }
+  }
+
+  return '';
 }
 
 async function fetchJSON<T>(url: string, options: RequestInit = {}): Promise<T> {
