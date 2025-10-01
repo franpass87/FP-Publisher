@@ -157,6 +157,7 @@ _Screenshot: bottone con tooltip e modale aperta_
 
 - [Guide utente](docs/user/) – configurazione connettori, calendario editoriale, workflow approvazioni, replay, short link e alert.
 - [Guide developer](docs/dev/) – panoramica architetturale, schema database, QA checklist e catalogo hook.
+- [Roadmap](docs/ROADMAP.md) – evoluzioni consigliate con priorità, integrazioni pianificate e miglioramenti operativi.
 - [FAQ](docs/faq.md) – risposte rapide a problemi comuni su token, pubblicazioni e permessi.
 
 ## Release process
