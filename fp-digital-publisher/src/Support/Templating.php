@@ -14,6 +14,7 @@ use function in_array;
 use function is_array;
 use function is_scalar;
 use function is_string;
+use function ltrim;
 use function preg_replace;
 use function preg_replace_callback;
 use function rtrim;
@@ -121,11 +122,13 @@ final class Templating
     private static function applyChannelTransforms(string $value, string $channel): string
     {
         $channel = Channels::normalize($channel);
-        $value = trim($value);
 
-        if ($value === '') {
+        if (trim($value) === '') {
             return '';
         }
+
+        $value = ltrim($value, " \t\v\0\r");
+        $value = rtrim($value, " \t\v\0\r");
 
         if (in_array($channel, ['instagram', 'meta_instagram', 'meta_instagram_stories'], true)) {
             $value = preg_replace_callback(
@@ -179,39 +182,21 @@ final class Templating
 
     private static function truncate(string $value, int $limit): string
     {
-        $length = self::length($value);
+        $length = Strings::length($value);
         if ($length <= $limit) {
             return $value;
         }
 
         $ellipsis = '…';
-        $ellipsisLength = self::length($ellipsis);
+        $ellipsisLength = Strings::length($ellipsis);
         $cut = $limit - $ellipsisLength;
 
         if ($cut <= 0) {
-            return self::substr($ellipsis, 0, $limit);
+            return Strings::safeSubstr($ellipsis, $limit);
         }
 
-        $truncated = self::substr($value, 0, $cut);
+        $truncated = Strings::safeSubstr($value, $cut);
 
-        return rtrim($truncated) . $ellipsis;
-    }
-
-    private static function length(string $value): int
-    {
-        if (function_exists('mb_strlen')) {
-            return (int) mb_strlen($value);
-        }
-
-        return strlen($value);
-    }
-
-    private static function substr(string $value, int $start, int $length): string
-    {
-        if (function_exists('mb_substr')) {
-            return (string) mb_substr($value, $start, $length);
-        }
-
-        return substr($value, $start, $length);
+        return rtrim($truncated, " \t\v\0\r") . $ellipsis;
     }
 }

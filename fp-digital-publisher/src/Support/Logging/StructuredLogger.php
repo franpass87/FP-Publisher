@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FP\Publisher\Support\Logging;
 
 use DateTimeInterface;
+use FP\Publisher\Support\Strings;
 use Psr\Log\AbstractLogger;
 use Stringable;
 use Throwable;
@@ -19,8 +20,6 @@ use function is_string;
 use function json_encode;
 use function method_exists;
 use function strtr;
-use function strlen;
-use function substr;
 use function strtoupper;
 use const DATE_ATOM;
 use const JSON_UNESCAPED_SLASHES;
@@ -138,10 +137,10 @@ final class StructuredLogger extends AbstractLogger
 
     private function truncate(string $value): string
     {
-        if (strlen($value) <= self::MAX_STRING_LENGTH) {
+        if (Strings::length($value) <= self::MAX_STRING_LENGTH) {
             return $value;
         }
 
-        return substr($value, 0, self::MAX_STRING_LENGTH - 1) . '…';
+        return Strings::safeSubstr($value, self::MAX_STRING_LENGTH - 1) . '…';
     }
 }
