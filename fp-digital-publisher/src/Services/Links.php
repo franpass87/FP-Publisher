@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace FP\Publisher\Services;
 
 use DateTimeInterface;
+use Exception;
 use FP\Publisher\Support\Dates;
+use FP\Publisher\Support\Logging\Logger;
 use FP\Publisher\Support\Utm;
 
 use function __;
@@ -26,6 +28,7 @@ use function sanitize_title;
 use function wp_http_validate_url;
 use function wp_json_encode;
 use function wp_safe_redirect;
+use function wp_strip_all_tags;
 
 final class Links
 {
@@ -121,7 +124,7 @@ final class Links
         }
 
         if (isset($existing['id'])) {
-            $wpdb->update(
+            $updated = $wpdb->update(
                 $table,
                 [
                     'target_url' => $target,
@@ -132,8 +135,17 @@ final class Links
                 ['%s', '%s', '%d'],
                 ['%d']
             );
+
+            if ($updated === false || $updated <= 0) {
+                Logger::get()->error('Failed to update short link.', [
+                    'slug' => $slug,
+                    'error' => wp_strip_all_tags((string) $wpdb->last_error),
+                ]);
+
+                throw new \RuntimeException(__('Unable to save the requested short link.', 'fp-publisher'));
+            }
         } else {
-            $wpdb->insert(
+            $inserted = $wpdb->insert(
                 $table,
                 [
                     'slug' => $slug,
@@ -145,6 +157,15 @@ final class Links
                 ],
                 ['%s', '%s', '%s', '%d', '%s', '%d']
             );
+
+            if ($inserted === false) {
+                Logger::get()->error('Failed to create short link.', [
+                    'slug' => $slug,
+                    'error' => wp_strip_all_tags((string) $wpdb->last_error),
+                ]);
+
+                throw new \RuntimeException(__('Unable to save the requested short link.', 'fp-publisher'));
+            }
         }
 
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE slug = %s", $slug), ARRAY_A);
@@ -253,18 +274,44 @@ final class Links
             }
         }
 
+        $lastClickAt = null;
+        if (isset($row['last_click_at']) && $row['last_click_at'] !== null && $row['last_click_at'] !== '') {
+            try {
+                $lastClickAt = Dates::fromString((string) $row['last_click_at'], 'UTC')
+                    ->setTimezone(Dates::timezone())
+                    ->format(DateTimeInterface::ATOM);
+            } catch (Exception $exception) {
+                Logger::get()->warning('Invalid last click timestamp found while hydrating link.', [
+                    'link_id' => absint($row['id'] ?? 0),
+                    'value' => $row['last_click_at'],
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        $createdAt = null;
+        if (isset($row['created_at']) && $row['created_at'] !== null && $row['created_at'] !== '') {
+            try {
+                $createdAt = Dates::fromString((string) $row['created_at'], 'UTC')
+                    ->setTimezone(Dates::timezone())
+                    ->format(DateTimeInterface::ATOM);
+            } catch (Exception $exception) {
+                Logger::get()->warning('Invalid creation timestamp found while hydrating link.', [
+                    'link_id' => absint($row['id'] ?? 0),
+                    'value' => $row['created_at'],
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
         return [
             'id' => absint($row['id'] ?? 0),
             'slug' => sanitize_title((string) ($row['slug'] ?? '')),
             'target_url' => esc_url_raw((string) ($row['target_url'] ?? '')),
             'utm' => $utm,
             'clicks' => absint($row['clicks'] ?? 0),
-            'last_click_at' => isset($row['last_click_at']) && $row['last_click_at'] !== null
-                ? Dates::fromString((string) $row['last_click_at'], 'UTC')->setTimezone(Dates::timezone())->format(DateTimeInterface::ATOM)
-                : null,
-            'created_at' => isset($row['created_at'])
-                ? Dates::fromString((string) $row['created_at'], 'UTC')->setTimezone(Dates::timezone())->format(DateTimeInterface::ATOM)
-                : null,
+            'last_click_at' => $lastClickAt,
+            'created_at' => $createdAt,
             'active' => absint($row['active'] ?? 1) === 1,
         ];
     }

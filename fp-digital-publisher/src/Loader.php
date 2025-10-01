@@ -22,6 +22,7 @@ use FP\Publisher\Services\TikTok\Dispatcher as TikTokDispatcher;
 use FP\Publisher\Services\YouTube\Dispatcher as YouTubeDispatcher;
 use FP\Publisher\Services\WordPress\Dispatcher as WordPressDispatcher;
 use FP\Publisher\Services\Worker;
+use FP\Publisher\Support\Cli\QueueCommand;
 use FP\Publisher\Support\I18n;
 
 final class Loader
@@ -47,5 +48,6 @@ final class Loader
         YouTubeDispatcher::register();
         WordPressDispatcher::register();
         Worker::register();
+        QueueCommand::register();
     }
 }

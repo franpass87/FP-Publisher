@@ -12,6 +12,7 @@ use FP\Publisher\Services\Scheduler;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Tests\Fixtures\FakeWpdb;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class QueueTest extends TestCase
 {
@@ -111,5 +112,142 @@ final class QueueTest extends TestCase
         $this->assertNotNull($reloaded);
         $this->assertSame(Queue::STATUS_FAILED, $reloaded['status']);
         $this->assertSame('Fatal error', trim((string) $reloaded['error']));
+    }
+
+    public function testMarkCompletedThrowsWhenJobIsMissing(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unable to mark job as completed.');
+
+        Queue::markCompleted(999);
+    }
+
+    public function testDueJobsReturnsEmptyArrayWhenQueryFails(): void
+    {
+        $this->wpdb->nextGetResults = 'not-an-array';
+
+        $jobs = Queue::dueJobs(Dates::now('UTC'), 5);
+
+        $this->assertSame([], $jobs);
+    }
+
+    public function testRunningChannelsReturnsEmptyArrayWhenQueryFails(): void
+    {
+        $this->wpdb->nextGetResults = 'failure';
+
+        $channels = Queue::runningChannels();
+
+        $this->assertSame([], $channels);
+    }
+
+    public function testPaginateHandlesFailuresGracefully(): void
+    {
+        $this->wpdb->nextGetResults = 'failure';
+        $this->wpdb->nextGetVar = 'not-numeric';
+
+        $page = Queue::paginate(1, 10);
+
+        $this->assertSame([], $page['items']);
+        $this->assertSame(0, $page['total']);
+    }
+
+    public function testIdempotencyKeyNormalizationPreservesSpecialCharacters(): void
+    {
+        $runAt = new DateTimeImmutable('2024-01-01 09:00:00', new DateTimeZone('UTC'));
+
+        $job = Queue::enqueue('meta_facebook', ['foo' => 'bar'], $runAt, 'token+/=');
+
+        $this->assertSame('token+/=', $job['idempotency_key']);
+
+        $reloaded = Queue::findByIdempotency('token+/=', 'meta_facebook');
+        $this->assertNotNull($reloaded);
+        $this->assertSame($job['id'], $reloaded['id']);
+    }
+
+    public function testRetryableMarkFailedThrowsWhenNoRowsUpdated(): void
+    {
+        $job = Queue::enqueue('meta_instagram', [], new DateTimeImmutable('2024-01-01 09:00:00', new DateTimeZone('UTC')), 'retry-throw');
+        $claimed = Queue::claim($job, Dates::now('UTC'));
+        $this->assertNotNull($claimed);
+
+        $this->wpdb->reset();
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unable to schedule job retry.');
+
+        Queue::markFailed($claimed, 'temporary', true);
+    }
+
+    public function testPermanentMarkFailedThrowsWhenNoRowsUpdated(): void
+    {
+        $job = Queue::enqueue('meta_instagram', [], new DateTimeImmutable('2024-01-01 09:00:00', new DateTimeZone('UTC')), 'fail-throw');
+        $claimed = Queue::claim($job, Dates::now('UTC'));
+        $this->assertNotNull($claimed);
+
+        $this->wpdb->reset();
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unable to mark job as failed.');
+
+        Queue::markFailed($claimed, 'fatal', false);
+    }
+
+    public function testReplayThrowsWhenNoRowsAreUpdated(): void
+    {
+        $job = Queue::enqueue('meta_instagram', [], new DateTimeImmutable('2024-01-01 09:00:00', new DateTimeZone('UTC')), 'replay-zero');
+        $claimed = Queue::claim($job, Dates::now('UTC'));
+        $this->assertNotNull($claimed);
+
+        Queue::markFailed($claimed, 'failure', false);
+
+        $this->wpdb->nextUpdateResult = 0;
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unable to reschedule the job.');
+
+        Queue::replay($claimed['id']);
+    }
+
+    public function testHydrateFallsBackWhenTimestampsAreInvalid(): void
+    {
+        $this->wpdb->setJob([
+            'id' => 99,
+            'status' => Queue::STATUS_PENDING,
+            'channel' => 'meta',
+            'payload_json' => '[]',
+            'run_at' => 'not-a-date',
+            'attempts' => 0,
+            'error' => null,
+            'idempotency_key' => 'invalid-times',
+            'remote_id' => '',
+            'created_at' => 'also-invalid',
+            'updated_at' => 'still-invalid',
+        ]);
+
+        $job = Queue::findById(99);
+        $this->assertNotNull($job);
+        $this->assertInstanceOf(DateTimeImmutable::class, $job['run_at']);
+        $this->assertInstanceOf(DateTimeImmutable::class, $job['created_at']);
+        $this->assertInstanceOf(DateTimeImmutable::class, $job['updated_at']);
+    }
+
+    public function testTimeInBlackoutSkipsInvalidTimezone(): void
+    {
+        $method = new \ReflectionMethod(Scheduler::class, 'timeInBlackout');
+        $method->setAccessible(true);
+
+        $result = $method->invoke(
+            null,
+            new DateTimeImmutable('2024-01-01 12:00:00', new DateTimeZone('UTC')),
+            [
+                [
+                    'start' => '09:00',
+                    'end' => '17:00',
+                    'timezone' => 'Invalid/Zone',
+                ],
+            ]
+        );
+
+        $this->assertFalse($result);
     }
 }

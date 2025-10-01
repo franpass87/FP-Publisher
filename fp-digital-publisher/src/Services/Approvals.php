@@ -9,6 +9,7 @@ use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Infra\Capabilities;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Validation;
+use FP\Publisher\Services\Exceptions\PlanPermissionDenied;
 use InvalidArgumentException;
 use RuntimeException;
 use wpdb;
@@ -17,7 +18,9 @@ use function array_key_exists;
 use function get_current_user_id;
 use function is_array;
 use function json_decode;
+use function is_string;
 use function wp_json_encode;
+use function __;
 
 final class Approvals
 {
@@ -52,22 +55,22 @@ final class Approvals
         $row = $wpdb->get_row($wpdb->prepare("SELECT id, brand, status, approvals_json FROM {$table} WHERE id = %d", $planId), ARRAY_A);
 
         if (! is_array($row)) {
-            throw new RuntimeException('Piano non trovato.');
+            throw new RuntimeException(__('Plan not found.', 'fp-publisher'));
         }
 
         $currentStatus = (string) $row['status'];
         if (! array_key_exists($currentStatus, self::TRANSITIONS)) {
-            throw new InvalidArgumentException('Lo stato corrente non supporta il workflow approvativo.');
+            throw new InvalidArgumentException(__('The current status does not support the approval workflow.', 'fp-publisher'));
         }
 
         $expected = self::TRANSITIONS[$currentStatus];
         if ($expected !== $targetStatus) {
-            throw new InvalidArgumentException('Transizione non consentita.');
+            throw new InvalidArgumentException(__('Transition not allowed for the selected plan.', 'fp-publisher'));
         }
 
         $capability = self::CAPABILITIES[$targetStatus] ?? 'fp_publisher_manage_plans';
         if (! Capabilities::userCan($capability)) {
-            throw new RuntimeException('Permessi insufficienti per cambiare stato.');
+            throw new PlanPermissionDenied(__('You do not have permission to change this plan status.', 'fp-publisher'));
         }
 
         $approvals = [];
@@ -87,11 +90,16 @@ final class Approvals
         ];
         $approvals[] = $entry;
 
+        $encodedApprovals = wp_json_encode($approvals);
+        if (! is_string($encodedApprovals)) {
+            throw new RuntimeException(__('Unable to store the approval history.', 'fp-publisher'));
+        }
+
         $updated = $wpdb->update(
             $table,
             [
                 'status' => $targetStatus,
-                'approvals_json' => wp_json_encode($approvals),
+                'approvals_json' => $encodedApprovals,
                 'updated_at' => $timestamp->format('Y-m-d H:i:s'),
             ],
             ['id' => $planId],
@@ -99,8 +107,8 @@ final class Approvals
             ['%d']
         );
 
-        if ($updated === false) {
-            throw new RuntimeException('Unable to update the plan status.');
+        if ($updated === false || $updated <= 0) {
+            throw new RuntimeException(__('Unable to update the plan status.', 'fp-publisher'));
         }
 
         return [

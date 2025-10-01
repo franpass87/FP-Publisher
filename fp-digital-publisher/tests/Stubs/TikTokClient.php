@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace FP\Publisher\Api\TikTok;
 
+use FP\Publisher\Support\Strings;
+
 if (! class_exists(__NAMESPACE__ . '\\Client', false)) {
+
     final class Client
     {
         /** @var array<int, array<string, mixed>> */
@@ -30,6 +33,18 @@ if (! class_exists(__NAMESPACE__ . '\\Client', false)) {
             }
 
             return ['id' => 'tiktok_stub'];
+        }
+
+        public static function sanitizeCaption(mixed $value): string
+        {
+            $caption = is_string($value) ? trim($value) : '';
+            if ($caption === '') {
+                return '';
+            }
+
+            $caption = wp_strip_all_tags($caption);
+
+            return Strings::safeSubstr($caption, 2200);
         }
     }
 }

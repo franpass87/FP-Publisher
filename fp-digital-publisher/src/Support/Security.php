@@ -79,14 +79,18 @@ final class Security
             return '';
         }
 
-        $length = strlen($value);
         $visible = max(0, $visible);
+        $length = Strings::length($value);
 
         if ($length <= $visible) {
-            return str_repeat('*', $length);
+            return str_repeat('*', strlen($value));
         }
 
-        return str_repeat('*', $length - $visible) . substr($value, -$visible);
+        $suffix = Strings::tail($value, $visible);
+        $visibleBytes = strlen($suffix);
+        $maskedBytes = max(0, strlen($value) - $visibleBytes);
+
+        return str_repeat('*', $maskedBytes) . $suffix;
     }
 
     public static function constantTimeEquals(string $known, string $user): bool

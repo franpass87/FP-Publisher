@@ -49,6 +49,12 @@ FP Digital Publisher è un plugin WordPress progettato per orchestrare campagne 
 - `composer validate` per verificare la correttezza del `composer.json`.
 - `composer test` (dopo `composer install`) per avviare gli stub di test PHP con bootstrap e output TestDox (`./vendor/bin/phpunit --bootstrap tests/bootstrap.php --testdox tests`).
 
+## Operatività
+- Logging strutturato: tutte le code e i connettori utilizzano un logger PSR-3 centralizzato (`Support\Logging\Logger`) che arricchisce i messaggi con contesto (ID job, canale, stato HTTP) instradandoli verso `error_log`.
+- WP-CLI: disponibili i comandi `wp fp-publisher queue list` (filtri per stato, canale, ricerca) e `wp fp-publisher queue run --limit=<n>` per processare manualmente i job schedulati.
+- Dashboard coda: voce di menu **Queue** con tabella paginata, filtri e ricerca per indagare rapidamente job falliti o in attesa.
+- Timeout e retry configurabili: nuove chiavi `integrations.http` e `integrations.queue` nelle opzioni permettono override per canale di timeout, backoff e strategie di retry.
+
 ## UI Polish Delta
 - Fase U0: introdotti design token condivisi, palette e reset controlli di base per l'SPA amministrativa.
 - Fase U1: aggiunti componenti riutilizzabili (badge di stato, toolbar sticky, empty state, skeleton, tooltip, modal e toast host) con styling coerente e bus notifiche minimale.

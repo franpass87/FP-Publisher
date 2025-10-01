@@ -8,6 +8,8 @@ use DateInterval;
 use DateTimeImmutable;
 use Exception;
 use FP\Publisher\Support\Dates;
+use FP\Publisher\Support\Strings;
+use FP\Publisher\Support\Logging\Logger;
 use RuntimeException;
 use wpdb;
 
@@ -20,10 +22,12 @@ use function is_numeric;
 use function is_string;
 use function json_decode;
 use function max;
+use function preg_replace;
+use function __;
 use function random_int;
 use function sanitize_key;
 use function sanitize_text_field;
-use function substr;
+use function trim;
 use function wp_json_encode;
 use function wp_strip_all_tags;
 
@@ -47,7 +51,7 @@ final class Queue
         global $wpdb;
 
         $channel = sanitize_key($channel);
-        $idempotencyKey = sanitize_text_field($idempotencyKey);
+        $idempotencyKey = self::normalizeIdempotencyKey($idempotencyKey);
 
         if ($channel === '' || $idempotencyKey === '') {
             throw new RuntimeException('Invalid channel or idempotency key provided.');
@@ -55,6 +59,11 @@ final class Queue
 
         $existing = self::findByIdempotency($idempotencyKey, $channel);
         if ($existing !== null) {
+            Logger::get()->debug('Queue returning existing job for idempotency key.', [
+                'job_id' => (int) ($existing['id'] ?? 0),
+                'channel' => $existing['channel'] ?? $channel,
+                'idempotency_key' => $idempotencyKey,
+            ]);
             return $existing;
         }
 
@@ -77,6 +86,11 @@ final class Queue
         $inserted = $wpdb->insert(self::table($wpdb), $data);
         if ($inserted === false) {
             $errorMessage = wp_strip_all_tags((string) $wpdb->last_error);
+            Logger::get()->error('Unable to enqueue job.', [
+                'channel' => $channel,
+                'idempotency_key' => $idempotencyKey,
+                'error' => $errorMessage !== '' ? $errorMessage : 'Unknown database error.',
+            ]);
             if ($errorMessage !== '') {
                 throw new RuntimeException($errorMessage);
             }
@@ -87,8 +101,21 @@ final class Queue
         $job = self::findById((int) $wpdb->insert_id);
 
         if ($job !== null) {
+            Logger::get()->info('Job enqueued.', [
+                'job_id' => (int) $job['id'],
+                'channel' => $job['channel'],
+                'idempotency_key' => $idempotencyKey,
+                'run_at' => $job['run_at'],
+            ]);
             return $job;
         }
+
+        Logger::get()->info('Job enqueued without hydration.', [
+            'job_id' => (int) $wpdb->insert_id,
+            'channel' => $channel,
+            'idempotency_key' => $idempotencyKey,
+            'run_at' => $runAt,
+        ]);
 
         return [
             'id' => (int) $wpdb->insert_id,
@@ -120,8 +147,16 @@ final class Queue
             max(1, $limit)
         );
 
-        /** @var array<int, array<string, mixed>> $results */
+        /** @var array<int, array<string, mixed>>|null $results */
         $results = $wpdb->get_results($sql, ARRAY_A);
+
+        if (! is_array($results)) {
+            Logger::get()->warning('Unable to retrieve due queue jobs.', [
+                'error' => wp_strip_all_tags((string) $wpdb->last_error),
+            ]);
+
+            return [];
+        }
 
         return array_map(self::hydrate(...), $results);
     }
@@ -147,6 +182,13 @@ final class Queue
         );
 
         if ($updated === false || $updated === 0) {
+            Logger::get()->warning('Unable to claim queue job.', [
+                'job_id' => (int) ($job['id'] ?? 0),
+                'status' => $job['status'] ?? null,
+                'channel' => $job['channel'] ?? null,
+                'error' => wp_strip_all_tags((string) $wpdb->last_error),
+            ]);
+
             return null;
         }
 
@@ -161,7 +203,7 @@ final class Queue
     {
         global $wpdb;
 
-        $wpdb->update(
+        $updated = $wpdb->update(
             self::table($wpdb),
             [
                 'status' => self::STATUS_COMPLETED,
@@ -173,6 +215,23 @@ final class Queue
             ['%s', '%s', '%s', '%s'],
             ['%d']
         );
+
+        if ($updated === false || $updated <= 0) {
+            self::handleUpdateFailure(
+                $wpdb,
+                'Unable to mark job as completed.',
+                [
+                    'job_id' => $jobId,
+                    'remote_id' => $remoteId,
+                ],
+                'Unable to mark job as completed.'
+            );
+        }
+
+        Logger::get()->info('Job completed.', [
+            'job_id' => $jobId,
+            'remote_id' => $remoteId,
+        ]);
     }
 
     /**
@@ -182,11 +241,11 @@ final class Queue
     {
         $job = self::findById($jobId);
         if ($job === null) {
-            throw new RuntimeException('Job non trovato.');
+            throw new RuntimeException(__('Job not found.', 'fp-publisher'));
         }
 
         if (($job['status'] ?? '') !== self::STATUS_FAILED) {
-            throw new RuntimeException('Solo i job falliti possono essere ripianificati.');
+            throw new RuntimeException(__('Only failed jobs can be replayed.', 'fp-publisher'));
         }
 
         global $wpdb;
@@ -206,14 +265,28 @@ final class Queue
             ['%d']
         );
 
-        if ($updated === false) {
-            throw new RuntimeException('Unable to reschedule the job.');
+        if ($updated === false || $updated <= 0) {
+            self::handleUpdateFailure(
+                $wpdb,
+                'Unable to reschedule the job.',
+                [
+                    'job_id' => $jobId,
+                    'channel' => $job['channel'] ?? null,
+                ],
+                'Unable to reschedule the job.'
+            );
         }
 
         $reloaded = self::findById($jobId);
         if ($reloaded === null) {
             throw new RuntimeException('Job unavailable after rescheduling.');
         }
+
+        Logger::get()->info('Job replayed and scheduled immediately.', [
+            'job_id' => $jobId,
+            'channel' => $reloaded['channel'] ?? null,
+            'run_at' => $reloaded['run_at'] ?? null,
+        ]);
 
         return $reloaded;
     }
@@ -233,13 +306,23 @@ final class Queue
         $attempts = (int) ($job['attempts'] ?? 1);
         $maxAttempts = (int) Options::get('queue.max_attempts', 5);
         $now = Dates::now('UTC');
-        $sanitizedError = substr(wp_strip_all_tags($error), 0, 5000);
+        $sanitizedError = Strings::trimWidth(wp_strip_all_tags($error), 5000, '');
+
+        $channel = isset($job['channel']) ? sanitize_key((string) $job['channel']) : null;
+        $context = [
+            'job_id' => $jobId,
+            'channel' => $channel,
+            'attempts' => $attempts,
+            'max_attempts' => $maxAttempts,
+            'retryable' => $retryable,
+            'error' => $sanitizedError,
+        ];
 
         if ($retryable && $attempts < $maxAttempts) {
-            $delay = self::calculateBackoff($attempts);
+            $delay = self::calculateBackoff($attempts, self::backoffConfig($channel));
             $nextRun = $now->add(new DateInterval('PT' . $delay . 'S'));
 
-            $wpdb->update(
+            $updated = $wpdb->update(
                 self::table($wpdb),
                 [
                     'status' => self::STATUS_PENDING,
@@ -252,10 +335,27 @@ final class Queue
                 ['%d']
             );
 
+            if ($updated === false || $updated <= 0) {
+                self::handleUpdateFailure(
+                    $wpdb,
+                    'Unable to mark job as retrying after failure.',
+                    $context + [
+                        'next_run' => $nextRun,
+                        'delay_seconds' => $delay,
+                    ],
+                    'Unable to schedule job retry.'
+                );
+            }
+
+            Logger::get()->warning('Job failed and scheduled for retry.', $context + [
+                'next_run' => $nextRun,
+                'delay_seconds' => $delay,
+            ]);
+
             return;
         }
 
-        $wpdb->update(
+        $updated = $wpdb->update(
             self::table($wpdb),
             [
                 'status' => self::STATUS_FAILED,
@@ -266,6 +366,17 @@ final class Queue
             ['%s', '%s', '%s'],
             ['%d']
         );
+
+        if ($updated === false || $updated <= 0) {
+            self::handleUpdateFailure(
+                $wpdb,
+                'Unable to mark job as failed.',
+                $context,
+                'Unable to mark job as failed.'
+            );
+        }
+
+        Logger::get()->error('Job failed permanently.', $context);
     }
 
     /**
@@ -280,8 +391,15 @@ final class Queue
             self::STATUS_RUNNING
         );
 
-        /** @var array<int, array{channel: string, total: string|int}> $rows */
+        /** @var array<int, array{channel: string, total: string|int}>|null $rows */
         $rows = $wpdb->get_results($sql, ARRAY_A);
+        if (! is_array($rows)) {
+            Logger::get()->warning('Unable to retrieve running queue channels.', [
+                'error' => wp_strip_all_tags((string) $wpdb->last_error),
+            ]);
+
+            return [];
+        }
         $channels = [];
 
         foreach ($rows as $row) {
@@ -290,6 +408,77 @@ final class Queue
         }
 
         return $channels;
+    }
+
+    /**
+     * @return array{items: array<int, array<string, mixed>>, total: int, page: int, per_page: int}
+     */
+    public static function paginate(int $page, int $perPage, array $filters = []): array
+    {
+        global $wpdb;
+
+        $page = max(1, $page);
+        $perPage = max(1, min(100, $perPage));
+        $offset = ($page - 1) * $perPage;
+
+        $conditions = ['1=1'];
+        $params = [];
+
+        if (isset($filters['status'])) {
+            $status = sanitize_key((string) $filters['status']);
+            if ($status !== '') {
+                $conditions[] = 'status = %s';
+                $params[] = $status;
+            }
+        }
+
+        if (isset($filters['channel'])) {
+            $channel = sanitize_key((string) $filters['channel']);
+            if ($channel !== '') {
+                $conditions[] = 'channel = %s';
+                $params[] = $channel;
+            }
+        }
+
+        if (isset($filters['search'])) {
+            $search = sanitize_text_field((string) $filters['search']);
+            if ($search !== '') {
+                $conditions[] = '(idempotency_key LIKE %s OR error LIKE %s)';
+                $like = '%' . $wpdb->esc_like($search) . '%';
+                $params[] = $like;
+                $params[] = $like;
+            }
+        }
+
+        $where = implode(' AND ', $conditions);
+        $querySql = 'SELECT * FROM ' . self::table($wpdb) . ' WHERE ' . $where
+            . ' ORDER BY run_at DESC, id DESC LIMIT %d OFFSET %d';
+        $queryParams = array_merge($params, [$perPage, $offset]);
+
+        $prepared = $wpdb->prepare($querySql, $queryParams);
+
+        /** @var array<int, array<string, mixed>>|null $rows */
+        $rows = $wpdb->get_results($prepared, ARRAY_A);
+        if (! is_array($rows)) {
+            Logger::get()->warning('Unable to paginate queue jobs.', [
+                'filters' => $filters,
+                'error' => wp_strip_all_tags((string) $wpdb->last_error),
+            ]);
+
+            $rows = [];
+        }
+
+        $countSql = 'SELECT COUNT(*) FROM ' . self::table($wpdb) . ' WHERE ' . $where;
+        $countQuery = $params !== [] ? $wpdb->prepare($countSql, $params) : $countSql;
+        $totalRaw = $wpdb->get_var($countQuery);
+        $total = is_numeric($totalRaw) ? (int) $totalRaw : 0;
+
+        return [
+            'items' => array_map(self::hydrate(...), $rows),
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+        ];
     }
 
     /**
@@ -319,7 +508,7 @@ final class Queue
 
         $sql = $wpdb->prepare(
             "SELECT * FROM " . self::table($wpdb) . " WHERE idempotency_key = %s LIMIT 1",
-            sanitize_text_field($idempotencyKey)
+            self::normalizeIdempotencyKey($idempotencyKey)
         );
 
         /** @var array<string, mixed>|null $row */
@@ -358,22 +547,40 @@ final class Queue
             }
         }
 
+        $jobId = (int) ($row['id'] ?? 0);
+
         return [
             'id' => (int) $row['id'],
             'status' => (string) $row['status'],
             'channel' => sanitize_key((string) $row['channel']),
             'payload' => $payload,
-            'run_at' => Dates::fromString((string) $row['run_at'], 'UTC'),
+            'run_at' => self::parseDateField((string) ($row['run_at'] ?? ''), 'run_at', $jobId),
             'attempts' => (int) $row['attempts'],
             'error' => isset($row['error']) ? (string) $row['error'] : null,
             'idempotency_key' => (string) $row['idempotency_key'],
             'remote_id' => (string) $row['remote_id'],
-            'created_at' => Dates::fromString((string) $row['created_at'], 'UTC'),
-            'updated_at' => Dates::fromString((string) $row['updated_at'], 'UTC'),
+            'created_at' => self::parseDateField((string) ($row['created_at'] ?? ''), 'created_at', $jobId),
+            'updated_at' => self::parseDateField((string) ($row['updated_at'] ?? ''), 'updated_at', $jobId),
             'child_job_id' => isset($row['child_job_id']) && is_numeric($row['child_job_id'])
                 ? (int) $row['child_job_id']
                 : null,
         ];
+    }
+
+    private static function parseDateField(string $value, string $field, int $jobId): DateTimeImmutable
+    {
+        try {
+            return Dates::fromString($value, 'UTC');
+        } catch (Exception $exception) {
+            Logger::get()->warning('Unable to parse queue timestamp, using current time instead.', [
+                'job_id' => $jobId,
+                'field' => $field,
+                'value' => $value,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return Dates::now('UTC');
+        }
     }
 
     /**
@@ -390,6 +597,28 @@ final class Queue
         return $encoded;
     }
 
+    /**
+     * @param array<string, mixed> $context
+     */
+    private static function handleUpdateFailure(wpdb $wpdb, string $logMessage, array $context, string $fallbackExceptionMessage): void
+    {
+        $errorMessage = wp_strip_all_tags((string) $wpdb->last_error);
+        $context['error'] = $errorMessage !== '' ? $errorMessage : 'Unknown database error.';
+
+        Logger::get()->error($logMessage, $context);
+
+        throw new RuntimeException($errorMessage !== '' ? $errorMessage : $fallbackExceptionMessage);
+    }
+
+    private static function normalizeIdempotencyKey(string $key): string
+    {
+        $trimmed = trim($key);
+        $clean = preg_replace('/[^\x20-\x7E]/', '', $trimmed);
+        $clean = is_string($clean) ? $clean : '';
+
+        return Strings::trimWidth($clean, 255, '');
+    }
+
     private static function table(wpdb $wpdb): string
     {
         return $wpdb->prefix . 'fp_pub_jobs';
@@ -400,9 +629,8 @@ final class Queue
         return Dates::ensure($date, 'UTC')->format('Y-m-d H:i:s');
     }
 
-    private static function calculateBackoff(int $attempts): int
+    private static function calculateBackoff(int $attempts, array $config): int
     {
-        $config = Options::get('queue.retry_backoff', []);
         $base = (int) ($config['base'] ?? 60);
         $factor = (float) ($config['factor'] ?? 2.0);
         $maxDelay = (int) ($config['max'] ?? 3600);
@@ -419,6 +647,25 @@ final class Queue
         }
 
         return min($maxDelay, $delay + abs($jitter));
+    }
+
+    private static function backoffConfig(?string $channel): array
+    {
+        if ($channel !== null && $channel !== '') {
+            $configured = Options::get('integrations.queue.channels.' . $channel . '.retry_backoff');
+            if (is_array($configured)) {
+                return $configured;
+            }
+        }
+
+        $default = Options::get('integrations.queue.default_retry_backoff');
+        if (is_array($default)) {
+            return $default;
+        }
+
+        $fallback = Options::get('queue.retry_backoff', []);
+
+        return is_array($fallback) ? $fallback : [];
     }
 }
 

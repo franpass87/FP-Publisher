@@ -699,7 +699,10 @@ final class Client
         }
 
         try {
-            $response = Http::request($method, $url, $args);
+            $response = Http::request($method, $url, $args, [
+                'integration' => 'google-business',
+                'endpoint' => $endpoint,
+            ]);
         } catch (RuntimeException $exception) {
             throw GoogleBusinessException::unexpected($exception->getMessage());
         }
@@ -734,7 +737,10 @@ final class Client
         ];
 
         try {
-            $response = Http::request('POST', self::OAUTH_TOKEN_URL, $args);
+            $response = Http::request('POST', self::OAUTH_TOKEN_URL, $args, [
+                'integration' => 'google-business',
+                'endpoint' => 'oauth_token',
+            ]);
         } catch (RuntimeException $exception) {
             throw GoogleBusinessException::unexpected($exception->getMessage());
         }

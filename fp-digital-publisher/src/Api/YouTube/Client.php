@@ -11,6 +11,7 @@ use Exception;
 use FP\Publisher\Infra\Options;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Http;
+use FP\Publisher\Support\Strings;
 use RuntimeException;
 
 use function add_query_arg;
@@ -27,7 +28,6 @@ use function is_numeric;
 use function is_string;
 use function json_decode;
 use function max;
-use function mb_substr;
 use function preg_match;
 use function sanitize_key;
 use function sanitize_text_field;
@@ -310,7 +310,7 @@ final class Client
         $title = is_string($value) ? trim($value) : '';
         $title = wp_strip_all_tags($title);
 
-        return mb_substr($title, 0, 100);
+        return Strings::safeSubstr($title, 100);
     }
 
     private static function sanitizeDescription(mixed $value): string
@@ -318,7 +318,7 @@ final class Client
         $description = is_string($value) ? trim($value) : '';
         $description = wp_strip_all_tags($description);
 
-        return mb_substr($description, 0, 5000);
+        return Strings::safeSubstr($description, 5000);
     }
 
     /**
@@ -518,6 +518,9 @@ final class Client
         try {
             $download = Http::request('GET', $media['source'], [
                 'timeout' => 60,
+            ], [
+                'integration' => 'youtube',
+                'operation' => 'media-download',
             ]);
         } catch (RuntimeException $exception) {
             throw YouTubeException::unexpected($exception->getMessage());
@@ -552,7 +555,10 @@ final class Client
             'timeout' => 60,
         ];
 
-        return self::request('PUT', $uploadUrl, $args, $accessToken, [200, 201, 308]);
+        return self::request('PUT', $uploadUrl, $args, $accessToken, [200, 201, 308], [
+            'integration' => 'youtube',
+            'operation' => 'chunk-upload',
+        ]);
     }
 
     private static function decodeVideoResponse(array $response): array
@@ -715,16 +721,32 @@ final class Client
      *
      * @return array<string, mixed>
      */
-    private static function request(string $method, string $url, array $args, string $accessToken, array $expected): array
-    {
+    private static function request(
+        string $method,
+        string $url,
+        array $args,
+        string $accessToken,
+        array $expected,
+        array $context = []
+    ): array {
+        $context = array_merge([
+            'integration' => 'youtube',
+            'operation' => 'api-request',
+        ], $context);
+
         try {
-            $response = Http::request($method, $url, $args);
+            $response = Http::request($method, $url, $args, $context);
         } catch (RuntimeException $exception) {
             throw YouTubeException::unexpected($exception->getMessage());
         }
 
         $status = (int) wp_remote_retrieve_response_code($response);
-        if (! in_array($status, $expected, true)) {
+
+        try {
+            Http::ensureStatus($response, $expected, array_merge($context, [
+                'status' => $status,
+            ]));
+        } catch (RuntimeException) {
             throw self::exceptionFromResponse($response, $status);
         }
 
@@ -743,7 +765,10 @@ final class Client
         ];
 
         try {
-            $response = Http::request('POST', self::OAUTH_TOKEN_URL, $args);
+            $response = Http::request('POST', self::OAUTH_TOKEN_URL, $args, [
+                'integration' => 'youtube',
+                'endpoint' => 'oauth_token',
+            ]);
         } catch (RuntimeException $exception) {
             throw YouTubeException::unexpected($exception->getMessage());
         }

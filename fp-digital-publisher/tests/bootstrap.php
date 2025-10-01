@@ -11,3 +11,7 @@ require_once __DIR__ . '/Stubs/MetaClient.php';
 require_once __DIR__ . '/Stubs/TikTokClient.php';
 require_once __DIR__ . '/Stubs/YouTubeClient.php';
 require_once __DIR__ . '/Stubs/GoogleBusinessClient.php';
+
+if (! defined('FP_PUBLISHER_PATH')) {
+    define('FP_PUBLISHER_PATH', dirname(__DIR__) . '/');
+}

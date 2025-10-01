@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace FP\Publisher\Infra;
 
+use DateTimeZone;
+use FP\Publisher\Support\Logging\Logger;
+use RuntimeException;
+use Throwable;
 use function add_option;
 use function array_key_exists;
 use function array_replace_recursive;
@@ -18,6 +22,7 @@ use function in_array;
 use function is_array;
 use function is_string;
 use function preg_match;
+use function preg_replace;
 use function random_bytes;
 use function sanitize_email;
 use function sanitize_key;
@@ -26,17 +31,30 @@ use function str_starts_with;
 use function strlen;
 use function substr;
 use function update_option;
+use function wp_strip_all_tags;
 
 final class Options
 {
     private const OPTION_KEY = 'fp_publisher_options';
     private const DEFAULT_TIMEZONE = 'Europe/Rome';
+    private const DEFAULT_HTTP_TIMEOUT = 15;
+    private const DEFAULT_RETRY_BACKOFF = [
+        'base' => 60,
+        'factor' => 2.0,
+        'max' => 3600,
+    ];
 
     public static function bootstrap(): void
     {
-        if (false === get_option(self::OPTION_KEY, false)) {
-            add_option(self::OPTION_KEY, self::getDefaults(), false);
+        $existing = get_option(self::OPTION_KEY, null);
+
+        if ($existing === null) {
+            add_option(self::OPTION_KEY, self::getDefaults(), '', 'no');
+
+            return;
         }
+
+        update_option(self::OPTION_KEY, $existing, false);
     }
 
     public static function all(): array
@@ -107,7 +125,14 @@ final class Options
             $ref =& $ref[$segment];
         }
 
-        update_option(self::OPTION_KEY, $stored, false);
+        $updated = update_option(self::OPTION_KEY, $stored, false);
+        if ($updated === false) {
+            Logger::get()->error('Unable to update FP Publisher options.', [
+                'key' => $key,
+            ]);
+
+            throw new RuntimeException('Unable to persist configuration changes.');
+        }
     }
 
     public static function getTokens(): array
@@ -117,17 +142,38 @@ final class Options
 
     public static function setToken(string $service, ?string $token): void
     {
-        $service = sanitize_text_field($service);
+        $sanitizedService = self::sanitizeTokenService($service);
+
         $stored = self::getRaw();
         $stored['tokens'] ??= [];
 
         if ($token === null || $token === '') {
-            unset($stored['tokens'][$service]);
+            unset($stored['tokens'][$sanitizedService]);
         } else {
-            $stored['tokens'][$service] = self::encodeToken($token);
+            $stored['tokens'][$sanitizedService] = self::encodeToken($token, $sanitizedService);
         }
 
-        update_option(self::OPTION_KEY, $stored, false);
+        $updated = update_option(self::OPTION_KEY, $stored, false);
+        if ($updated === false) {
+            Logger::get()->error('Unable to update token configuration.', [
+                'service' => $sanitizedService,
+            ]);
+
+            throw new RuntimeException('Unable to persist token changes.');
+        }
+    }
+
+    private static function sanitizeTokenService(string $service): string
+    {
+        $normalized = preg_replace('/\s+/', '_', $service);
+        $normalized = is_string($normalized) ? $normalized : '';
+        $sanitized = sanitize_key($normalized);
+
+        if ($sanitized === '' || preg_match('/[a-z0-9]/', $sanitized) !== 1) {
+            throw new RuntimeException('Invalid token service identifier.');
+        }
+
+        return $sanitized;
     }
 
     public static function hasTokens(): bool
@@ -152,6 +198,7 @@ final class Options
             ))),
             'timezone' => self::sanitizeTimezone($value),
             'queue' => self::sanitizeQueueValue($segments, $value),
+            'integrations' => self::sanitizeIntegrationsValue($segments, $value),
             'cleanup' => self::sanitizeCleanupValue($segments, $value),
             default => $value,
         };
@@ -179,6 +226,10 @@ final class Options
     private static function sanitizeQueueValue(array $segments, mixed $value): mixed
     {
         if (($segments[1] ?? '') === 'retry_backoff') {
+            if (count($segments) === 2) {
+                return self::sanitizeRetryBackoffArray($value);
+            }
+
             $field = $segments[2] ?? '';
             return match ($field) {
                 'base' => max(10, (int) $value),
@@ -219,7 +270,7 @@ final class Options
 
             $channel = isset($window['channel']) ? sanitize_key((string) $window['channel']) : '';
             $tz = isset($window['timezone']) && is_string($window['timezone']) && $window['timezone'] !== ''
-                ? sanitize_text_field($window['timezone'])
+                ? self::sanitizeBlackoutWindowTimezone($window['timezone'], $timezone, $channel !== '' ? $channel : null)
                 : $timezone;
 
             $days = [];
@@ -253,13 +304,52 @@ final class Options
         return preg_match('/^\d{2}:\d{2}$/', $value) === 1 ? $value : '';
     }
 
-    private static function sanitizeTimezone(mixed $value): string
+    private static function sanitizeBlackoutWindowTimezone(string $value, string $fallback, ?string $channel): string
     {
-        if (is_string($value) && $value !== '') {
-            return sanitize_text_field($value);
+        $timezone = sanitize_text_field($value);
+
+        if ($timezone === '') {
+            return $fallback;
         }
 
-        return self::DEFAULT_TIMEZONE;
+        try {
+            new DateTimeZone($timezone);
+
+            return $timezone;
+        } catch (Throwable $exception) {
+            Logger::get()->warning('Invalid blackout window timezone provided, using plugin default.', [
+                'timezone' => $timezone,
+                'channel' => $channel,
+                'error' => wp_strip_all_tags($exception->getMessage()),
+            ]);
+
+            return $fallback;
+        }
+    }
+
+    private static function sanitizeTimezone(mixed $value): string
+    {
+        $timezone = '';
+        if (is_string($value) && $value !== '') {
+            $timezone = sanitize_text_field($value);
+        }
+
+        if ($timezone === '') {
+            return self::DEFAULT_TIMEZONE;
+        }
+
+        try {
+            new DateTimeZone($timezone);
+
+            return $timezone;
+        } catch (Throwable $exception) {
+            Logger::get()->warning('Invalid timezone configured, falling back to default.', [
+                'timezone' => $timezone,
+                'error' => wp_strip_all_tags($exception->getMessage()),
+            ]);
+
+            return self::DEFAULT_TIMEZONE;
+        }
     }
 
     private static function getDefaults(): array
@@ -272,11 +362,7 @@ final class Options
             'queue' => [
                 'max_concurrent' => 5,
                 'max_attempts' => 5,
-                'retry_backoff' => [
-                    'base' => 60,
-                    'factor' => 2.0,
-                    'max' => 3600,
-                ],
+                'retry_backoff' => self::DEFAULT_RETRY_BACKOFF,
                 'blackout_windows' => [],
             ],
             'cleanup' => [
@@ -284,7 +370,141 @@ final class Options
                 'assets_retention_days' => 7,
                 'terms_cache_ttl_minutes' => 1440,
             ],
+            'integrations' => [
+                'http' => [
+                    'default_timeout' => self::DEFAULT_HTTP_TIMEOUT,
+                    'channels' => [],
+                ],
+                'queue' => [
+                    'default_retry_backoff' => self::DEFAULT_RETRY_BACKOFF,
+                    'channels' => [],
+                ],
+            ],
             'tokens' => [],
+        ];
+    }
+
+    private static function sanitizeIntegrationsValue(array $segments, mixed $value): mixed
+    {
+        $section = $segments[1] ?? '';
+
+        if ($section === 'http') {
+            $field = $segments[2] ?? '';
+
+            if ($field === 'default_timeout') {
+                return max(1, (int) $value);
+            }
+
+            if ($field === 'channels') {
+                return self::sanitizeHttpChannels($value);
+            }
+
+            if ($field !== '') {
+                return $value;
+            }
+
+            if (! is_array($value)) {
+                return [
+                    'default_timeout' => self::DEFAULT_HTTP_TIMEOUT,
+                    'channels' => [],
+                ];
+            }
+
+            return [
+                'default_timeout' => max(1, (int) ($value['default_timeout'] ?? self::DEFAULT_HTTP_TIMEOUT)),
+                'channels' => self::sanitizeHttpChannels($value['channels'] ?? []),
+            ];
+        }
+
+        if ($section === 'queue') {
+            $field = $segments[2] ?? '';
+
+            if ($field === 'default_retry_backoff') {
+                return self::sanitizeRetryBackoffArray($value);
+            }
+
+            if ($field === 'channels') {
+                return self::sanitizeQueueChannels($value);
+            }
+
+            if ($field !== '') {
+                return $value;
+            }
+
+            if (! is_array($value)) {
+                return [
+                    'default_retry_backoff' => self::sanitizeRetryBackoffArray([]),
+                    'channels' => [],
+                ];
+            }
+
+            return [
+                'default_retry_backoff' => self::sanitizeRetryBackoffArray($value['default_retry_backoff'] ?? []),
+                'channels' => self::sanitizeQueueChannels($value['channels'] ?? []),
+            ];
+        }
+
+        return $value;
+    }
+
+    private static function sanitizeHttpChannels(mixed $value): array
+    {
+        $channels = [];
+
+        foreach ((array) $value as $channel => $config) {
+            $key = sanitize_key((string) $channel);
+            if ($key === '') {
+                continue;
+            }
+
+            $channelConfig = [];
+
+            if (is_array($config) && isset($config['timeout'])) {
+                $channelConfig['timeout'] = max(1, (int) $config['timeout']);
+            } elseif (is_numeric($config)) {
+                $channelConfig['timeout'] = max(1, (int) $config);
+            }
+
+            if ($channelConfig !== []) {
+                $channels[$key] = $channelConfig;
+            }
+        }
+
+        return $channels;
+    }
+
+    private static function sanitizeQueueChannels(mixed $value): array
+    {
+        $channels = [];
+
+        foreach ((array) $value as $channel => $config) {
+            $key = sanitize_key((string) $channel);
+            if ($key === '' || ! is_array($config)) {
+                continue;
+            }
+
+            $channelConfig = [];
+
+            if (isset($config['retry_backoff'])) {
+                $channelConfig['retry_backoff'] = self::sanitizeRetryBackoffArray($config['retry_backoff']);
+            }
+
+            if ($channelConfig !== []) {
+                $channels[$key] = $channelConfig;
+            }
+        }
+
+        return $channels;
+    }
+
+    private static function sanitizeRetryBackoffArray(mixed $value): array
+    {
+        $config = is_array($value) ? $value : [];
+
+        return [
+            'base' => max(10, (int) ($config['base'] ?? self::DEFAULT_RETRY_BACKOFF['base'])),
+            'factor' => max(1.0, (float) ($config['factor'] ?? self::DEFAULT_RETRY_BACKOFF['factor'])),
+            'max' => max(60, (int) ($config['max'] ?? self::DEFAULT_RETRY_BACKOFF['max'])),
         ];
     }
 
@@ -309,17 +529,27 @@ final class Options
         return $decrypted;
     }
 
-    private static function encodeToken(string $token): string
+    private static function encodeToken(string $token, string $service): string
     {
         if (! self::sodiumAvailable()) {
             return 'plain:' . base64_encode($token);
         }
 
-        $nonceLength = self::nonceLength();
-        $nonce = random_bytes($nonceLength);
-        $ciphertext = sodium_crypto_secretbox($token, $nonce, self::encryptionKey());
+        try {
+            $nonceLength = self::nonceLength();
+            $nonce = random_bytes($nonceLength);
+            $ciphertext = sodium_crypto_secretbox($token, $nonce, self::encryptionKey());
 
-        return 'sodium:' . base64_encode($nonce . $ciphertext);
+            return 'sodium:' . base64_encode($nonce . $ciphertext);
+        } catch (Throwable $exception) {
+            Logger::get()->warning('Token encryption failed, storing plain value.', [
+                'service' => sanitize_key($service),
+                'option_key' => 'tokens.' . sanitize_key($service),
+                'error' => wp_strip_all_tags($exception->getMessage()),
+            ]);
+
+            return 'plain:' . base64_encode($token);
+        }
     }
 
     private static function decodeToken(?string $payload): ?string
