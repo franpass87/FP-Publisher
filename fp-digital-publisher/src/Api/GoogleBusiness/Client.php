@@ -10,13 +10,13 @@ use Exception;
 use FP\Publisher\Infra\Options;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Http;
+use FP\Publisher\Support\Strings;
 use RuntimeException;
 
 use function add_query_arg;
 use function array_filter;
 use function array_map;
 use function explode;
-use function function_exists;
 use function esc_url_raw;
 use function http_build_query;
 use function implode;
@@ -33,8 +33,6 @@ use function str_contains;
 use function str_starts_with;
 use function strtolower;
 use function trim;
-use function mb_substr;
-use function substr;
 use function wp_json_encode;
 use function wp_remote_retrieve_body;
 use function wp_remote_retrieve_response_code;
@@ -480,11 +478,11 @@ final class Client
     {
         $trimmed = trim($value);
 
-        if (function_exists('mb_substr')) {
-            return mb_substr($trimmed, 0, $length);
+        if ($trimmed === '') {
+            return '';
         }
 
-        return substr($trimmed, 0, $length);
+        return Strings::safeSubstr($trimmed, $length);
     }
 
     private static function getAccessToken(string $accountId, array $payload): string

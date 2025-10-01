@@ -8,12 +8,12 @@ use FP\Publisher\Domain\AssetRef;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Services\Templates\Engine;
 use FP\Publisher\Support\Channels;
+use FP\Publisher\Support\Strings;
 
 use function __;
 use function array_key_exists;
 use function array_unique;
 use function count;
-use function function_exists;
 use function in_array;
 use function is_array;
 use function is_scalar;
@@ -22,7 +22,6 @@ use function round;
 use function str_starts_with;
 use function strtolower;
 use function trim;
-use function strlen;
 use function wp_http_validate_url;
 
 final class Preflight
@@ -437,10 +436,6 @@ final class Preflight
 
     private static function length(string $value): int
     {
-        if (function_exists('mb_strlen')) {
-            return (int) mb_strlen($value);
-        }
-
-        return strlen($value);
+        return Strings::length($value);
     }
 }

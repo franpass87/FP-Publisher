@@ -7,6 +7,7 @@ namespace FP\Publisher\Tests\Unit\Services;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Services\Preflight;
 use FP\Publisher\Support\Channels;
+use FP\Publisher\Support\Strings;
 use PHPUnit\Framework\TestCase;
 
 use function strlen;
@@ -125,5 +126,22 @@ final class PreflightTest extends TestCase
         $hashtagsCheck = $result['checks']['hashtags'];
         $this->assertSame('fail', $hashtagsCheck['status']);
         $this->assertSame(31, $hashtagsCheck['details']['count']);
+    }
+
+    public function testCaptionLengthUsesUtf8SafeFallback(): void
+    {
+        Strings::forceMbstringAvailabilityForTesting(false);
+
+        try {
+            $method = new \ReflectionMethod(Preflight::class, 'checkCaptionLength');
+            $method->setAccessible(true);
+
+            $result = $method->invoke(null, str_repeat('€', 300), 'twitter');
+
+            $this->assertSame('fail', $result['status']);
+            $this->assertSame(300, $result['details']['length']);
+        } finally {
+            Strings::forceMbstringAvailabilityForTesting(null);
+        }
     }
 }
