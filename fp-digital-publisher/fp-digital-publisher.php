@@ -2,7 +2,7 @@
 /**
  * Plugin Name: FP Digital Publisher
  * Description: Omnichannel digital publishing orchestrator for social and owned media workflows.
- * Version: 0.1.0
+ * Version: 0.1.1
  * Author: Francesco Passeri
  * Author URI: https://francescopasseri.com
  * Text Domain: fp-publisher
@@ -16,7 +16,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('FP_PUBLISHER_VERSION', '0.1.0');
+define('FP_PUBLISHER_VERSION', '0.1.1');
 define('FP_PUBLISHER_PATH', plugin_dir_path(__FILE__));
 define('FP_PUBLISHER_URL', plugin_dir_url(__FILE__));
 define('FP_PUBLISHER_BASENAME', plugin_basename(__FILE__));
