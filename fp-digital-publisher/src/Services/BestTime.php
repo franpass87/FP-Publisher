@@ -8,6 +8,7 @@ use DateInterval;
 use DatePeriod;
 use DateTimeImmutable;
 use DateTimeInterface;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use InvalidArgumentException;
 
@@ -43,7 +44,41 @@ final class BestTime
                 ['time' => '10:30', 'score' => 70, 'reason' => 'Channel average performance'],
             ],
         ],
+        'meta_facebook' => [
+            '1' => [
+                ['time' => '09:30', 'score' => 82, 'reason' => 'High engagement after the weekend'],
+                ['time' => '14:00', 'score' => 75, 'reason' => 'Lunch break audience spike'],
+            ],
+            '3' => [
+                ['time' => '11:00', 'score' => 78, 'reason' => 'Midweek discovery window'],
+            ],
+            'default' => [
+                ['time' => '10:30', 'score' => 70, 'reason' => 'Channel average performance'],
+            ],
+        ],
         'instagram' => [
+            '2' => [
+                ['time' => '20:30', 'score' => 84, 'reason' => 'Evening prime time'],
+            ],
+            '4' => [
+                ['time' => '19:15', 'score' => 80, 'reason' => 'Commuter scroll window'],
+            ],
+            'default' => [
+                ['time' => '18:45', 'score' => 74, 'reason' => 'Evening scroll habits'],
+            ],
+        ],
+        'meta_instagram' => [
+            '2' => [
+                ['time' => '20:30', 'score' => 84, 'reason' => 'Evening prime time'],
+            ],
+            '4' => [
+                ['time' => '19:15', 'score' => 80, 'reason' => 'Commuter scroll window'],
+            ],
+            'default' => [
+                ['time' => '18:45', 'score' => 74, 'reason' => 'Evening scroll habits'],
+            ],
+        ],
+        'meta_instagram_stories' => [
             '2' => [
                 ['time' => '20:30', 'score' => 84, 'reason' => 'Evening prime time'],
             ],
@@ -95,6 +130,14 @@ final class BestTime
                 ['time' => '11:30', 'score' => 71, 'reason' => 'Editorial update window'],
             ],
         ],
+        'wordpress_blog' => [
+            '2' => [
+                ['time' => '07:30', 'score' => 79, 'reason' => 'Newsletter distribution window'],
+            ],
+            'default' => [
+                ['time' => '11:30', 'score' => 71, 'reason' => 'Editorial update window'],
+            ],
+        ],
     ];
 
     /**
@@ -103,7 +146,7 @@ final class BestTime
     public static function getSuggestions(string $brand, string $channel, string $month): array
     {
         $brand = trim($brand);
-        $channel = strtolower(trim($channel));
+        $channel = Channels::normalize($channel);
         $month = trim($month);
 
         if ($brand === '' || $channel === '') {

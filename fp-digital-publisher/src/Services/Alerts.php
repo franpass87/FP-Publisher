@@ -10,6 +10,7 @@ use Exception;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Infra\Options;
 use FP\Publisher\Infra\Queue;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Logging\Logger;
 use FP\Publisher\Support\Strings;
@@ -309,7 +310,7 @@ final class Alerts
 
             $failed[] = [
                 'id' => absint($row['id'] ?? 0),
-                'channel' => sanitize_key((string) ($row['channel'] ?? '')),
+                'channel' => Channels::normalize((string) ($row['channel'] ?? '')),
                 'run_at' => $runAt,
                 'attempts' => absint($row['attempts'] ?? 0),
                 'error' => Strings::trimWidth(wp_strip_all_tags((string) ($row['error'] ?? '')), 500, ''),
@@ -362,7 +363,7 @@ final class Alerts
                         continue;
                     }
 
-                    $channel = sanitize_key((string) ($slot['channel'] ?? ''));
+                    $channel = Channels::normalize((string) ($slot['channel'] ?? ''));
                     $scheduledAt = isset($slot['scheduled_at']) ? (string) $slot['scheduled_at'] : '';
                     if ($channel === '' || $scheduledAt === '') {
                         continue;
@@ -399,7 +400,7 @@ final class Alerts
             }
 
             foreach ((array) $channels as $channel) {
-                $channelKey = sanitize_key((string) $channel);
+                $channelKey = Channels::normalize((string) $channel);
                 if ($channelKey === '') {
                     continue;
                 }

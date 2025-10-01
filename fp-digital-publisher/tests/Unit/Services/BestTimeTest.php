@@ -25,6 +25,18 @@ final class BestTimeTest extends TestCase
         $this->assertSame('High engagement after the weekend', $suggestions[0]['reason']);
     }
 
+    public function testMetaChannelsReuseFacebookRules(): void
+    {
+        $facebookBase = BestTime::getSuggestions('Acme', 'facebook', '2024-01');
+        $instagramBase = BestTime::getSuggestions('Acme', 'instagram', '2024-01');
+
+        $facebook = BestTime::getSuggestions('Acme', 'meta_facebook', '2024-01');
+        $instagram = BestTime::getSuggestions('Acme', 'meta_instagram', '2024-01');
+
+        $this->assertSame($facebookBase, $facebook);
+        $this->assertSame($instagramBase, $instagram);
+    }
+
     public function testInvalidMonthFormatThrowsTranslatedMessage(): void
     {
         $this->expectException(InvalidArgumentException::class);

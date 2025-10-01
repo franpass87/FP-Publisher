@@ -7,6 +7,7 @@ namespace FP\Publisher\Services\TikTok;
 use FP\Publisher\Api\TikTok\Client;
 use FP\Publisher\Api\TikTok\TikTokException;
 use FP\Publisher\Infra\Queue;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\TransientErrorClassifier;
 use Throwable;
 
@@ -15,7 +16,6 @@ use function add_action;
 use function do_action;
 use function is_array;
 use function is_string;
-use function sanitize_key;
 use function wp_strip_all_tags;
 
 final class Dispatcher
@@ -32,7 +32,7 @@ final class Dispatcher
      */
     public static function handle(array $job): void
     {
-        $channel = sanitize_key((string) ($job['channel'] ?? ''));
+        $channel = Channels::normalize((string) ($job['channel'] ?? ''));
         if ($channel !== self::CHANNEL) {
             return;
         }

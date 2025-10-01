@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use FP\Publisher\Infra\Options;
 use FP\Publisher\Infra\Queue;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Logging\Logger;
 use Throwable;
@@ -17,7 +18,6 @@ use function in_array;
 use function is_array;
 use function is_int;
 use function is_string;
-use function sanitize_key;
 use function wp_strip_all_tags;
 
 final class Scheduler
@@ -41,7 +41,10 @@ final class Scheduler
                 break;
             }
 
-            $channel = sanitize_key((string) $candidate['channel']);
+            $channel = Channels::normalize((string) $candidate['channel']);
+            if ($channel === '') {
+                continue;
+            }
             if (($runningChannels[$channel] ?? 0) > 0) {
                 continue;
             }
@@ -69,7 +72,14 @@ final class Scheduler
      */
     public static function evaluate(string $channel, DateTimeImmutable $runAt): array
     {
-        $channel = sanitize_key($channel);
+        $channel = Channels::normalize($channel);
+        if ($channel === '') {
+            return [
+                'runnable' => false,
+                'in_blackout' => false,
+                'has_collision' => false,
+            ];
+        }
         $blackouts = self::blackoutWindows();
         $hasCollision = (Queue::runningChannels()[$channel] ?? 0) > 0;
         $inBlackout = self::timeInBlackout($runAt, $blackouts, $channel);
@@ -87,7 +97,10 @@ final class Scheduler
      */
     private static function inBlackout(array $job, DateTimeImmutable $now, array $blackouts): bool
     {
-        $channel = sanitize_key((string) ($job['channel'] ?? ''));
+        $channel = Channels::normalize((string) ($job['channel'] ?? ''));
+        if ($channel === '') {
+            return false;
+        }
 
         return self::timeInBlackout($now, $blackouts, $channel);
     }
@@ -102,7 +115,7 @@ final class Scheduler
                 continue;
             }
 
-            $windowChannel = isset($window['channel']) ? sanitize_key((string) $window['channel']) : null;
+            $windowChannel = isset($window['channel']) ? Channels::normalize((string) $window['channel']) : null;
             if ($windowChannel !== null && $windowChannel !== '' && $windowChannel !== $channel) {
                 continue;
             }
@@ -181,7 +194,7 @@ final class Scheduler
             }
 
             $normalized = [
-                'channel' => isset($window['channel']) && is_string($window['channel']) ? sanitize_key($window['channel']) : null,
+                'channel' => isset($window['channel']) && is_string($window['channel']) ? Channels::normalize($window['channel']) : null,
                 'start' => isset($window['start']) && is_string($window['start']) ? $window['start'] : '',
                 'end' => isset($window['end']) && is_string($window['end']) ? $window['end'] : '',
                 'timezone' => isset($window['timezone']) && is_string($window['timezone']) ? $window['timezone'] : null,

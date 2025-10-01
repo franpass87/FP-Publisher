@@ -13,6 +13,8 @@ final class FakeWpdb extends \wpdb
     public int $insert_id = 0;
     public string $last_error = '';
     public int|false|null $nextUpdateResult = null;
+    public bool|null $nextInsertResult = null;
+    public string $nextInsertError = '';
 
     /**
      * @var array<int, array<string, mixed>>
@@ -24,6 +26,17 @@ final class FakeWpdb extends \wpdb
      */
     public function insert(string $table, array $data): bool
     {
+        if ($this->nextInsertResult !== null) {
+            $forced = $this->nextInsertResult;
+            $this->nextInsertResult = null;
+            $this->last_error = $this->nextInsertError;
+            $this->nextInsertError = '';
+
+            if ($forced === false) {
+                return false;
+            }
+        }
+
         if (! str_ends_with($table, 'fp_pub_jobs')) {
             $this->last_error = 'Unknown table ' . $table;
 
@@ -107,11 +120,22 @@ final class FakeWpdb extends \wpdb
 
         if (str_contains($query['sql'], 'WHERE idempotency_key = %s')) {
             $key = (string) ($query['args'][0] ?? '');
+            $channel = null;
+
+            if (str_contains($query['sql'], 'AND channel = %s')) {
+                $channel = (string) ($query['args'][1] ?? '');
+            }
 
             foreach ($this->jobs as $row) {
-                if (($row['idempotency_key'] ?? '') === $key) {
-                    return $this->normalizeRow($row);
+                if (($row['idempotency_key'] ?? '') !== $key) {
+                    continue;
                 }
+
+                if ($channel !== null && $channel !== '' && ($row['channel'] ?? '') !== $channel) {
+                    continue;
+                }
+
+                return $this->normalizeRow($row);
             }
         }
 

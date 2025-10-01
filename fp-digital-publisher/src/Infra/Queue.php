@@ -7,6 +7,7 @@ namespace FP\Publisher\Infra;
 use DateInterval;
 use DateTimeImmutable;
 use Exception;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Strings;
 use FP\Publisher\Support\Logging\Logger;
@@ -25,6 +26,7 @@ use function max;
 use function preg_replace;
 use function __;
 use function random_int;
+use function str_contains;
 use function sanitize_key;
 use function sanitize_text_field;
 use function trim;
@@ -50,7 +52,7 @@ final class Queue
     ): array {
         global $wpdb;
 
-        $channel = sanitize_key($channel);
+        $channel = self::normalizeChannel($channel);
         $idempotencyKey = self::normalizeIdempotencyKey($idempotencyKey);
 
         if ($channel === '' || $idempotencyKey === '') {
@@ -86,6 +88,22 @@ final class Queue
         $inserted = $wpdb->insert(self::table($wpdb), $data);
         if ($inserted === false) {
             $errorMessage = wp_strip_all_tags((string) $wpdb->last_error);
+
+            $existingJob = null;
+            if (self::isDuplicateKeyError($errorMessage)) {
+                $existingJob = self::findByIdempotency($idempotencyKey, $channel);
+            }
+
+            if ($existingJob !== null) {
+                Logger::get()->debug('Queue returning existing job after duplicate insert attempt.', [
+                    'job_id' => (int) ($existingJob['id'] ?? 0),
+                    'channel' => $channel,
+                    'idempotency_key' => $idempotencyKey,
+                ]);
+
+                return $existingJob;
+            }
+
             Logger::get()->error('Unable to enqueue job.', [
                 'channel' => $channel,
                 'idempotency_key' => $idempotencyKey,
@@ -308,10 +326,10 @@ final class Queue
         $now = Dates::now('UTC');
         $sanitizedError = Strings::trimWidth(wp_strip_all_tags($error), 5000, '');
 
-        $channel = isset($job['channel']) ? sanitize_key((string) $job['channel']) : null;
+        $channel = isset($job['channel']) ? self::normalizeChannel((string) $job['channel']) : '';
         $context = [
             'job_id' => $jobId,
-            'channel' => $channel,
+            'channel' => $channel !== '' ? $channel : null,
             'attempts' => $attempts,
             'max_attempts' => $maxAttempts,
             'retryable' => $retryable,
@@ -403,7 +421,11 @@ final class Queue
         $channels = [];
 
         foreach ($rows as $row) {
-            $channel = sanitize_key((string) $row['channel']);
+            $channel = self::normalizeChannel((string) $row['channel']);
+            if ($channel === '') {
+                continue;
+            }
+
             $channels[$channel] = (int) $row['total'];
         }
 
@@ -433,7 +455,7 @@ final class Queue
         }
 
         if (isset($filters['channel'])) {
-            $channel = sanitize_key((string) $filters['channel']);
+            $channel = self::normalizeChannel((string) $filters['channel']);
             if ($channel !== '') {
                 $conditions[] = 'channel = %s';
                 $params[] = $channel;
@@ -506,28 +528,31 @@ final class Queue
     {
         global $wpdb;
 
+        $normalizedKey = self::normalizeIdempotencyKey($idempotencyKey);
+        if ($normalizedKey === '') {
+            return null;
+        }
+
+        if ($channel === null) {
+            return null;
+        }
+
+        $sanitizedChannel = self::normalizeChannel($channel);
+
+        if ($sanitizedChannel === '') {
+            return null;
+        }
+
         $sql = $wpdb->prepare(
-            "SELECT * FROM " . self::table($wpdb) . " WHERE idempotency_key = %s LIMIT 1",
-            self::normalizeIdempotencyKey($idempotencyKey)
+            "SELECT * FROM " . self::table($wpdb) . " WHERE idempotency_key = %s AND channel = %s LIMIT 1",
+            $normalizedKey,
+            $sanitizedChannel
         );
 
         /** @var array<string, mixed>|null $row */
         $row = $wpdb->get_row($sql, ARRAY_A);
 
-        if ($row === null) {
-            return null;
-        }
-
-        if ($channel !== null && $channel !== '') {
-            $requested = sanitize_key($channel);
-            $stored = sanitize_key((string) ($row['channel'] ?? ''));
-
-            if ($requested !== '' && $stored !== '' && $requested !== $stored) {
-                return null;
-            }
-        }
-
-        return self::hydrate($row);
+        return $row !== null ? self::hydrate($row) : null;
     }
 
     /**
@@ -552,7 +577,7 @@ final class Queue
         return [
             'id' => (int) $row['id'],
             'status' => (string) $row['status'],
-            'channel' => sanitize_key((string) $row['channel']),
+            'channel' => self::normalizeChannel((string) $row['channel']),
             'payload' => $payload,
             'run_at' => self::parseDateField((string) ($row['run_at'] ?? ''), 'run_at', $jobId),
             'attempts' => (int) $row['attempts'],
@@ -610,13 +635,31 @@ final class Queue
         throw new RuntimeException($errorMessage !== '' ? $errorMessage : $fallbackExceptionMessage);
     }
 
+    private static function normalizeChannel(string $channel): string
+    {
+        return Channels::normalize($channel);
+    }
+
     private static function normalizeIdempotencyKey(string $key): string
     {
         $trimmed = trim($key);
         $clean = preg_replace('/[^\x20-\x7E]/', '', $trimmed);
         $clean = is_string($clean) ? $clean : '';
 
-        return Strings::trimWidth($clean, 255, '');
+        return Strings::trimWidth($clean, 191, '');
+    }
+
+    private static function isDuplicateKeyError(string $message): bool
+    {
+        if ($message === '') {
+            return false;
+        }
+
+        $normalized = strtolower($message);
+
+        return str_contains($normalized, 'duplicate entry')
+            || str_contains($normalized, 'duplicate key value')
+            || str_contains($normalized, 'unique constraint');
     }
 
     private static function table(wpdb $wpdb): string
@@ -651,8 +694,10 @@ final class Queue
 
     private static function backoffConfig(?string $channel): array
     {
-        if ($channel !== null && $channel !== '') {
-            $configured = Options::get('integrations.queue.channels.' . $channel . '.retry_backoff');
+        $normalizedChannel = $channel !== null ? self::normalizeChannel($channel) : '';
+
+        if ($normalizedChannel !== '') {
+            $configured = Options::get('integrations.queue.channels.' . $normalizedChannel . '.retry_backoff');
             if (is_array($configured)) {
                 return $configured;
             }

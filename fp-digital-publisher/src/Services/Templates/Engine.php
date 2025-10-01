@@ -7,6 +7,7 @@ namespace FP\Publisher\Services\Templates;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Domain\ScheduledSlot;
 use FP\Publisher\Infra\Options;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Templating;
 
@@ -17,7 +18,6 @@ use function is_array;
 use function is_scalar;
 use function ltrim;
 use function preg_split;
-use function sanitize_key;
 use function trim;
 
 final class Engine
@@ -39,7 +39,7 @@ final class Engine
      */
     public static function render(PostPlan $plan, string $channel, array $context = []): array
     {
-        $channel = sanitize_key($channel);
+        $channel = Channels::normalize($channel);
         $template = $plan->template();
         $overrides = $template->channelOverrides();
         $variant = is_array($overrides[$channel] ?? null) ? $overrides[$channel] : [];

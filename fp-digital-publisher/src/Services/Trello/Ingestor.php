@@ -6,6 +6,7 @@ namespace FP\Publisher\Services\Trello;
 
 use DateInterval;
 use FP\Publisher\Domain\PostPlan;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Http;
 use InvalidArgumentException;
@@ -20,7 +21,6 @@ use function is_array;
 use function is_numeric;
 use function is_scalar;
 use function rawurlencode;
-use function sanitize_key;
 use function sanitize_text_field;
 use function strtolower;
 use function wp_strip_all_tags;
@@ -36,7 +36,7 @@ final class Ingestor
     public static function ingest(array $payload): array
     {
         $brand = sanitize_text_field((string) ($payload['brand'] ?? ''));
-        $channel = sanitize_key((string) ($payload['channel'] ?? ''));
+        $channel = Channels::normalize((string) ($payload['channel'] ?? ''));
         $listId = sanitize_text_field((string) ($payload['list_id'] ?? ''));
         $cardIds = self::sanitizeCardIds($payload['card_ids'] ?? null);
 

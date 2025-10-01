@@ -7,6 +7,7 @@ namespace FP\Publisher\Services;
 use FP\Publisher\Domain\AssetRef;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Services\Templates\Engine;
+use FP\Publisher\Support\Channels;
 
 use function __;
 use function array_key_exists;
@@ -18,7 +19,6 @@ use function is_array;
 use function is_scalar;
 use function max;
 use function round;
-use function sanitize_key;
 use function str_starts_with;
 use function strtolower;
 use function trim;
@@ -33,9 +33,9 @@ final class Preflight
      */
     public static function validate(PostPlan $plan, string $channel, array $context = []): array
     {
-        $channel = sanitize_key($channel);
+        $channel = Channels::normalize($channel);
         if ($channel === '' && $plan->channels() !== []) {
-            $channel = sanitize_key((string) $plan->channels()[0]);
+            $channel = Channels::normalize((string) $plan->channels()[0]);
         }
 
         $result = [
@@ -205,6 +205,7 @@ final class Preflight
         $rules = [
             'google_business' => 'fail',
             'facebook' => 'warning',
+            'meta_facebook' => 'warning',
             'linkedin' => 'warning',
         ];
 
@@ -236,7 +237,7 @@ final class Preflight
 
     private static function checkLink(string $url, string $targetUrl, string $channel): array
     {
-        $requiredChannels = ['google_business', 'facebook', 'linkedin'];
+        $requiredChannels = ['google_business', 'facebook', 'meta_facebook', 'linkedin'];
         $hasLink = $targetUrl !== '' || $url !== '';
 
         if (! $hasLink && in_array($channel, $requiredChannels, true)) {
@@ -276,7 +277,15 @@ final class Preflight
      */
     private static function checkUtm(array $utm, string $channel): array
     {
-        $required = ['facebook', 'instagram', 'linkedin', 'google_business'];
+        $required = [
+            'facebook',
+            'meta_facebook',
+            'instagram',
+            'meta_instagram',
+            'meta_instagram_stories',
+            'linkedin',
+            'google_business',
+        ];
         $hasUtm = $utm !== [];
 
         if (in_array($channel, $required, true) && ! $hasUtm) {
@@ -339,7 +348,7 @@ final class Preflight
             ];
         }
 
-        if ($channel === 'instagram' && count($normalized) > 30) {
+        if (in_array($channel, ['instagram', 'meta_instagram', 'meta_instagram_stories'], true) && count($normalized) > 30) {
             return [
                 'status' => 'fail',
                 'message' => __('Hashtag count exceeds the allowed Instagram limit.', 'fp-publisher'),
@@ -398,7 +407,10 @@ final class Preflight
             'twitter' => 280,
             'x' => 280,
             'instagram' => 2200,
+            'meta_instagram' => 2200,
+            'meta_instagram_stories' => 2200,
             'facebook' => 63206,
+            'meta_facebook' => 63206,
             'linkedin' => 3000,
             'tiktok' => 2200,
             'google_business' => 1500,
@@ -413,7 +425,10 @@ final class Preflight
     {
         return [
             'instagram' => ['min' => 0.8, 'max' => 1.91],
+            'meta_instagram' => ['min' => 0.8, 'max' => 1.91],
+            'meta_instagram_stories' => ['min' => 0.8, 'max' => 1.91],
             'facebook' => ['min' => 0.7, 'max' => 1.91],
+            'meta_facebook' => ['min' => 0.7, 'max' => 1.91],
             'tiktok' => ['min' => 0.55, 'max' => 0.75],
             'google_business' => ['min' => 0.8, 'max' => 1.91],
             'youtube' => ['min' => 1.7, 'max' => 1.9],

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FP\Publisher\Support;
 
+use FP\Publisher\Support\Channels;
+
 use function add_query_arg;
 use function esc_url_raw;
 use function is_array;
@@ -100,7 +102,7 @@ final class Utm
      */
     public static function channelDefaults(string $channel, array $context = []): array
     {
-        $channelKey = sanitize_key($channel);
+        $channelKey = Channels::normalize($channel);
 
         $source = isset($context['source']) && is_scalar($context['source'])
             ? sanitize_key((string) $context['source'])
