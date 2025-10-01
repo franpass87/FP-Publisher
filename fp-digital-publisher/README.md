@@ -13,6 +13,7 @@ FP Digital Publisher è un plugin WordPress progettato per orchestrare campagne 
 - [UI Kit](#ui-kit)
 - [Documentazione](#documentazione)
 - [FAQ](#faq)
+- [Release process](#release-process)
 
 ## Requisiti
 - WordPress >= 6.4
@@ -157,6 +158,12 @@ _Screenshot: bottone con tooltip e modale aperta_
 - [Guide utente](docs/user/) – configurazione connettori, calendario editoriale, workflow approvazioni, replay, short link e alert.
 - [Guide developer](docs/dev/) – panoramica architetturale, schema database, QA checklist e catalogo hook.
 - [FAQ](docs/faq.md) – risposte rapide a problemi comuni su token, pubblicazioni e permessi.
+
+## Release process
+
+1. Aggiorna la versione del plugin con `bash build.sh --bump=patch` oppure imposta manualmente con `bash build.sh --set-version=1.2.3`.
+2. Recupera lo ZIP generato in `build/` (nome: `fp-digital-publisher-<timestamp>.zip`) e caricalo nell'installazione WordPress.
+3. In alternativa, crea un tag `vX.Y.Z` su GitHub per ottenere automaticamente lo ZIP tramite l'artifact `plugin-zip` del workflow *Build plugin ZIP*.
 
 ## FAQ
 

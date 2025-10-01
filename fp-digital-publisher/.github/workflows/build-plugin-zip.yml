@@ -1,0 +1,61 @@
+name: Build plugin ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+          coverage: none
+
+      - name: Install dependencies
+        working-directory: fp-digital-publisher
+        run: composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+
+      - name: Dump optimized autoload
+        working-directory: fp-digital-publisher
+        run: composer dump-autoload -o --classmap-authoritative
+
+      - name: Prepare artifact
+        working-directory: fp-digital-publisher
+        run: |
+          set -euo pipefail
+          SLUG="fp-digital-publisher"
+          BUILD_DIR="build"
+          STAGING_DIR="$BUILD_DIR/$SLUG"
+          rm -rf "$STAGING_DIR"
+          mkdir -p "$STAGING_DIR"
+          rsync -a --delete \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=tests \
+            --exclude=docs \
+            --exclude=node_modules \
+            --exclude=*.md \
+            --exclude=.idea \
+            --exclude=.vscode \
+            --exclude=build \
+            --exclude=build.sh \
+            --exclude=.gitattributes \
+            --exclude=.gitignore \
+            --exclude=tools \
+            ./ "$STAGING_DIR/"
+          ZIP_NAME="$SLUG-${GITHUB_REF_NAME}.zip"
+          (cd "$BUILD_DIR" && zip -rq "$ZIP_NAME" "$SLUG")
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: fp-digital-publisher/build/*.zip
