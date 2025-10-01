@@ -334,12 +334,12 @@ final class Ingestor
     {
         if (is_string($value) && $value !== '') {
             try {
-                return Dates::ensure($value, Dates::DEFAULT_TZ);
+                return Dates::ensure($value, Dates::timezone());
             } catch (\Throwable) {
                 // fallthrough
             }
         }
 
-        return Dates::now(Dates::DEFAULT_TZ)->add(new DateInterval('P1D'));
+        return Dates::now(Dates::timezone())->add(new DateInterval('P1D'));
     }
 }

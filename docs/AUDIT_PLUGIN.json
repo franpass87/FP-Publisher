@@ -1,0 +1,177 @@
+{
+  "meta": {
+    "plugin": "FP Digital Publisher",
+    "date": "2024-10-08",
+    "wp_min": "6.6",
+    "php_targets": [
+      "8.2",
+      "8.3"
+    ],
+    "phase": "audit_complete"
+  },
+  "summary": {
+    "files_scanned": 144,
+    "files_total": 144,
+    "issues_total": 5,
+    "by_severity": {
+      "critical": 0,
+      "high": 2,
+      "medium": 2,
+      "low": 1
+    }
+  },
+  "issues": [
+    {
+      "id": "ISSUE-001",
+      "severity": "high",
+      "category": [
+        "functional",
+        "compatibility"
+      ],
+      "file": "fp-digital-publisher/src/Support/Dates.php",
+      "line": 17,
+      "snippet": "public const DEFAULT_TZ = 'Europe/Rome';\n...\nreturn new DateTimeZone(self::DEFAULT_TZ);",
+      "diagnosis": "Date helpers and default options always fall back to the Europe/Rome timezone instead of honoring the WordPress site timezone, so queues, blackout windows, and templates run in Rome time unless the user overrides plugin settings.",
+      "impact": "Scheduling, alert timestamps, and best-time suggestions drift for sites outside CET/CEST, breaking automation accuracy on non-Italian installs.",
+      "repro": [
+        "Install the plugin on a site whose timezone is set to America/New_York.",
+        "Call Routes::getStatus() or Scheduler::evaluate() \u2014 returned timestamps are shifted 6 hours ahead."
+      ],
+      "proposed_fix": "Default Dates::timezone() and Options::getDefaults() to wp_timezone()/wp_timezone_string(), falling back to UTC instead of 'Europe/Rome', and adjust sanitization to use the site timezone when input is empty.",
+      "effort": "M",
+      "tags": [
+        "timezone",
+        "scheduling",
+        "options"
+      ]
+    },
+    {
+      "id": "ISSUE-002",
+      "severity": "medium",
+      "category": [
+        "compatibility",
+        "api"
+      ],
+      "file": "fp-digital-publisher/src/Api/Routes.php",
+      "line": 860,
+      "snippet": "if (! self::verifyNonce($request)) {\n    return new WP_Error('fp_publisher_invalid_nonce', ...);\n}",
+      "diagnosis": "authorize() rejects any REST request that lacks a wp_rest nonce. Application passwords and other HTTP-authenticated integrations do not send nonces, so valid credentials fail before capability checks.",
+      "impact": "External automation, CLI, and integration platforms that rely on WordPress REST authentication cannot call the plugin endpoints, blocking enterprise workflows.",
+      "repro": [
+        "Create an application password for an admin user.",
+        "Send a POST to /wp-json/fp-publisher/v1/plans using Basic Auth only \u2014 response is 403 invalid nonce."
+      ],
+      "proposed_fix": "Only enforce nonce verification when the request is using cookie-based auth (no Authorization header and user is logged in). Skip the nonce check when Application Passwords or other server-side auth is detected.",
+      "effort": "S",
+      "tags": [
+        "nonce",
+        "rest",
+        "authentication"
+      ]
+    },
+    {
+      "id": "ISSUE-003",
+      "severity": "medium",
+      "category": [
+        "performance"
+      ],
+      "file": "fp-digital-publisher/src/Api/Routes.php",
+      "line": 386,
+      "snippet": "$rows = $wpdb->get_results(\"SELECT * FROM {$table}\", ARRAY_A);\nforeach ($rows as $row) { ... }",
+      "diagnosis": "The plans endpoint loads every row and filters in PHP, so large datasets are fully materialised on each call.",
+      "impact": "High memory usage and slow responses on sites with many plans; risk of timeouts on shared hosting when admins load the calendar.",
+      "repro": [
+        "Populate wp_fp_pub_plans with several thousand rows.",
+        "Call GET /wp-json/fp-publisher/v1/plans?month=2024-10 \u2014 request time grows linearly with table size."
+      ],
+      "proposed_fix": "Build WHERE clauses for brand/channel/month and apply LIMIT/OFFSET via $wpdb->prepare, mirroring Queue::paginate(), then return pagination metadata.",
+      "effort": "M",
+      "tags": [
+        "rest",
+        "query",
+        "pagination"
+      ]
+    },
+    {
+      "id": "ISSUE-004",
+      "severity": "high",
+      "category": [
+        "functional",
+        "compatibility"
+      ],
+      "file": "fp-digital-publisher/src/Services/WordPress/Publisher.php",
+      "line": 49,
+      "snippet": "$publishAt = self::resolvePublishAt($payload, $plan);\nself::applySchedule($postData, $publishAt);\n\n$switched = self::maybeSwitchBlog($payload);",
+      "diagnosis": "process() schedules posts before switching to the destination blog on multisite, so applySchedule() reads the runner site's timezone via wp_timezone().",
+      "impact": "Multisite jobs post at the wrong local time whenever target blogs use a different timezone option, breaking scheduling accuracy across a network.",
+      "repro": [
+        "Create a multisite where the main site is UTC and a child site is America/New_York.",
+        "Queue a WordPress publishing job for the child site at 09:00 local time.",
+        "Inspect the stored post_date \u2014 it reflects UTC instead of the child site's timezone."
+      ],
+      "proposed_fix": "Switch to the target blog (or load its timezone via get_blog_option) before calling applySchedule() so wp_timezone() reflects the destination site.",
+      "effort": "M",
+      "tags": [
+        "multisite",
+        "timezone",
+        "scheduler"
+      ]
+    },
+    {
+      "id": "ISSUE-005",
+      "severity": "low",
+      "category": [
+        "i18n",
+        "ux"
+      ],
+      "file": "fp-digital-publisher/src/Services/WordPress/Publisher.php",
+      "line": 440,
+      "snippet": "return $message !== '' ? $message : 'Errore WordPress sconosciuto.';",
+      "diagnosis": "Fallback WP error messages are hard-coded in Italian without using the fp-publisher text domain, so translations cannot override the string.",
+      "impact": "Non-Italian sites display untranslated copy in admin notices and fail WP i18n expectations.",
+      "repro": [],
+      "proposed_fix": "Wrap the fallback in __() with an English source string (e.g. 'Unknown WordPress error.') and update the POT file.",
+      "effort": "S",
+      "tags": [
+        "translation",
+        "admin"
+      ]
+    }
+  ],
+  "conflicts": [],
+  "compat": {
+    "deprecated": [],
+    "php_warnings": []
+  },
+  "perf": {
+    "hotspots": [
+      "Routes::listPlans() loads entire fp_pub_plans table; move filters into SQL and paginate.",
+      "Services\\Links::all() performs SELECT * without limits; add pagination or lightweight summaries."
+    ],
+    "autoload_options": [],
+    "cron": []
+  },
+  "i18n": {
+    "domain_issues": [],
+    "missing": [
+      "Services/WordPress/Publisher.php fallback error string hard-coded in Italian (ISSUE-005)"
+    ]
+  },
+  "tests": {
+    "gaps": [
+      "No regression coverage for timezone defaults or REST authentication fallbacks."
+    ],
+    "suggestions": [
+      "Add tests that assert Dates::timezone() aligns with wp_timezone().",
+      "Add REST integration tests for application-password authenticated requests."
+    ]
+  },
+  "manifest": {
+    "previous_hash": "e5f3004821e9c6c7aead466f6d705ce7d32a41278d88929a0f3793c577da2024",
+    "current_hash": "74489831ff48080e11bd6698f11fb2a189e5cc6df40c77b9d7e29ec973781798",
+    "added": [
+      "fp-digital-publisher/composer.lock"
+    ],
+    "removed": []
+  }
+}

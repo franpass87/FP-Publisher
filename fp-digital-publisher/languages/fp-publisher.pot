@@ -119,6 +119,10 @@ msgstr ""
 msgid "The provided plan is not valid for scheduling."
 msgstr ""
 
+#: src/Services/WordPress/Publisher.php:440
+msgid "Unknown WordPress error."
+msgstr ""
+
 #: src/Api/Routes.php:420
 msgid "Preflight failed: resolve the errors before scheduling."
 msgstr ""

@@ -27,11 +27,11 @@ final class ScheduledSlot
     {
         return Validation::guard(static function () use ($payload): self {
             $channel = Validation::string($payload['channel'] ?? '', 'slot.channel');
-            $scheduledAt = Dates::ensure((string) ($payload['scheduled_at'] ?? 'now'), Dates::DEFAULT_TZ);
+            $scheduledAt = Dates::ensure((string) ($payload['scheduled_at'] ?? 'now'), Dates::timezone());
             $publishUntil = null;
 
             if (! empty($payload['publish_until'])) {
-                $publishUntil = Dates::ensure((string) $payload['publish_until'], Dates::DEFAULT_TZ);
+                $publishUntil = Dates::ensure((string) $payload['publish_until'], Dates::timezone());
             }
 
             $duration = null;

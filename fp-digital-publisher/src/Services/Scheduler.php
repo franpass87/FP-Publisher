@@ -122,7 +122,7 @@ final class Scheduler
 
             $timezone = isset($window['timezone']) && is_string($window['timezone']) && $window['timezone'] !== ''
                 ? $window['timezone']
-                : (string) Options::get('timezone', Dates::DEFAULT_TZ);
+                : (string) Options::get('timezone', Dates::timezone()->getName());
 
             try {
                 $zone = new DateTimeZone($timezone);

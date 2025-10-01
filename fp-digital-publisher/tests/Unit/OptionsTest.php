@@ -41,7 +41,7 @@ final class OptionsTest extends TestCase
     {
         Options::set('timezone', 'Invalid/Zone');
 
-        $this->assertSame('Europe/Rome', Options::get('timezone'));
+        $this->assertSame('UTC', Options::get('timezone'));
     }
 
     public function testSetTokenSanitizesServiceKey(): void

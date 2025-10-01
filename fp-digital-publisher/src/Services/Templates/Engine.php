@@ -94,7 +94,7 @@ final class Engine
         $firstSlot = $plan->slots()[0] ?? null;
         $date = '';
         if ($firstSlot instanceof ScheduledSlot) {
-            $timezone = Dates::timezone(Options::get('timezone', Dates::DEFAULT_TZ));
+            $timezone = Dates::timezone(Options::get('timezone', Dates::timezone()->getName()));
             $localized = $firstSlot->scheduledAt()->setTimezone($timezone);
             $date = $localized->format('d/m/Y H:i');
         }
