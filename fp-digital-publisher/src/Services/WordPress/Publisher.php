@@ -15,6 +15,7 @@ use RuntimeException;
 use Throwable;
 use WP_Error;
 
+use function __;
 use function esc_url_raw;
 use function array_filter;
 use function get_current_blog_id;
@@ -57,20 +58,21 @@ final class Publisher
 
         $postData = self::preparePostData($payload, $context, $plan);
         $publishAt = self::resolvePublishAt($payload, $plan);
-        self::applySchedule($postData, $publishAt);
-
-        $normalized = self::normalize($payload, $postData, $primaryLink, $publishAt);
-
-        if (! empty($payload['preview'])) {
-            return [
-                'preview' => true,
-                'normalized' => $normalized,
-            ];
-        }
 
         $switched = self::maybeSwitchBlog($payload);
 
         try {
+            self::applySchedule($postData, $publishAt);
+
+            $normalized = self::normalize($payload, $postData, $primaryLink, $publishAt);
+
+            if (! empty($payload['preview'])) {
+                return [
+                    'preview' => true,
+                    'normalized' => $normalized,
+                ];
+            }
+
             $postId = wp_insert_post($postData, true);
             if ($postId === 0 || is_wp_error($postId)) {
                 throw new RuntimeException(self::resolveWpErrorMessage($postId));
@@ -437,11 +439,14 @@ final class Publisher
 
     private static function resolveWpErrorMessage(int|WP_Error $result): string
     {
+        $defaultMessage = __('Unknown WordPress error.', 'fp-publisher');
+
         if ($result instanceof WP_Error) {
             $message = wp_strip_all_tags($result->get_error_message());
-            return $message !== '' ? $message : 'Errore WordPress sconosciuto.';
+
+            return $message !== '' ? $message : $defaultMessage;
         }
 
-        return 'Errore WordPress sconosciuto.';
+        return $defaultMessage;
     }
 }

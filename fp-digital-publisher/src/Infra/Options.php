@@ -6,6 +6,7 @@ namespace FP\Publisher\Infra;
 
 use DateTimeZone;
 use FP\Publisher\Support\Channels;
+use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Logging\Logger;
 use RuntimeException;
 use Throwable;
@@ -38,7 +39,7 @@ use function wp_strip_all_tags;
 final class Options
 {
     private const OPTION_KEY = 'fp_publisher_options';
-    private const DEFAULT_TIMEZONE = 'Europe/Rome';
+    private const DEFAULT_TIMEZONE = 'UTC';
     private const DEFAULT_HTTP_TIMEOUT = 15;
     private const DEFAULT_RETRY_BACKOFF = [
         'base' => 60,
@@ -355,7 +356,7 @@ final class Options
         }
 
         if ($timezone === '') {
-            return self::DEFAULT_TIMEZONE;
+            return self::fallbackTimezone();
         }
 
         try {
@@ -368,8 +369,19 @@ final class Options
                 'error' => wp_strip_all_tags($exception->getMessage()),
             ]);
 
+            return self::fallbackTimezone();
+        }
+    }
+
+    private static function fallbackTimezone(): string
+    {
+        $timezone = Dates::timezone()->getName();
+
+        if ($timezone === '') {
             return self::DEFAULT_TIMEZONE;
         }
+
+        return $timezone;
     }
 
     private static function getDefaults(): array
@@ -378,7 +390,7 @@ final class Options
             'brands' => [],
             'channels' => [],
             'alert_emails' => [],
-            'timezone' => self::DEFAULT_TIMEZONE,
+            'timezone' => self::fallbackTimezone(),
             'queue' => [
                 'max_concurrent' => 5,
                 'max_attempts' => 5,

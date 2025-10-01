@@ -10,11 +10,14 @@ use DateTimeInterface;
 use DateTimeZone;
 use InvalidArgumentException;
 
+use function function_exists;
 use function is_string;
+use function wp_timezone;
+use function wp_timezone_string;
 
 final class Dates
 {
-    public const DEFAULT_TZ = 'Europe/Rome';
+    public const DEFAULT_TZ = 'UTC';
 
     public static function timezone(string|DateTimeZone|null $timezone = null): DateTimeZone
     {
@@ -23,6 +26,22 @@ final class Dates
         }
 
         if ($timezone === null) {
+            if (function_exists('wp_timezone')) {
+                $wpTimezone = wp_timezone();
+
+                if ($wpTimezone instanceof DateTimeZone) {
+                    return $wpTimezone;
+                }
+            }
+
+            if (function_exists('wp_timezone_string')) {
+                $siteTimezone = wp_timezone_string();
+
+                if (is_string($siteTimezone) && $siteTimezone !== '') {
+                    return new DateTimeZone($siteTimezone);
+                }
+            }
+
             return new DateTimeZone(self::DEFAULT_TZ);
         }
 

@@ -107,6 +107,38 @@ final class RoutesTest extends TestCase
         $this->assertFalse($method->invoke(null, $request));
     }
 
+    public function testAuthorizeSkipsNonceForAuthorizationHeader(): void
+    {
+        $GLOBALS['wp_stub_current_user_id'] = 99;
+        $GLOBALS['wp_stub_current_user_caps'] = ['manage_options' => true];
+
+        $request = new WP_REST_Request();
+        $request->set_header('Authorization', 'Basic Zm9v');
+
+        $method = new \ReflectionMethod(Routes::class, 'authorize');
+        $method->setAccessible(true);
+
+        $result = $method->invoke(null, $request, 'manage_options');
+
+        $this->assertTrue($result);
+    }
+
+    public function testAuthorizeRequiresNonceWhenUsingCookies(): void
+    {
+        $GLOBALS['wp_stub_current_user_id'] = 101;
+        $GLOBALS['wp_stub_current_user_caps'] = ['manage_options' => true];
+
+        $request = new WP_REST_Request();
+
+        $method = new \ReflectionMethod(Routes::class, 'authorize');
+        $method->setAccessible(true);
+
+        $result = $method->invoke(null, $request, 'manage_options');
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('fp_publisher_invalid_nonce', $result->get_error_code());
+    }
+
     public function testGetBestTimeClampsChannelName(): void
     {
         $request = new WP_REST_Request();
@@ -176,6 +208,78 @@ final class RoutesTest extends TestCase
         $this->assertSame(1, $data['items'][0]['id']);
         $this->assertSame('alpha', $data['items'][0]['brand']);
         $this->assertSame(PostPlan::STATUS_READY, $data['items'][0]['status']);
+        $this->assertSame(1, $data['total']);
+        $this->assertSame(1, $data['page']);
+        $this->assertSame(20, $data['per_page']);
+    }
+
+    public function testListPlansSupportsPagination(): void
+    {
+        $template = [
+            'id' => 2,
+            'name' => 'Template',
+            'body' => 'Body',
+            'placeholders' => [],
+            'channel_overrides' => [],
+        ];
+
+        $this->wpdb->setPlan([
+            'id' => 1,
+            'brand' => 'alpha',
+            'status' => PostPlan::STATUS_READY,
+            'channel_set_json' => json_encode(['instagram']),
+            'slots_json' => json_encode([
+                ['channel' => 'instagram', 'scheduled_at' => '2024-01-05T08:00:00+00:00'],
+            ]),
+            'assets_json' => json_encode([]),
+            'template_json' => json_encode($template),
+            'created_at' => '2023-12-01 08:00:00',
+            'updated_at' => '2023-12-02 08:00:00',
+        ]);
+
+        $this->wpdb->setPlan([
+            'id' => 2,
+            'brand' => 'alpha',
+            'status' => PostPlan::STATUS_READY,
+            'channel_set_json' => json_encode(['instagram']),
+            'slots_json' => json_encode([
+                ['channel' => 'instagram', 'scheduled_at' => '2024-02-05T08:00:00+00:00'],
+            ]),
+            'assets_json' => json_encode([]),
+            'template_json' => json_encode($template),
+            'created_at' => '2023-12-15 08:00:00',
+            'updated_at' => '2023-12-16 08:00:00',
+        ]);
+
+        $this->wpdb->setPlan([
+            'id' => 3,
+            'brand' => 'alpha',
+            'status' => PostPlan::STATUS_READY,
+            'channel_set_json' => json_encode(['instagram']),
+            'slots_json' => json_encode([
+                ['channel' => 'instagram', 'scheduled_at' => '2024-03-05T08:00:00+00:00'],
+            ]),
+            'assets_json' => json_encode([]),
+            'template_json' => json_encode($template),
+            'created_at' => '2024-01-05 08:00:00',
+            'updated_at' => '2024-01-06 08:00:00',
+        ]);
+
+        $request = new WP_REST_Request();
+        $request->set_param('brand', 'alpha');
+        $request->set_param('channel', 'instagram');
+        $request->set_param('page', 2);
+        $request->set_param('per_page', 2);
+
+        $response = Routes::listPlans($request);
+
+        $this->assertInstanceOf(\WP_REST_Response::class, $response);
+        $data = $response->get_data();
+        $this->assertSame(3, $data['total']);
+        $this->assertSame(2, $data['page']);
+        $this->assertSame(2, $data['per_page']);
+        $this->assertCount(1, $data['items']);
+        $this->assertSame(3, $data['items'][0]['id']);
     }
 
     public function testGetPlanApprovalsReturnsTimeline(): void

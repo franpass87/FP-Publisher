@@ -360,10 +360,6 @@ final class Routes
     {
         global $wpdb;
 
-        if (! isset($wpdb)) {
-            return new WP_REST_Response(['items' => []]);
-        }
-
         $brandFilter = $request->get_param('brand');
         $brand = is_string($brandFilter) ? trim(sanitize_text_field($brandFilter)) : '';
 
@@ -383,36 +379,99 @@ final class Routes
             }
         }
 
-        $table = $wpdb->prefix . 'fp_pub_plans';
-        $rows = $wpdb->get_results("SELECT * FROM {$table}", ARRAY_A);
-        if (! is_array($rows)) {
-            $rows = [];
+        $pageParam = $request->get_param('page');
+        $page = is_numeric($pageParam) ? max(1, (int) $pageParam) : 1;
+
+        $perPageParam = $request->get_param('per_page');
+        $perPageValue = is_numeric($perPageParam) ? (int) $perPageParam : 0;
+        $perPage = $perPageValue > 0 ? min(100, $perPageValue) : 20;
+        $offset = ($page - 1) * $perPage;
+
+        if (! isset($wpdb)) {
+            return new WP_REST_Response([
+                'items' => [],
+                'total' => 0,
+                'page' => $page,
+                'per_page' => $perPage,
+            ]);
         }
 
+        $conditions = ['1=1'];
+        $params = [];
+
+        if ($brand !== '') {
+            $conditions[] = 'brand = %s';
+            $params[] = $brand;
+        }
+
+        if ($channel !== '') {
+            $conditions[] = 'channel_set_json LIKE %s';
+            $params[] = '%"' . $wpdb->esc_like($channel) . '"%';
+        }
+
+        $monthKey = null;
+        if ($monthStart !== null && $monthEnd !== null) {
+            $monthKey = $monthStart->format('Y-m');
+        }
+
+        if ($monthKey !== null) {
+            $conditions[] = 'slots_json LIKE %s';
+            $params[] = '%"scheduled_at":"' . $wpdb->esc_like($monthKey) . '%';
+        }
+
+        $where = implode(' AND ', $conditions);
+        $table = $wpdb->prefix . 'fp_pub_plans';
+
         $items = [];
-        foreach ($rows as $row) {
-            if (! is_array($row)) {
-                continue;
+        $chunkSize = max($perPage * $page, $perPage);
+        $batchOffset = 0;
+
+        $selectSql = "SELECT * FROM {$table} WHERE {$where} ORDER BY created_at DESC, id DESC LIMIT %d OFFSET %d";
+
+        while (true) {
+            $queryParams = array_merge($params, [$chunkSize, $batchOffset]);
+            $prepared = $wpdb->prepare($selectSql, ...$queryParams);
+
+            /** @var array<int, array<string, mixed>>|null $rows */
+            $rows = $prepared !== false ? $wpdb->get_results($prepared, ARRAY_A) : null;
+            if (! is_array($rows) || $rows === []) {
+                break;
             }
 
-            $plan = self::formatPlanRow($row);
-            if ($plan === null) {
-                continue;
+            foreach ($rows as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+
+                $plan = self::formatPlanRow($row);
+                if ($plan === null) {
+                    continue;
+                }
+
+                if ($brand !== '' && strtolower($plan['brand']) !== strtolower($brand)) {
+                    continue;
+                }
+
+                if ($channel !== '' && ! self::planMatchesChannel($plan, $channel)) {
+                    continue;
+                }
+
+                if ($monthStart !== null && $monthEnd !== null && ! self::planMatchesMonth($plan, $monthStart, $monthEnd)) {
+                    continue;
+                }
+
+                $items[] = $plan;
             }
 
-            if ($brand !== '' && strtolower($plan['brand']) !== strtolower($brand)) {
-                continue;
+            if (count($items) >= $offset + $perPage) {
+                break;
             }
 
-            if ($channel !== '' && ! self::planMatchesChannel($plan, $channel)) {
-                continue;
+            if (count($rows) < $chunkSize) {
+                break;
             }
 
-            if ($monthStart !== null && $monthEnd !== null && ! self::planMatchesMonth($plan, $monthStart, $monthEnd)) {
-                continue;
-            }
-
-            $items[] = $plan;
+            $batchOffset += $chunkSize;
         }
 
         usort(
@@ -422,7 +481,27 @@ final class Routes
             }
         );
 
-        return new WP_REST_Response(['items' => $items]);
+        $pagedItems = array_slice($items, $offset, $perPage);
+
+        $countSql = "SELECT COUNT(*) FROM {$table} WHERE {$where}";
+        $countQuery = $params !== [] ? $wpdb->prepare($countSql, ...$params) : $countSql;
+        $totalRaw = $countQuery !== false ? $wpdb->get_var($countQuery) : null;
+        $minimumTotal = ($page - 1) * $perPage + count($pagedItems);
+        if (is_numeric($totalRaw)) {
+            $total = (int) $totalRaw;
+            if ($total < $minimumTotal && count($pagedItems) > 0) {
+                $total = $minimumTotal;
+            }
+        } else {
+            $total = $minimumTotal;
+        }
+
+        return new WP_REST_Response([
+            'items' => $pagedItems,
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+        ]);
     }
 
     public static function preflight(WP_REST_Request $request)
@@ -859,7 +938,7 @@ final class Routes
 
     private static function authorize(WP_REST_Request $request, string $capability)
     {
-        if (! self::verifyNonce($request)) {
+        if (self::requiresNonce($request) && ! self::verifyNonce($request)) {
             return new WP_Error(
                 'fp_publisher_invalid_nonce',
                 esc_html__('Invalid nonce for the REST request.', 'fp-publisher'),
@@ -881,8 +960,9 @@ final class Routes
     private static function verifyNonce(WP_REST_Request $request): bool
     {
         $nonce = $request->get_header('X-WP-Nonce');
-        if ($nonce === '') {
-            $nonce = (string) $request->get_param('_wpnonce');
+        if (! is_string($nonce) || $nonce === '') {
+            $param = $request->get_param('_wpnonce');
+            $nonce = is_string($param) ? $param : '';
         }
 
         if ($nonce === '') {
@@ -892,6 +972,22 @@ final class Routes
         $result = wp_verify_nonce($nonce, 'wp_rest');
 
         return $result === 1 || $result === 2;
+    }
+
+    private static function requiresNonce(WP_REST_Request $request): bool
+    {
+        $authHeaders = [
+            $request->get_header('Authorization'),
+            $request->get_header('Proxy-Authorization'),
+        ];
+
+        foreach ($authHeaders as $header) {
+            if (is_string($header) && trim($header) !== '') {
+                return false;
+            }
+        }
+
+        return get_current_user_id() > 0;
     }
 
     private static function extractRunAt(WP_REST_Request $request): DateTimeImmutable
