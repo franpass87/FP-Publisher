@@ -6,9 +6,13 @@ namespace FP\Publisher\Services;
 
 use DateInterval;
 use DateTimeInterface;
+use Exception;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Infra\Options;
+use FP\Publisher\Infra\Queue;
 use FP\Publisher\Support\Dates;
+use FP\Publisher\Support\Logging\Logger;
+use FP\Publisher\Support\Strings;
 use function __;
 use function absint;
 use function add_action;
@@ -26,7 +30,6 @@ use function ob_get_clean;
 use function ob_start;
 use function sanitize_key;
 use function sanitize_text_field;
-use function substr;
 use function time;
 use function update_option;
 use function wp_mail;
@@ -237,7 +240,17 @@ final class Alerts
                 continue;
             }
 
-            $expiry = Dates::fromString($expiresAt, 'UTC');
+            try {
+                $expiry = Dates::fromString($expiresAt, 'UTC');
+            } catch (Exception $exception) {
+                Logger::get()->warning('Skipping token with invalid expiry timestamp.', [
+                    'service' => $row['service'] ?? null,
+                    'account_id' => $row['account_id'] ?? null,
+                    'expires_at' => $expiresAt,
+                    'error' => $exception->getMessage(),
+                ]);
+                continue;
+            }
             if ($expiry < $now) {
                 $days = 0;
             } else {
@@ -280,12 +293,26 @@ final class Alerts
 
         $failed = [];
         foreach ($rows as $row) {
+            try {
+                $runAt = Dates::fromString((string) ($row['run_at'] ?? ''), 'UTC')
+                    ->setTimezone(Dates::timezone())
+                    ->format(DateTimeInterface::ATOM);
+            } catch (Exception $exception) {
+                Logger::get()->warning('Skipping failed job with invalid timestamp.', [
+                    'job_id' => $row['id'] ?? null,
+                    'run_at' => $row['run_at'] ?? null,
+                    'error' => $exception->getMessage(),
+                ]);
+
+                continue;
+            }
+
             $failed[] = [
                 'id' => absint($row['id'] ?? 0),
                 'channel' => sanitize_key((string) ($row['channel'] ?? '')),
-                'run_at' => Dates::fromString((string) ($row['run_at'] ?? ''), 'UTC')->setTimezone(Dates::timezone())->format(DateTimeInterface::ATOM),
+                'run_at' => $runAt,
                 'attempts' => absint($row['attempts'] ?? 0),
-                'error' => substr(wp_strip_all_tags((string) ($row['error'] ?? '')), 0, 500),
+                'error' => Strings::trimWidth(wp_strip_all_tags((string) ($row['error'] ?? '')), 500, ''),
             ];
         }
 
@@ -341,7 +368,18 @@ final class Alerts
                         continue;
                     }
 
-                    $date = Dates::ensure($scheduledAt);
+                    try {
+                        $date = Dates::ensure($scheduledAt);
+                    } catch (Exception $exception) {
+                        Logger::get()->warning('Skipping scheduled slot with invalid timestamp.', [
+                            'brand' => $brand,
+                            'channel' => $channel,
+                            'scheduled_at' => $scheduledAt,
+                            'error' => $exception->getMessage(),
+                        ]);
+
+                        continue;
+                    }
                     if ($date < $now || $date > $end) {
                         continue;
                     }

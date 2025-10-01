@@ -109,7 +109,10 @@ final class Pipeline
     {
         $channel = sanitize_key((string) ($payload['channel'] ?? ''));
         if ($channel === '') {
-            return new WP_Error('fp_publisher_invalid_channel', __('Canale non valido per l\'upload.', 'fp-publisher'));
+            return new WP_Error(
+                'fp_publisher_invalid_channel',
+                __('Invalid channel provided for the upload.', 'fp-publisher')
+            );
         }
 
         $media = is_array($payload['media'] ?? null) ? $payload['media'] : [];

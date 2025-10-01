@@ -5,17 +5,21 @@ declare(strict_types=1);
 namespace FP\Publisher\Services;
 
 use DateTimeInterface;
+use Exception;
 use FP\Publisher\Support\Dates;
+use FP\Publisher\Support\Logging\Logger;
 use InvalidArgumentException;
 use RuntimeException;
 use WP_User;
 use wpdb;
 
+use function __;
 use function array_unique;
 use function esc_html__;
 use function get_user_by;
 use function is_array;
 use function json_decode;
+use function is_string;
 use function preg_match_all;
 use function sprintf;
 use function strip_tags;
@@ -34,7 +38,7 @@ final class Comments
         global $wpdb;
 
         if ($planId <= 0) {
-            throw new InvalidArgumentException('ID piano non valido.');
+            throw new InvalidArgumentException(__('Invalid plan identifier.', 'fp-publisher'));
         }
 
         $table = $wpdb->prefix . 'fp_pub_comments';
@@ -60,11 +64,23 @@ final class Comments
                 }
             }
 
+            $createdAt = null;
+            try {
+                $createdAt = Dates::ensure((string) $row['created_at'])->format(DateTimeInterface::ATOM);
+            } catch (Exception $exception) {
+                Logger::get()->warning('Skipping comment with invalid creation date.', [
+                    'comment_id' => (int) ($row['id'] ?? 0),
+                    'plan_id' => (int) ($row['plan_id'] ?? 0),
+                    'created_at' => $row['created_at'] ?? null,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
             $comments[] = [
                 'id' => (int) $row['id'],
                 'plan_id' => (int) $row['plan_id'],
                 'body' => (string) $row['body'],
-                'created_at' => Dates::ensure((string) $row['created_at'])->format(DateTimeInterface::ATOM),
+                'created_at' => $createdAt,
                 'author' => [
                     'id' => (int) $row['user_id'],
                     'display_name' => (string) $row['display_name'],
@@ -85,42 +101,49 @@ final class Comments
         global $wpdb;
 
         if ($planId <= 0) {
-            throw new InvalidArgumentException('ID piano non valido.');
+            throw new InvalidArgumentException(__('Invalid plan identifier.', 'fp-publisher'));
         }
 
         if ($userId <= 0) {
-            throw new RuntimeException('Utente non autenticato.');
+            throw new RuntimeException(__('You must be logged in to comment.', 'fp-publisher'));
         }
 
         $body = wp_kses_post(trim($body));
         if ($body === '') {
-            throw new InvalidArgumentException('The comment cannot be empty.');
+            throw new InvalidArgumentException(__('The comment cannot be empty.', 'fp-publisher'));
         }
 
         $mentions = self::resolveMentions($body);
         $timestamp = Dates::now();
 
         $table = $wpdb->prefix . 'fp_pub_comments';
+        $mentionsPayload = array_map(static function (array $mention): array {
+            return [
+                'id' => $mention['id'],
+                'display_name' => $mention['display_name'],
+                'login' => $mention['login'],
+            ];
+        }, $mentions);
+
+        $mentionsJson = wp_json_encode($mentionsPayload);
+        if (! is_string($mentionsJson)) {
+            throw new RuntimeException(__('Unable to encode comment mentions.', 'fp-publisher'));
+        }
+
         $inserted = $wpdb->insert(
             $table,
             [
                 'plan_id' => $planId,
                 'user_id' => $userId,
                 'body' => $body,
-                'mentions_json' => wp_json_encode(array_map(static function (array $mention): array {
-                    return [
-                        'id' => $mention['id'],
-                        'display_name' => $mention['display_name'],
-                        'login' => $mention['login'],
-                    ];
-                }, $mentions)),
+                'mentions_json' => $mentionsJson,
                 'created_at' => $timestamp->format('Y-m-d H:i:s'),
             ],
             ['%d', '%d', '%s', '%s', '%s']
         );
 
         if (! $inserted) {
-            throw new RuntimeException('Unable to save the comment.');
+            throw new RuntimeException(__('Unable to save the comment.', 'fp-publisher'));
         }
 
         $commentId = (int) $wpdb->insert_id;
@@ -186,9 +209,10 @@ final class Comments
                 continue;
             }
 
-            $subject = esc_html__('Nuovo commento FP Publisher', 'fp-publisher');
+            $subject = esc_html__('New FP Publisher comment', 'fp-publisher');
             $message = sprintf(
-                "Hai ricevuto una menzione sul piano #%d:\n\n%s\n",
+                /* translators: 1: plan identifier, 2: comment body */
+                __("You were mentioned on plan #%1\\$d:\\n\\n%2\\$s\\n", 'fp-publisher'),
                 $planId,
                 strip_tags($body)
             );
@@ -213,7 +237,7 @@ final class Comments
 
         return [
             'id' => $userId,
-            'display_name' => 'Utente',
+            'display_name' => __('User', 'fp-publisher'),
             'login' => '',
         ];
     }

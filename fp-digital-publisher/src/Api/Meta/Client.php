@@ -503,6 +503,9 @@ final class Client
             'headers' => [
                 'Content-Type' => 'application/x-www-form-urlencoded; charset=utf-8',
             ],
+        ], [
+            'integration' => 'meta',
+            'endpoint' => $endpoint,
         ]);
 
         $status = (int) wp_remote_retrieve_response_code($response);

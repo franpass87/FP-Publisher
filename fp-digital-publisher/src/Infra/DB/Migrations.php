@@ -15,7 +15,7 @@ use function update_option;
 final class Migrations
 {
     private const OPTION_KEY = 'fp_publisher_db_version';
-    private const VERSION = '2024093001';
+    private const VERSION = '2024100101';
 
     public static function install(): void
     {
@@ -109,6 +109,8 @@ final class Migrations
                 brand VARCHAR(191) NOT NULL,
                 channel_set_json LONGTEXT NOT NULL,
                 slots_json LONGTEXT NOT NULL,
+                assets_json LONGTEXT NULL,
+                template_json LONGTEXT NULL,
                 owner BIGINT UNSIGNED NOT NULL,
                 status ENUM('draft','ready','approved','scheduled','published','failed') NOT NULL DEFAULT 'draft',
                 approvals_json LONGTEXT NULL,

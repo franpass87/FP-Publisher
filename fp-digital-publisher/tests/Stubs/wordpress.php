@@ -20,6 +20,12 @@ if (! class_exists('wpdb')) {
     }
 }
 
+if (! class_exists('WP_User')) {
+    class WP_User
+    {
+    }
+}
+
 if (! defined('ARRAY_A')) {
     define('ARRAY_A', 'ARRAY_A');
 }
@@ -48,6 +54,15 @@ if (! function_exists('wp_stub_reset')) {
     $GLOBALS['wp_stub_upload_dir'] = null;
     $GLOBALS['wp_stub_cron_events'] = [];
     $GLOBALS['wp_stub_next_term_id'] = 2000;
+    $GLOBALS['wp_stub_options_autoload'] = [];
+    $GLOBALS['wp_stub_current_user_id'] = 0;
+    $GLOBALS['wp_stub_current_user_caps'] = [];
+    $GLOBALS['wp_stub_json_encode_should_fail'] = false;
+    $GLOBALS['wp_stub_users'] = [];
+    $GLOBALS['wp_stub_sent_mail'] = [];
+    $GLOBALS['wp_stub_update_option_failures'] = [];
+    $GLOBALS['wp_stub_nonce_result'] = 0;
+    $GLOBALS['wp_stub_transients'] = [];
 
     function wp_stub_reset(): void
     {
@@ -69,6 +84,15 @@ if (! function_exists('wp_stub_reset')) {
         $GLOBALS['wp_stub_upload_dir'] = null;
         $GLOBALS['wp_stub_cron_events'] = [];
         $GLOBALS['wp_stub_next_term_id'] = 2000;
+        $GLOBALS['wp_stub_options_autoload'] = [];
+        $GLOBALS['wp_stub_current_user_id'] = 0;
+        $GLOBALS['wp_stub_current_user_caps'] = [];
+        $GLOBALS['wp_stub_json_encode_should_fail'] = false;
+        $GLOBALS['wp_stub_users'] = [];
+        $GLOBALS['wp_stub_sent_mail'] = [];
+        $GLOBALS['wp_stub_nonce_result'] = 0;
+        $GLOBALS['wp_stub_update_option_failures'] = [];
+        $GLOBALS['wp_stub_transients'] = [];
     }
 
     function wp_stub_terms_reset(): void
@@ -112,10 +136,45 @@ if (! function_exists('wp_stub_reset')) {
         $GLOBALS['wp_stub_options'] = [];
     }
 
+    function wp_stub_register_user(array $user): void
+    {
+        $defaults = [
+            'ID' => 0,
+            'display_name' => '',
+            'user_login' => '',
+            'user_nicename' => '',
+            'user_email' => '',
+        ];
+
+        $user = array_merge($defaults, $user);
+
+        $GLOBALS['wp_stub_users']['login:' . strtolower($user['user_login'])] = $user;
+        $GLOBALS['wp_stub_users']['slug:' . strtolower($user['user_nicename'] ?: $user['user_login'])] = $user;
+    }
+
+    function wp_stub_last_mail(): array
+    {
+        if ($GLOBALS['wp_stub_sent_mail'] === []) {
+            return [];
+        }
+
+        return $GLOBALS['wp_stub_sent_mail'][array_key_last($GLOBALS['wp_stub_sent_mail'])];
+    }
+
+    function wp_stub_set_json_encode_failure(bool $shouldFail): void
+    {
+        $GLOBALS['wp_stub_json_encode_should_fail'] = $shouldFail;
+    }
+
     function wp_stub_set_insert_post_failure(bool $fail, string $message = 'WP insert error.'): void
     {
         $GLOBALS['wp_stub_fail_insert_post'] = $fail;
         $GLOBALS['wp_stub_insert_post_error'] = $message;
+    }
+
+    function wp_stub_set_nonce_result(int $result): void
+    {
+        $GLOBALS['wp_stub_nonce_result'] = $result;
     }
 
     function wp_stub_http_reset(): void
@@ -207,16 +266,85 @@ if (! class_exists('WP_Error')) {
     {
         private string $code;
         private string $message;
+        private mixed $data;
 
-        public function __construct(string $code, string $message)
+        public function __construct(string $code, string $message, mixed $data = null)
         {
             $this->code = $code;
             $this->message = $message;
+            $this->data = $data;
         }
 
         public function get_error_message(): string
         {
             return $this->message;
+        }
+
+        public function get_error_data(): mixed
+        {
+            return $this->data;
+        }
+
+        public function get_error_code(): string
+        {
+            return $this->code;
+        }
+    }
+}
+
+if (! class_exists('WP_REST_Request')) {
+    class WP_REST_Request
+    {
+        /**
+         * @param array<string, mixed> $params
+         */
+        public function __construct(private array $params = [], private array $headers = [])
+        {
+        }
+
+        public function get_param(string $key): mixed
+        {
+            return $this->params[$key] ?? null;
+        }
+
+        public function set_param(string $key, mixed $value): void
+        {
+            $this->params[$key] = $value;
+        }
+
+        public function set_header(string $key, mixed $value): void
+        {
+            $this->headers[strtolower($key)] = $value;
+        }
+
+        public function get_header(string $key): mixed
+        {
+            $normalized = strtolower($key);
+            if (isset($this->headers[$normalized])) {
+                return $this->headers[$normalized];
+            }
+
+            if ($normalized === 'x-wp-nonce' && isset($this->params['_wpnonce'])) {
+                return $this->params['_wpnonce'];
+            }
+
+            return null;
+        }
+
+        /**
+         * @return array<string, mixed>
+         */
+        public function get_json_params(): array
+        {
+            return $this->params;
+        }
+
+        /**
+         * @return array<string, mixed>
+         */
+        public function get_params(): array
+        {
+            return $this->params;
         }
     }
 }
@@ -248,6 +376,24 @@ if (! function_exists('sanitize_text_field')) {
     }
 }
 
+if (! function_exists('submit_button')) {
+    function submit_button(string $text, string $type = 'primary', string $name = 'submit', bool $wrap = true): void
+    {
+        echo '<button type="submit" name="' . esc_html($name) . '" class="button button-' . esc_html($type) . '">'
+            . esc_html($text) . '</button>';
+        if ($wrap) {
+            echo "\n";
+        }
+    }
+}
+
+if (! function_exists('wp_die')) {
+    function wp_die(string $message = ''): void
+    {
+        throw new \RuntimeException($message !== '' ? $message : 'wp_die called');
+    }
+}
+
 if (! function_exists('sanitize_title')) {
     function sanitize_title(string $title): string
     {
@@ -274,6 +420,38 @@ if (! function_exists('sanitize_email')) {
     }
 }
 
+if (! function_exists('get_transient')) {
+    function get_transient(string $key): mixed
+    {
+        return $GLOBALS['wp_stub_transients'][$key] ?? false;
+    }
+}
+
+if (! function_exists('set_transient')) {
+    function set_transient(string $key, mixed $value, int $expiration): bool
+    {
+        $GLOBALS['wp_stub_transients'][$key] = $value;
+
+        return true;
+    }
+}
+
+if (! function_exists('delete_transient')) {
+    function delete_transient(string $key): bool
+    {
+        unset($GLOBALS['wp_stub_transients'][$key]);
+
+        return true;
+    }
+}
+
+if (! function_exists('is_email')) {
+    function is_email(string $email): bool
+    {
+        return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+    }
+}
+
 if (! function_exists('__')) {
     function __($text, $domain = ''): string
     {
@@ -281,21 +459,73 @@ if (! function_exists('__')) {
     }
 }
 
+if (! function_exists('esc_html')) {
+    function esc_html(mixed $text): string
+    {
+        return htmlspecialchars((string) $text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+}
+
+if (! function_exists('esc_html__')) {
+    function esc_html__($text, $domain = ''): string
+    {
+        return esc_html(__($text, $domain));
+    }
+}
+
+if (! function_exists('esc_html_e')) {
+    function esc_html_e($text, $domain = ''): void
+    {
+        echo esc_html__($text, $domain);
+    }
+}
+
 if (! function_exists('add_option')) {
-    function add_option(string $name, mixed $value, bool $autoload = false): bool
+    function add_option(string $name, mixed $value = '', mixed $deprecated = '', mixed $autoload = 'yes'): bool
     {
         $GLOBALS['wp_stub_options'][$name] = $value;
+        $GLOBALS['wp_stub_options_autoload'][$name] = normalize_wp_stub_autoload($autoload);
 
         return true;
     }
 }
 
 if (! function_exists('update_option')) {
-    function update_option(string $name, mixed $value, bool $autoload = false): bool
+    function update_option(string $name, mixed $value, mixed $autoload = null): bool
     {
+        if ($GLOBALS['wp_stub_update_option_failures'][$name] ?? false) {
+            return false;
+        }
+
         $GLOBALS['wp_stub_options'][$name] = $value;
 
+        if ($autoload !== null) {
+            $GLOBALS['wp_stub_options_autoload'][$name] = normalize_wp_stub_autoload($autoload);
+        }
+
         return true;
+    }
+}
+
+if (! function_exists('wp_stub_set_update_option_failure')) {
+    function wp_stub_set_update_option_failure(string $name, bool $shouldFail): void
+    {
+        $GLOBALS['wp_stub_update_option_failures'][$name] = $shouldFail;
+    }
+}
+
+if (! function_exists('normalize_wp_stub_autoload')) {
+    function normalize_wp_stub_autoload(mixed $autoload): string
+    {
+        if ($autoload === true || $autoload === 'yes') {
+            return 'yes';
+        }
+
+        if ($autoload === false || $autoload === 'no') {
+            return 'no';
+        }
+
+        return (string) $autoload;
     }
 }
 
@@ -303,6 +533,21 @@ if (! function_exists('get_option')) {
     function get_option(string $name, mixed $default = false): mixed
     {
         return $GLOBALS['wp_stub_options'][$name] ?? $default;
+    }
+}
+
+if (! function_exists('current_user_can')) {
+    function current_user_can(string $capability): bool
+    {
+        return ($GLOBALS['wp_stub_current_user_caps'][$capability] ?? false)
+            || ($GLOBALS['wp_stub_current_user_caps']['manage_options'] ?? false);
+    }
+}
+
+if (! function_exists('get_current_user_id')) {
+    function get_current_user_id(): int
+    {
+        return $GLOBALS['wp_stub_current_user_id'] ?? 0;
     }
 }
 
@@ -366,11 +611,15 @@ if (! function_exists('wp_strip_all_tags')) {
 }
 
 if (! function_exists('wp_json_encode')) {
-    function wp_json_encode(mixed $value): string
+    function wp_json_encode(mixed $value, int $options = 0, int $depth = 512): string|false
     {
-        $encoded = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (! empty($GLOBALS['wp_stub_json_encode_should_fail'])) {
+            return false;
+        }
 
-        return $encoded === false ? '' : $encoded;
+        $encoded = json_encode($value, $options ?: JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE, $depth);
+
+        return $encoded === false ? false : $encoded;
     }
 }
 
@@ -685,5 +934,49 @@ if (! function_exists('absint')) {
     function absint(mixed $value): int
     {
         return (int) abs((int) $value);
+    }
+}
+if (! function_exists('get_user_by')) {
+    function get_user_by(string $field, string $value): WP_User|false
+    {
+        $key = strtolower(trim($value));
+        $user = null;
+
+        if ($field === 'login') {
+            $user = $GLOBALS['wp_stub_users']['login:' . $key] ?? null;
+        } elseif ($field === 'slug') {
+            $user = $GLOBALS['wp_stub_users']['slug:' . $key] ?? null;
+        }
+
+        if ($user === null) {
+            return false;
+        }
+
+        $wpUser = new WP_User();
+        foreach ($user as $prop => $value) {
+            $wpUser->$prop = $value;
+        }
+
+        return $wpUser;
+    }
+}
+
+if (! function_exists('wp_mail')) {
+    function wp_mail(string $to, string $subject, string $message): bool
+    {
+        $GLOBALS['wp_stub_sent_mail'][] = [
+            'to' => $to,
+            'subject' => $subject,
+            'message' => $message,
+        ];
+
+        return true;
+    }
+}
+
+if (! function_exists('wp_verify_nonce')) {
+    function wp_verify_nonce(string $nonce, string $action = ''): int
+    {
+        return (int) ($GLOBALS['wp_stub_nonce_result'] ?? 0);
     }
 }

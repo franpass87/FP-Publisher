@@ -15,6 +15,7 @@ use FP\Publisher\Services\Approvals;
 use FP\Publisher\Services\Assets\Pipeline;
 use FP\Publisher\Services\BestTime;
 use FP\Publisher\Services\Comments;
+use FP\Publisher\Services\Exceptions\PlanPermissionDenied;
 use FP\Publisher\Services\Links;
 use FP\Publisher\Services\Preflight;
 use FP\Publisher\Services\Scheduler;
@@ -531,7 +532,7 @@ final class Routes
         } catch (InvalidArgumentException $exception) {
             return new WP_Error(
                 'fp_publisher_ingest_invalid',
-                esc_html__('Parametri Trello non validi per l\'ingestione.', 'fp-publisher'),
+                esc_html__('Invalid Trello parameters for ingestion.', 'fp-publisher'),
                 ['status' => 400, 'detail' => $exception->getMessage()]
             );
         } catch (RuntimeException $exception) {
@@ -559,7 +560,7 @@ final class Routes
         } catch (InvalidArgumentException $exception) {
             return new WP_Error(
                 'fp_publisher_ingest_invalid',
-                esc_html__('Parametri Trello non validi per l\'ingestione.', 'fp-publisher'),
+                esc_html__('Invalid Trello parameters for ingestion.', 'fp-publisher'),
                 ['status' => 400, 'detail' => $exception->getMessage()]
             );
         } catch (RuntimeException $exception) {
@@ -614,13 +615,17 @@ final class Routes
                 esc_html__('Transition not allowed for the selected plan.', 'fp-publisher'),
                 ['status' => 422, 'detail' => $exception->getMessage()]
             );
+        } catch (PlanPermissionDenied $exception) {
+            return new WP_Error(
+                'fp_publisher_transition_forbidden',
+                esc_html__('You do not have permission to change this plan status.', 'fp-publisher'),
+                ['status' => 403, 'detail' => $exception->getMessage()]
+            );
         } catch (RuntimeException $exception) {
-            $statusCode = str_contains($exception->getMessage(), 'Permessi') ? 403 : 500;
-
             return new WP_Error(
                 'fp_publisher_transition_failed',
                 esc_html__('Unable to update the plan status.', 'fp-publisher'),
-                ['status' => $statusCode, 'detail' => $exception->getMessage()]
+                ['status' => 500, 'detail' => $exception->getMessage()]
             );
         }
 
@@ -761,7 +766,9 @@ final class Routes
             return false;
         }
 
-        return wp_verify_nonce($nonce, 'wp_rest') === 1;
+        $result = wp_verify_nonce($nonce, 'wp_rest');
+
+        return $result === 1 || $result === 2;
     }
 
     private static function extractRunAt(WP_REST_Request $request): DateTimeImmutable

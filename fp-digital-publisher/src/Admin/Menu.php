@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FP\Publisher\Admin;
 
+use FP\Publisher\Admin\QueuePage;
 use FP\Publisher\Infra\Capabilities;
 
 use function add_action;
@@ -68,6 +69,14 @@ final class Menu
             esc_html__('Logs', 'fp-publisher'),
             'fp_publisher_view_logs',
             'logs'
+        );
+        add_submenu_page(
+            self::MENU_SLUG,
+            esc_html__('Queue', 'fp-publisher'),
+            esc_html__('Queue', 'fp-publisher'),
+            'fp_publisher_view_logs',
+            self::MENU_SLUG . '-queue',
+            [QueuePage::class, 'render']
         );
 
         remove_submenu_page(self::MENU_SLUG, self::MENU_SLUG);

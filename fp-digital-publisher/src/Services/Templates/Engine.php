@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace FP\Publisher\Services\Templates;
 
-use DateTimeZone;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Domain\ScheduledSlot;
+use FP\Publisher\Infra\Options;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Templating;
 
@@ -94,7 +94,8 @@ final class Engine
         $firstSlot = $plan->slots()[0] ?? null;
         $date = '';
         if ($firstSlot instanceof ScheduledSlot) {
-            $localized = $firstSlot->scheduledAt()->setTimezone(new DateTimeZone(Dates::DEFAULT_TZ));
+            $timezone = Dates::timezone(Options::get('timezone', Dates::DEFAULT_TZ));
+            $localized = $firstSlot->scheduledAt()->setTimezone($timezone);
             $date = $localized->format('d/m/Y H:i');
         }
 

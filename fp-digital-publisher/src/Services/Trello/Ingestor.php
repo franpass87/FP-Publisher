@@ -103,6 +103,9 @@ final class Ingestor
         $response = Http::json('GET', $url, [
             'timeout' => 20,
             'headers' => $auth['headers'],
+        ], [
+            'integration' => 'trello',
+            'list_id' => $listId,
         ]);
 
         if (! is_array($response)) {

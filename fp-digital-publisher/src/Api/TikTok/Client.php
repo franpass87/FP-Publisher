@@ -10,6 +10,7 @@ use Exception;
 use FP\Publisher\Infra\Options;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Http;
+use FP\Publisher\Support\Strings;
 use RuntimeException;
 
 use function add_query_arg;
@@ -24,7 +25,6 @@ use function is_numeric;
 use function is_string;
 use function json_decode;
 use function max;
-use function mb_substr;
 use function preg_match;
 use function sanitize_key;
 use function sanitize_text_field;
@@ -278,6 +278,9 @@ final class Client
         try {
             $response = Http::request('GET', $sourceUrl, [
                 'timeout' => 60,
+            ], [
+                'integration' => 'tiktok',
+                'operation' => 'media-download',
             ]);
         } catch (RuntimeException $exception) {
             throw TikTokException::unexpected($exception->getMessage());
@@ -295,6 +298,10 @@ final class Client
     private static function uploadChunk(string $uploadUrl, string $chunk, string $accessToken, int $start, int $end, string $total): void
     {
         try {
+            $context = [
+                'integration' => 'tiktok',
+                'operation' => 'chunk-upload',
+            ];
             $response = Http::request('PUT', $uploadUrl, [
                 'body' => $chunk,
                 'headers' => [
@@ -304,8 +311,8 @@ final class Client
                     'Content-Range' => sprintf('bytes %d-%d/%s', $start, $end, $total),
                 ],
                 'timeout' => 60,
-            ]);
-            Http::ensureStatus($response, [200, 201, 202, 204]);
+            ], $context);
+            Http::ensureStatus($response, [200, 201, 202, 204], $context);
         } catch (RuntimeException $exception) {
             throw TikTokException::unexpected($exception->getMessage());
         }
@@ -386,7 +393,7 @@ final class Client
 
         $caption = wp_strip_all_tags($caption);
 
-        return mb_substr($caption, 0, 2200);
+        return Strings::safeSubstr($caption, 2200);
     }
 
     private static function sanitizeStrings(mixed $values): array
@@ -567,7 +574,10 @@ final class Client
         }
 
         try {
-            $response = Http::request($method, $url, $args);
+            $response = Http::request($method, $url, $args, [
+                'integration' => 'tiktok',
+                'endpoint' => $endpoint,
+            ]);
         } catch (RuntimeException $exception) {
             throw TikTokException::unexpected($exception->getMessage());
         }

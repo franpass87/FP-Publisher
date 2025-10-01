@@ -9,6 +9,8 @@ use DateTimeZone;
 use FP\Publisher\Infra\Options;
 use FP\Publisher\Infra\Queue;
 use FP\Publisher\Support\Dates;
+use FP\Publisher\Support\Logging\Logger;
+use Throwable;
 
 use function array_map;
 use function in_array;
@@ -16,6 +18,7 @@ use function is_array;
 use function is_int;
 use function is_string;
 use function sanitize_key;
+use function wp_strip_all_tags;
 
 final class Scheduler
 {
@@ -108,7 +111,19 @@ final class Scheduler
                 ? $window['timezone']
                 : (string) Options::get('timezone', Dates::DEFAULT_TZ);
 
-            $localized = $at->setTimezone(new DateTimeZone($timezone));
+            try {
+                $zone = new DateTimeZone($timezone);
+            } catch (Throwable $exception) {
+                Logger::get()->warning('Skipping blackout window with invalid timezone.', [
+                    'timezone' => $timezone,
+                    'channel' => $windowChannel,
+                    'error' => wp_strip_all_tags($exception->getMessage()),
+                ]);
+
+                continue;
+            }
+
+            $localized = $at->setTimezone($zone);
             $day = (int) $localized->format('w');
 
             $days = [];

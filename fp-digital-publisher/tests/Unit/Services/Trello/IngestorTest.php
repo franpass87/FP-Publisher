@@ -6,7 +6,9 @@ namespace FP\Publisher\Tests\Unit\Services\Trello;
 
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Services\Trello\Ingestor;
+use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 use function json_encode;
 use function wp_stub_http_last_request;
@@ -84,6 +86,52 @@ final class IngestorTest extends TestCase
         $lastRequest = wp_stub_http_last_request();
         $headers = $lastRequest['args']['headers'] ?? [];
         self::assertSame('Bearer oauth-token-789', $headers['Authorization'] ?? null);
+    }
+
+    public function testIngestThrowsWhenListIdentifierMissing(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Missing Trello credentials or targeting information.');
+
+        Ingestor::ingest([
+            'api_key' => 'key-123',
+            'token' => 'token-456',
+            'brand' => 'Brand ACME',
+            'channel' => 'instagram',
+            'card_ids' => ['card-1'],
+        ]);
+    }
+
+    public function testIngestThrowsWhenNoCardsSelected(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Select at least one Trello card to import.');
+
+        Ingestor::ingest([
+            'api_key' => 'key-123',
+            'token' => 'token-456',
+            'brand' => 'Brand ACME',
+            'channel' => 'instagram',
+            'list_id' => 'list-xyz',
+            'card_ids' => [],
+        ]);
+    }
+
+    public function testIngestThrowsWhenSelectedCardsAreUnavailable(): void
+    {
+        $this->queueTrelloResponse();
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Selected Trello cards are unavailable.');
+
+        Ingestor::ingest([
+            'api_key' => 'key-123',
+            'token' => 'token-456',
+            'brand' => 'Brand ACME',
+            'channel' => 'instagram',
+            'list_id' => 'list-xyz',
+            'card_ids' => ['card-9'],
+        ]);
     }
 
     private function queueTrelloResponse(): void

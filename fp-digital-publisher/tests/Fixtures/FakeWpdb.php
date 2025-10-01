@@ -12,6 +12,7 @@ final class FakeWpdb extends \wpdb
     public string $prefix = 'wp_';
     public int $insert_id = 0;
     public string $last_error = '';
+    public int|false|null $nextUpdateResult = null;
 
     /**
      * @var array<int, array<string, mixed>>
@@ -43,6 +44,25 @@ final class FakeWpdb extends \wpdb
      */
     public function update(string $table, array $data, array $where, array $format = [], array $whereFormat = []): int|false
     {
+        if ($this->nextUpdateResult !== null) {
+            $forced = $this->nextUpdateResult;
+            $this->nextUpdateResult = null;
+
+            if ($forced === false) {
+                $this->last_error = 'Forced update failure';
+
+                return false;
+            }
+
+            if ($forced <= 0) {
+                return $forced;
+            }
+
+            $resultOverride = $forced;
+        } else {
+            $resultOverride = null;
+        }
+
         if (! str_ends_with($table, 'fp_pub_jobs')) {
             $this->last_error = 'Unknown table ' . $table;
 
@@ -59,6 +79,10 @@ final class FakeWpdb extends \wpdb
             foreach ($data as $key => $value) {
                 $this->jobs[$id][$key] = $value;
             }
+        }
+
+        if ($resultOverride !== null) {
+            return $resultOverride;
         }
 
         return $matched;
@@ -94,11 +118,21 @@ final class FakeWpdb extends \wpdb
         return null;
     }
 
+    public mixed $nextGetResults = null;
+    public mixed $nextGetVar = null;
+
     /**
-     * @return array<int, array<string, mixed>>
+     * @return array<int, array<string, mixed>>|null
      */
-    public function get_results(mixed $prepared, mixed $output = ARRAY_A): array
+    public function get_results(mixed $prepared, mixed $output = ARRAY_A): ?array
     {
+        if ($this->nextGetResults !== null) {
+            $forced = $this->nextGetResults;
+            $this->nextGetResults = null;
+
+            return is_array($forced) ? $forced : null;
+        }
+
         $query = $this->normalizeQuery($prepared);
         if ($query === null) {
             return [];
@@ -156,6 +190,60 @@ final class FakeWpdb extends \wpdb
         return [];
     }
 
+    public function get_var(mixed $prepared, mixed $output = 0, mixed $y = 0): mixed
+    {
+        if ($this->nextGetVar !== null) {
+            $forced = $this->nextGetVar;
+            $this->nextGetVar = null;
+
+            return $forced;
+        }
+
+        $query = $this->normalizeQuery($prepared);
+        if ($query === null) {
+            return null;
+        }
+
+        if (! str_contains($query['sql'], 'COUNT(*)')) {
+            return null;
+        }
+
+        $rows = $this->jobs;
+        $args = $query['args'];
+
+        if (str_contains($query['sql'], 'status = %s') && $args !== []) {
+            $status = (string) array_shift($args);
+            $rows = array_filter($rows, static fn (array $row): bool => ($row['status'] ?? '') === $status);
+        }
+
+        if (str_contains($query['sql'], 'channel = %s') && $args !== []) {
+            $channel = (string) array_shift($args);
+            $rows = array_filter(
+                $rows,
+                static function (array $row) use ($channel): bool {
+                    return ($row['channel'] ?? '') === $channel;
+                }
+            );
+        }
+
+        if (str_contains($query['sql'], 'idempotency_key LIKE %s') && $args !== []) {
+            $like = (string) array_shift($args);
+            // Skip OR error LIKE %s duplicate argument.
+            if ($args !== []) {
+                array_shift($args);
+            }
+            $pattern = '/^' . str_replace('%', '.*', preg_quote($like, '/')) . '$/';
+            $rows = array_filter(
+                $rows,
+                static fn (array $row): bool => isset($row['idempotency_key']) && $row['idempotency_key'] !== ''
+                    && preg_match($pattern, (string) $row['idempotency_key']) === 1
+                    || (isset($row['error']) && preg_match($pattern, (string) $row['error']) === 1)
+            );
+        }
+
+        return count($rows);
+    }
+
     public function prepare(string $query, mixed ...$args): array
     {
         return [
@@ -197,6 +285,9 @@ final class FakeWpdb extends \wpdb
         $this->jobs = [];
         $this->insert_id = 0;
         $this->last_error = '';
+        $this->nextUpdateResult = null;
+        $this->nextGetResults = null;
+        $this->nextGetVar = null;
     }
 
     /**
