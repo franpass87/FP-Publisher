@@ -29,10 +29,14 @@ use WP_REST_Request;
 use WP_REST_Response;
 
 use function add_action;
+use function array_filter;
 use function array_map;
+use function array_values;
+use function count;
 use function esc_html__;
 use function hash;
 use function get_current_user_id;
+use function get_user_by;
 use function in_array;
 use function is_array;
 use function is_bool;
@@ -44,7 +48,10 @@ use function register_rest_route;
 use function sanitize_key;
 use function sanitize_title;
 use function sanitize_text_field;
+use function preg_match;
 use function str_contains;
+use function trim;
+use function usort;
 use function strtolower;
 use function wp_generate_uuid4;
 use function wp_json_encode;
@@ -63,7 +70,7 @@ final class Routes
     public static function registerRoutes(): void
     {
         self::registerReadRoute('status', 'fp_publisher_manage_plans', [self::class, 'getStatus']);
-        self::registerCrudRoutes('plans', 'fp_publisher_manage_plans');
+        self::registerCrudRoutes('plans', 'fp_publisher_manage_plans', [self::class, 'listPlans']);
         self::registerCrudRoutes('jobs', 'fp_publisher_manage_plans', null, [self::class, 'enqueueJob']);
         self::registerCrudRoutes('accounts', 'fp_publisher_manage_accounts');
         self::registerCrudRoutes('templates', 'fp_publisher_manage_templates');
@@ -128,6 +135,18 @@ final class Routes
                 [
                     'methods' => 'POST',
                     'callback' => [self::class, 'previewTrello'],
+                    'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, 'fp_publisher_manage_plans'),
+                ],
+            ]
+        );
+
+        register_rest_route(
+            self::NAMESPACE,
+            '/plans/(?P<id>\\d+)/approvals',
+            [
+                [
+                    'methods' => 'GET',
+                    'callback' => [self::class, 'getPlanApprovals'],
                     'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, 'fp_publisher_manage_plans'),
                 ],
             ]
@@ -204,21 +223,24 @@ final class Routes
 
     private static function registerCrudRoutes(string $path, string $capability, ?callable $getCallback = null, ?callable $postCallback = null): void
     {
+        $routes = [[
+            'methods' => 'GET',
+            'callback' => $getCallback ?? [self::class, 'emptyCollection'],
+            'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, $capability),
+        ]];
+
+        if ($postCallback !== null) {
+            $routes[] = [
+                'methods' => 'POST',
+                'callback' => $postCallback,
+                'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, $capability),
+            ];
+        }
+
         register_rest_route(
             self::NAMESPACE,
             '/' . $path,
-            [
-                [
-                    'methods' => 'GET',
-                    'callback' => $getCallback ?? [self::class, 'emptyCollection'],
-                    'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, $capability),
-                ],
-                [
-                    'methods' => 'POST',
-                    'callback' => $postCallback ?? [self::class, 'notImplemented'],
-                    'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, $capability),
-                ],
-            ]
+            $routes
         );
     }
 
@@ -332,6 +354,75 @@ final class Routes
             'month' => $month,
             'suggestions' => $suggestions,
         ]);
+    }
+
+    public static function listPlans(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        if (! isset($wpdb)) {
+            return new WP_REST_Response(['items' => []]);
+        }
+
+        $brandFilter = $request->get_param('brand');
+        $brand = is_string($brandFilter) ? trim(sanitize_text_field($brandFilter)) : '';
+
+        $channelFilter = $request->get_param('channel');
+        $channel = Channels::normalize(is_string($channelFilter) ? $channelFilter : '');
+
+        $monthStart = null;
+        $monthEnd = null;
+        $monthParam = $request->get_param('month');
+        if (is_string($monthParam) && preg_match('/^\d{4}-\d{2}$/', $monthParam) === 1) {
+            try {
+                $monthStart = Dates::ensure($monthParam . '-01T00:00:00');
+                $monthEnd = Dates::add($monthStart, 'P1M');
+            } catch (InvalidArgumentException $exception) {
+                $monthStart = null;
+                $monthEnd = null;
+            }
+        }
+
+        $table = $wpdb->prefix . 'fp_pub_plans';
+        $rows = $wpdb->get_results("SELECT * FROM {$table}", ARRAY_A);
+        if (! is_array($rows)) {
+            $rows = [];
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $plan = self::formatPlanRow($row);
+            if ($plan === null) {
+                continue;
+            }
+
+            if ($brand !== '' && strtolower($plan['brand']) !== strtolower($brand)) {
+                continue;
+            }
+
+            if ($channel !== '' && ! self::planMatchesChannel($plan, $channel)) {
+                continue;
+            }
+
+            if ($monthStart !== null && $monthEnd !== null && ! self::planMatchesMonth($plan, $monthStart, $monthEnd)) {
+                continue;
+            }
+
+            $items[] = $plan;
+        }
+
+        usort(
+            $items,
+            static function (array $left, array $right): int {
+                return self::planPrimaryTimestamp($left) <=> self::planPrimaryTimestamp($right);
+            }
+        );
+
+        return new WP_REST_Response(['items' => $items]);
     }
 
     public static function preflight(WP_REST_Request $request)
@@ -577,6 +668,47 @@ final class Routes
         ]);
     }
 
+    public static function getPlanApprovals(WP_REST_Request $request)
+    {
+        $planId = (int) $request->get_param('id');
+        if ($planId <= 0) {
+            return new WP_Error(
+                'fp_publisher_invalid_plan',
+                esc_html__('Invalid plan identifier.', 'fp-publisher'),
+                ['status' => 400]
+            );
+        }
+
+        global $wpdb;
+
+        if (! isset($wpdb)) {
+            return new WP_REST_Response([
+                'plan_id' => $planId,
+                'status' => PostPlan::STATUS_DRAFT,
+                'items' => [],
+            ]);
+        }
+
+        $table = $wpdb->prefix . 'fp_pub_plans';
+        $row = $wpdb->get_row($wpdb->prepare("SELECT approvals_json, status FROM {$table} WHERE id = %d", $planId), ARRAY_A);
+
+        if (! is_array($row)) {
+            return new WP_Error(
+                'fp_publisher_invalid_plan',
+                esc_html__('Invalid plan identifier.', 'fp-publisher'),
+                ['status' => 404]
+            );
+        }
+
+        $events = self::formatApprovalEvents((string) ($row['approvals_json'] ?? '[]'));
+
+        return new WP_REST_Response([
+            'plan_id' => $planId,
+            'status' => self::normalizePlanStatus((string) ($row['status'] ?? PostPlan::STATUS_DRAFT)),
+            'items' => $events,
+        ]);
+    }
+
     public static function transitionPlanStatus(WP_REST_Request $request)
     {
         $planId = (int) $request->get_param('id');
@@ -723,16 +855,6 @@ final class Routes
         return new WP_REST_Response([
             'items' => [],
         ]);
-    }
-
-    public static function notImplemented(): WP_REST_Response
-    {
-        return new WP_REST_Response(
-            [
-                'message' => esc_html__('Endpoint not implemented yet.', 'fp-publisher'),
-            ],
-            202
-        );
     }
 
     private static function authorize(WP_REST_Request $request, string $capability)
@@ -978,6 +1100,262 @@ final class Routes
         return false;
     }
 
+    private static function formatPlanRow(array $row): ?array
+    {
+        $id = (int) ($row['id'] ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+
+        $channelsRaw = self::decodeJsonList((string) ($row['channel_set_json'] ?? '[]'));
+        $slotsRaw = self::decodeJsonList((string) ($row['slots_json'] ?? '[]'));
+
+        if ($channelsRaw === [] || $slotsRaw === []) {
+            return null;
+        }
+
+        $channels = array_values(array_filter(array_map(
+            static fn (mixed $channel): string => Channels::normalize(is_string($channel) ? $channel : ''),
+            $channelsRaw
+        ), static fn (string $channel): bool => $channel !== ''));
+
+        $slots = self::normalizeSlots($slotsRaw, $channels);
+
+        if ($channels === [] || $slots === []) {
+            return null;
+        }
+
+        $assets = self::decodeJsonList((string) ($row['assets_json'] ?? '[]'));
+        $template = self::decodeTemplate((string) ($row['template_json'] ?? '{}'));
+
+        return [
+            'id' => $id,
+            'brand' => trim((string) ($row['brand'] ?? '')),
+            'channels' => $channels,
+            'slots' => $slots,
+            'assets' => $assets,
+            'template' => $template,
+            'status' => self::normalizePlanStatus((string) ($row['status'] ?? PostPlan::STATUS_DRAFT)),
+            'ig_first_comment' => null,
+            'created_at' => self::formatDateField($row['created_at'] ?? null),
+            'updated_at' => self::formatDateField($row['updated_at'] ?? null),
+        ];
+    }
+
+    private static function formatDateField(mixed $value): ?string
+    {
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        try {
+            return Dates::ensure($value)->format(DateTimeInterface::ATOM);
+        } catch (InvalidArgumentException $exception) {
+            return null;
+        }
+    }
+
+    /**
+     * @param array<int, mixed> $slots
+     * @return array<int, array<string, mixed>>
+     */
+    private static function normalizeSlots(array $slots, array $planChannels = []): array
+    {
+        $normalized = [];
+        $fallbackChannel = '';
+        foreach ($planChannels as $planChannel) {
+            if ($planChannel !== '') {
+                $fallbackChannel = $planChannel;
+                break;
+            }
+        }
+
+        foreach ($slots as $slot) {
+            if (! is_array($slot)) {
+                continue;
+            }
+
+            $channel = Channels::normalize(isset($slot['channel']) ? (string) $slot['channel'] : '');
+            if ($channel === '' && $fallbackChannel !== '') {
+                $channel = $fallbackChannel;
+            }
+            $scheduledAt = isset($slot['scheduled_at']) ? (string) $slot['scheduled_at'] : '';
+
+            if ($channel === '' || $scheduledAt === '') {
+                continue;
+            }
+
+            try {
+                $scheduled = Dates::ensure($scheduledAt);
+            } catch (InvalidArgumentException $exception) {
+                continue;
+            }
+
+            $entry = [
+                'channel' => $channel,
+                'scheduled_at' => $scheduled->format(DateTimeInterface::ATOM),
+            ];
+
+            if (isset($slot['publish_until']) && is_string($slot['publish_until']) && $slot['publish_until'] !== '') {
+                try {
+                    $entry['publish_until'] = Dates::ensure($slot['publish_until'])->format(DateTimeInterface::ATOM);
+                } catch (InvalidArgumentException $exception) {
+                    // Ignore invalid publish_until values.
+                }
+            }
+
+            if (isset($slot['duration_minutes']) && is_numeric($slot['duration_minutes'])) {
+                $entry['duration_minutes'] = (int) $slot['duration_minutes'];
+            }
+
+            $normalized[] = $entry;
+        }
+
+        return $normalized;
+    }
+
+    private static function normalizePlanStatus(string $status): string
+    {
+        $status = strtolower(trim($status));
+
+        foreach (PostPlan::statuses() as $candidate) {
+            if ($status === $candidate) {
+                return $candidate;
+            }
+        }
+
+        return PostPlan::STATUS_DRAFT;
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     */
+    private static function planMatchesChannel(array $plan, string $channel): bool
+    {
+        $channels = isset($plan['channels']) && is_array($plan['channels']) ? $plan['channels'] : [];
+        if (in_array($channel, $channels, true)) {
+            return true;
+        }
+
+        $slots = isset($plan['slots']) && is_array($plan['slots']) ? $plan['slots'] : [];
+        foreach ($slots as $slot) {
+            if (is_array($slot) && isset($slot['channel']) && Channels::normalize((string) $slot['channel']) === $channel) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     */
+    private static function planMatchesMonth(array $plan, DateTimeImmutable $start, DateTimeImmutable $end): bool
+    {
+        $slots = isset($plan['slots']) && is_array($plan['slots']) ? $plan['slots'] : [];
+        foreach ($slots as $slot) {
+            if (! is_array($slot) || empty($slot['scheduled_at'])) {
+                continue;
+            }
+
+            try {
+                $scheduled = Dates::ensure((string) $slot['scheduled_at'], 'UTC');
+            } catch (InvalidArgumentException $exception) {
+                continue;
+            }
+
+            if ($scheduled >= $start && $scheduled < $end) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     */
+    private static function planPrimaryTimestamp(array $plan): int
+    {
+        $slots = isset($plan['slots']) && is_array($plan['slots']) ? $plan['slots'] : [];
+        $timestamps = [];
+
+        foreach ($slots as $slot) {
+            if (! is_array($slot) || empty($slot['scheduled_at'])) {
+                continue;
+            }
+
+            try {
+                $scheduled = Dates::ensure((string) $slot['scheduled_at']);
+            } catch (InvalidArgumentException $exception) {
+                continue;
+            }
+
+            $timestamps[] = $scheduled->getTimestamp();
+        }
+
+        if ($timestamps === []) {
+            return PHP_INT_MAX;
+        }
+
+        sort($timestamps);
+
+        return $timestamps[0];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function formatApprovalEvents(string $json): array
+    {
+        $decoded = json_decode($json, true);
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        $events = [];
+
+        foreach ($decoded as $index => $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $status = self::normalizePlanStatus((string) ($entry['to'] ?? PostPlan::STATUS_DRAFT));
+            $userId = isset($entry['user_id']) ? (int) $entry['user_id'] : 0;
+            $user = $userId > 0 ? get_user_by('id', (string) $userId) : null;
+            $displayName = $user && isset($user->display_name)
+                ? $user->display_name
+                : esc_html__('System', 'fp-publisher');
+
+            $occurredAt = null;
+            if (isset($entry['at']) && is_string($entry['at']) && $entry['at'] !== '') {
+                try {
+                    $occurredAt = Dates::ensure($entry['at'])->format(DateTimeInterface::ATOM);
+                } catch (InvalidArgumentException $exception) {
+                    $occurredAt = null;
+                }
+            }
+
+            if ($occurredAt === null) {
+                continue;
+            }
+
+            $events[] = [
+                'id' => (int) $index,
+                'status' => $status,
+                'from' => self::normalizePlanStatus((string) ($entry['from'] ?? PostPlan::STATUS_DRAFT)),
+                'note' => isset($entry['note']) && is_string($entry['note']) ? $entry['note'] : null,
+                'actor' => [
+                    'id' => $userId,
+                    'display_name' => $displayName,
+                ],
+                'occurred_at' => $occurredAt,
+            ];
+        }
+
+        return $events;
+    }
+
     private static function loadPlanFromDb(int $planId): ?array
     {
         global $wpdb;
@@ -993,26 +1371,7 @@ final class Routes
             return null;
         }
 
-        $channels = self::decodeJsonList((string) ($row['channel_set_json'] ?? '[]'));
-        $slots = self::decodeJsonList((string) ($row['slots_json'] ?? '[]'));
-
-        if ($channels === [] || $slots === []) {
-            return null;
-        }
-
-        $assets = self::decodeJsonList((string) ($row['assets_json'] ?? '[]'));
-        $template = self::decodeTemplate((string) ($row['template_json'] ?? '{}'));
-
-        return [
-            'id' => (int) ($row['id'] ?? 0),
-            'brand' => (string) ($row['brand'] ?? ''),
-            'channels' => $channels,
-            'slots' => $slots,
-            'assets' => $assets,
-            'template' => $template,
-            'status' => (string) ($row['status'] ?? PostPlan::STATUS_DRAFT),
-            'ig_first_comment' => null,
-        ];
+        return self::formatPlanRow($row);
     }
 
     /**

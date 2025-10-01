@@ -14,6 +14,9 @@ use WP_REST_Request;
 use function json_encode;
 use function strlen;
 use function str_repeat;
+use function wp_stub_register_user;
+use function wp_stub_rest_reset;
+use function wp_stub_rest_routes;
 
 final class RoutesTest extends TestCase
 {
@@ -119,5 +122,151 @@ final class RoutesTest extends TestCase
         $expected = Channels::normalize($longChannel);
         $this->assertSame($expected, $data['channel']);
         $this->assertLessThanOrEqual(64, strlen($expected));
+    }
+
+    public function testListPlansFiltersByBrandChannelAndMonth(): void
+    {
+        $template = [
+            'id' => 1,
+            'name' => 'Template',
+            'body' => 'Body',
+            'placeholders' => [],
+            'channel_overrides' => [],
+        ];
+
+        $this->wpdb->setPlan([
+            'id' => 1,
+            'brand' => 'alpha',
+            'status' => PostPlan::STATUS_READY,
+            'channel_set_json' => json_encode(['instagram']),
+            'slots_json' => json_encode([
+                ['channel' => 'instagram', 'scheduled_at' => '2024-01-15T10:00:00+01:00'],
+            ]),
+            'assets_json' => json_encode([]),
+            'template_json' => json_encode($template),
+            'created_at' => '2023-12-20 10:00:00',
+            'updated_at' => '2023-12-21 11:00:00',
+        ]);
+
+        $this->wpdb->setPlan([
+            'id' => 2,
+            'brand' => 'beta',
+            'status' => PostPlan::STATUS_READY,
+            'channel_set_json' => json_encode(['tiktok']),
+            'slots_json' => json_encode([
+                ['channel' => 'tiktok', 'scheduled_at' => '2024-02-01T08:00:00+01:00'],
+            ]),
+            'assets_json' => json_encode([]),
+            'template_json' => json_encode($template),
+            'created_at' => '2024-01-02 09:00:00',
+            'updated_at' => '2024-01-03 09:30:00',
+        ]);
+
+        $request = new WP_REST_Request();
+        $request->set_param('brand', 'alpha');
+        $request->set_param('channel', 'instagram');
+        $request->set_param('month', '2024-01');
+
+        $response = Routes::listPlans($request);
+
+        $this->assertInstanceOf(\WP_REST_Response::class, $response);
+        $data = $response->get_data();
+        $this->assertArrayHasKey('items', $data);
+        $this->assertCount(1, $data['items']);
+        $this->assertSame(1, $data['items'][0]['id']);
+        $this->assertSame('alpha', $data['items'][0]['brand']);
+        $this->assertSame(PostPlan::STATUS_READY, $data['items'][0]['status']);
+    }
+
+    public function testGetPlanApprovalsReturnsTimeline(): void
+    {
+        $this->wpdb->setPlan([
+            'id' => 5,
+            'brand' => 'alpha',
+            'status' => PostPlan::STATUS_READY,
+            'approvals_json' => json_encode([
+                [
+                    'user_id' => 7,
+                    'from' => PostPlan::STATUS_DRAFT,
+                    'to' => PostPlan::STATUS_READY,
+                    'at' => '2024-01-10T09:00:00+00:00',
+                ],
+            ]),
+            'channel_set_json' => json_encode(['instagram']),
+            'slots_json' => json_encode([
+                ['channel' => 'instagram', 'scheduled_at' => '2024-01-20T10:00:00+00:00'],
+            ]),
+            'assets_json' => json_encode([]),
+            'template_json' => json_encode([
+                'id' => 1,
+                'name' => 'Template',
+                'body' => 'Body',
+                'placeholders' => [],
+                'channel_overrides' => [],
+            ]),
+            'created_at' => '2024-01-01 08:00:00',
+            'updated_at' => '2024-01-10 09:00:00',
+        ]);
+
+        wp_stub_register_user([
+            'ID' => 7,
+            'user_login' => 'reviewer',
+            'user_nicename' => 'reviewer',
+            'display_name' => 'Jane Reviewer',
+            'user_email' => 'reviewer@example.com',
+        ]);
+
+        $request = new WP_REST_Request();
+        $request->set_param('id', 5);
+
+        $response = Routes::getPlanApprovals($request);
+
+        $this->assertInstanceOf(\WP_REST_Response::class, $response);
+        $data = $response->get_data();
+
+        $this->assertSame(5, $data['plan_id']);
+        $this->assertSame(PostPlan::STATUS_READY, $data['status']);
+        $this->assertCount(1, $data['items']);
+        $this->assertSame(PostPlan::STATUS_READY, $data['items'][0]['status']);
+        $this->assertSame('Jane Reviewer', $data['items'][0]['actor']['display_name']);
+    }
+
+    public function testRegisterCrudRoutesSkipsPostWhenCallbackMissing(): void
+    {
+        wp_stub_rest_reset();
+
+        $method = new \ReflectionMethod(Routes::class, 'registerCrudRoutes');
+        $method->setAccessible(true);
+
+        $method->invoke(null, 'accounts', 'fp_publisher_manage_accounts');
+
+        $routes = wp_stub_rest_routes();
+        $this->assertCount(1, $routes);
+        $this->assertSame('fp-publisher/v1', $routes[0]['namespace']);
+        $this->assertSame('/accounts', $routes[0]['route']);
+        $this->assertCount(1, $routes[0]['args']);
+        $this->assertSame('GET', $routes[0]['args'][0]['methods']);
+    }
+
+    public function testRegisterCrudRoutesIncludesPostWhenCallbackProvided(): void
+    {
+        wp_stub_rest_reset();
+
+        $method = new \ReflectionMethod(Routes::class, 'registerCrudRoutes');
+        $method->setAccessible(true);
+
+        $method->invoke(
+            null,
+            'links',
+            'fp_publisher_manage_links',
+            [Routes::class, 'getLinks'],
+            [Routes::class, 'saveLink']
+        );
+
+        $routes = wp_stub_rest_routes();
+        $this->assertCount(1, $routes);
+        $this->assertSame('/links', $routes[0]['route']);
+        $this->assertCount(2, $routes[0]['args']);
+        $this->assertSame('POST', $routes[0]['args'][1]['methods']);
     }
 }

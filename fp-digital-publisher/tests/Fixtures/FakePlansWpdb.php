@@ -14,6 +14,11 @@ class FakePlansWpdb extends \wpdb
      */
     private array $plans = [];
 
+    /**
+     * @var array<int, array<string, mixed>>
+     */
+    private array $assets = [];
+
     public function prepare(string $query, mixed ...$args): array
     {
         return [
@@ -32,6 +37,21 @@ class FakePlansWpdb extends \wpdb
         $id = (int) ($query['args'][0] ?? 0);
 
         return $this->plans[$id] ?? null;
+    }
+
+    public function get_results(mixed $prepared, mixed $output = ARRAY_A): array
+    {
+        $query = $this->normalizeQuery($prepared);
+        if ($query === null) {
+            return [];
+        }
+
+        $sql = $query['sql'];
+        if (is_string($sql) && str_contains($sql, 'fp_pub_assets')) {
+            return array_values($this->assets);
+        }
+
+        return array_values($this->plans);
     }
 
     public function update(string $table, array $data, array $where, array $format = [], array $whereFormat = []): int|false
@@ -54,6 +74,45 @@ class FakePlansWpdb extends \wpdb
         return 1;
     }
 
+    public function query($query)
+    {
+        $normalized = $this->normalizeQuery($query);
+        if ($normalized === null) {
+            return false;
+        }
+
+        $sql = $normalized['sql'];
+        if (! is_string($sql)) {
+            return false;
+        }
+
+        if (str_contains($sql, 'DELETE FROM ' . $this->prefix . 'fp_pub_assets')) {
+            if (preg_match('/IN \(([^)]+)\)/', $sql, $matches) === 1) {
+                $ids = array_map('intval', explode(',', $matches[1]));
+                foreach ($ids as $id) {
+                    unset($this->assets[$id]);
+                }
+            } else {
+                $this->assets = [];
+            }
+
+            return 1;
+        }
+
+        if (str_contains($sql, 'DELETE FROM ' . $this->prefix . 'fp_pub_plans')) {
+            if (preg_match('/IN \(([^)]+)\)/', $sql, $matches) === 1) {
+                $ids = array_map('intval', explode(',', $matches[1]));
+                foreach ($ids as $id) {
+                    unset($this->plans[$id]);
+                }
+            }
+
+            return 1;
+        }
+
+        return 0;
+    }
+
     public function table(): string
     {
         return $this->prefix . 'fp_pub_plans';
@@ -69,6 +128,18 @@ class FakePlansWpdb extends \wpdb
         }
 
         $this->plans[(int) $plan['id']] = $plan;
+    }
+
+    /**
+     * @param array<string, mixed> $asset
+     */
+    public function setAsset(array $asset): void
+    {
+        if (! isset($asset['id'])) {
+            throw new \InvalidArgumentException('Missing asset id.');
+        }
+
+        $this->assets[(int) $asset['id']] = $asset;
     }
 
     /**
