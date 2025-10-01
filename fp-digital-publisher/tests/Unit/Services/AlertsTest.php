@@ -6,8 +6,12 @@ namespace FP\Publisher\Tests\Unit\Services;
 
 use FP\Publisher\Infra\Options;
 use FP\Publisher\Services\Alerts;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Tests\Fixtures\FakeAlertsWpdb;
 use PHPUnit\Framework\TestCase;
+
+use function strlen;
+use function str_repeat;
 
 final class AlertsTest extends TestCase
 {
@@ -75,5 +79,23 @@ final class AlertsTest extends TestCase
 
         $state = Alerts::getState();
         $this->assertNotEmpty($state['weekly']['gaps']);
+    }
+
+    public function testRunWeeklyClampsChannelNames(): void
+    {
+        $longChannel = 'channel' . str_repeat('abc123', 20);
+        Options::set('channels', [$longChannel]);
+
+        $this->wpdb->planRows = [];
+
+        Alerts::runWeekly();
+
+        $state = Alerts::getState();
+        $this->assertNotEmpty($state['weekly']['gaps']);
+        $gap = $state['weekly']['gaps'][0];
+
+        $expected = Channels::normalize($longChannel);
+        $this->assertSame($expected, $gap['channel']);
+        $this->assertLessThanOrEqual(64, strlen($expected));
     }
 }

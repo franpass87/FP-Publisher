@@ -15,7 +15,7 @@ use function update_option;
 final class Migrations
 {
     private const OPTION_KEY = 'fp_publisher_db_version';
-    private const VERSION = '2024100101';
+    private const VERSION = '2024100102';
 
     public static function install(): void
     {
@@ -68,7 +68,7 @@ final class Migrations
                 updated_at DATETIME NOT NULL,
                 child_job_id BIGINT UNSIGNED DEFAULT NULL,
                 PRIMARY KEY  (id),
-                UNIQUE KEY idempotency (idempotency_key),
+                UNIQUE KEY idempotency (idempotency_key, channel),
                 KEY status (status),
                 KEY run_at (run_at),
                 KEY channel (channel),

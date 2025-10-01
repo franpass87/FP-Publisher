@@ -12,6 +12,7 @@ use FP\Publisher\Api\TikTok\Client as TikTokClient;
 use FP\Publisher\Api\YouTube\Client as YouTubeClient;
 use FP\Publisher\Infra\Options;
 use FP\Publisher\Services\Housekeeping;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use RuntimeException;
 use WP_Error;
@@ -107,7 +108,7 @@ final class Pipeline
      */
     public static function prepareUpload(array $payload)
     {
-        $channel = sanitize_key((string) ($payload['channel'] ?? ''));
+        $channel = Channels::normalize((string) ($payload['channel'] ?? ''));
         if ($channel === '') {
             return new WP_Error(
                 'fp_publisher_invalid_channel',

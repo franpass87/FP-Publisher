@@ -8,6 +8,7 @@ use FP\Publisher\Api\Meta\Client;
 use FP\Publisher\Api\Meta\MetaException;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Infra\Queue;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\TransientErrorClassifier;
 use Throwable;
@@ -38,7 +39,7 @@ final class Dispatcher
      */
     public static function handle(array $job): void
     {
-        $channel = sanitize_key((string) ($job['channel'] ?? ''));
+        $channel = Channels::normalize((string) ($job['channel'] ?? ''));
         if (! in_array($channel, [self::CHANNEL_FACEBOOK, self::CHANNEL_INSTAGRAM], true)) {
             return;
         }
@@ -140,7 +141,7 @@ final class Dispatcher
         $remoteId = $remoteId !== '' ? $remoteId : null;
 
         Queue::markCompleted($jobId, $remoteId);
-        do_action('fp_pub_published', sanitize_key((string) ($job['channel'] ?? self::CHANNEL_INSTAGRAM)), $remoteId, $job);
+        do_action('fp_pub_published', Channels::normalize((string) ($job['channel'] ?? self::CHANNEL_INSTAGRAM)), $remoteId, $job);
     }
 
     /**
@@ -187,7 +188,7 @@ final class Dispatcher
 
         try {
             Queue::enqueue(
-                sanitize_key((string) ($job['channel'] ?? self::CHANNEL_INSTAGRAM)),
+                Channels::normalize((string) ($job['channel'] ?? self::CHANNEL_INSTAGRAM)),
                 [
                     'type' => 'ig_first_comment',
                     'media_id' => $mediaId,

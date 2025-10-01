@@ -20,6 +20,7 @@ use FP\Publisher\Services\Links;
 use FP\Publisher\Services\Preflight;
 use FP\Publisher\Services\Scheduler;
 use FP\Publisher\Services\Trello\Ingestor as TrelloIngestor;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use InvalidArgumentException;
 use RuntimeException;
@@ -303,7 +304,7 @@ final class Routes
     public static function getBestTime(WP_REST_Request $request)
     {
         $brand = sanitize_text_field((string) $request->get_param('brand'));
-        $channel = sanitize_key((string) $request->get_param('channel'));
+        $channel = Channels::normalize((string) $request->get_param('channel'));
         $monthParam = $request->get_param('month');
         $month = is_string($monthParam) ? sanitize_text_field($monthParam) : Dates::now()->format('Y-m');
 
@@ -360,9 +361,9 @@ final class Routes
         }
 
         $channelParam = $request->get_param('channel');
-        $channel = is_string($channelParam) ? sanitize_key($channelParam) : '';
+        $channel = is_string($channelParam) ? Channels::normalize($channelParam) : '';
         if ($channel === '' && $plan->channels() !== []) {
-            $channel = sanitize_key((string) $plan->channels()[0]);
+            $channel = Channels::normalize((string) $plan->channels()[0]);
         }
 
         if ($channel === '') {
@@ -386,7 +387,7 @@ final class Routes
 
     public static function enqueueJob(WP_REST_Request $request)
     {
-        $channel = sanitize_key((string) $request->get_param('channel'));
+        $channel = Channels::normalize((string) $request->get_param('channel'));
 
         if ($channel === '') {
             return new WP_Error(
@@ -457,7 +458,7 @@ final class Routes
 
     public static function testJob(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        $channel = sanitize_key((string) $request->get_param('channel'));
+        $channel = Channels::normalize((string) $request->get_param('channel'));
         if ($channel === '') {
             return new WP_Error(
                 'fp_publisher_invalid_channel',
@@ -875,7 +876,7 @@ final class Routes
         array $payload,
         ?string $provided
     ): string {
-        $channelKey = sanitize_key($channel);
+        $channelKey = Channels::normalize($channel);
 
         if ($plan instanceof PostPlan) {
             $brand = sanitize_text_field($plan->brand());
@@ -922,7 +923,7 @@ final class Routes
     private static function scheduledAtForChannel(PostPlan $plan, string $channel): ?DateTimeImmutable
     {
         foreach ($plan->slots() as $slot) {
-            if (sanitize_key($slot->channel()) === $channel) {
+            if (Channels::normalize($slot->channel()) === $channel) {
                 return Dates::toUtc($slot->scheduledAt());
             }
         }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FP\Publisher\Tests\Unit;
 
 use FP\Publisher\Infra\Options;
+use FP\Publisher\Support\Channels;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -96,5 +97,80 @@ final class OptionsTest extends TestCase
 
         $this->assertIsArray($windows);
         $this->assertSame('UTC', $windows[0]['timezone']);
+    }
+
+    public function testBlackoutWindowChannelsAreClampedToQueueLimit(): void
+    {
+        $longChannel = 'channel' . str_repeat('abc123', 20);
+        Options::set('queue.blackout_windows', [
+            [
+                'channel' => $longChannel,
+                'start' => '09:00',
+                'end' => '10:00',
+                'timezone' => 'UTC',
+            ],
+        ]);
+
+        $windows = Options::get('queue.blackout_windows', []);
+
+        $this->assertIsArray($windows);
+        $this->assertSame(Channels::normalize($longChannel), $windows[0]['channel']);
+    }
+
+    public function testQueueIntegrationChannelConfigurationIsClamped(): void
+    {
+        $longChannel = 'channel' . str_repeat('xyz789', 20);
+
+        Options::set('integrations.queue.channels', [
+            $longChannel => [
+                'retry_backoff' => [
+                    'base' => 120,
+                    'factor' => 2.0,
+                    'max' => 600,
+                ],
+            ],
+        ]);
+
+        $channels = Options::get('integrations.queue.channels', []);
+        $normalized = Channels::normalize($longChannel);
+
+        $this->assertArrayHasKey($normalized, $channels);
+        $this->assertSame(120, $channels[$normalized]['retry_backoff']['base']);
+    }
+
+    public function testHttpIntegrationChannelConfigurationIsClamped(): void
+    {
+        $longChannel = 'channel' . str_repeat('lmn456', 20);
+
+        Options::set('integrations.http.channels', [
+            $longChannel => [
+                'timeout' => 45,
+            ],
+        ]);
+
+        $channels = Options::get('integrations.http.channels', []);
+        $normalized = Channels::normalize($longChannel);
+
+        $this->assertArrayHasKey($normalized, $channels);
+        $this->assertSame(45, $channels[$normalized]['timeout']);
+    }
+
+    public function testChannelsOptionNormalizesAndDeduplicatesValues(): void
+    {
+        $longChannel = 'channel' . str_repeat('rst789', 20);
+
+        Options::set('channels', [
+            ' Meta Facebook ',
+            'meta-facebook',
+            '###',
+            $longChannel,
+        ]);
+
+        $channels = Options::get('channels', []);
+
+        $this->assertSame([
+            Channels::normalize(' Meta Facebook '),
+            Channels::normalize($longChannel),
+        ], $channels);
     }
 }

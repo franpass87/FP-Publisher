@@ -4,17 +4,19 @@ declare(strict_types=1);
 
 namespace FP\Publisher\Support;
 
+use FP\Publisher\Support\Channels;
+
 use function array_filter;
 use function array_is_list;
 use function array_map;
 use function implode;
+use function in_array;
 use function is_array;
 use function is_scalar;
 use function is_string;
 use function preg_replace;
 use function preg_replace_callback;
 use function rtrim;
-use function sanitize_key;
 use function sanitize_title;
 use function str_replace;
 use function strlen;
@@ -118,14 +120,14 @@ final class Templating
 
     private static function applyChannelTransforms(string $value, string $channel): string
     {
-        $channel = sanitize_key($channel);
+        $channel = Channels::normalize($channel);
         $value = trim($value);
 
         if ($value === '') {
             return '';
         }
 
-        if ($channel === 'instagram') {
+        if (in_array($channel, ['instagram', 'meta_instagram', 'meta_instagram_stories'], true)) {
             $value = preg_replace_callback(
                 '/https?:\/\/\S+/i',
                 static function (array $matches): string {
@@ -164,8 +166,11 @@ final class Templating
             'twitter' => 280,
             'x' => 280,
             'instagram' => 2200,
+            'meta_instagram' => 2200,
+            'meta_instagram_stories' => 2200,
             'tiktok' => 2200,
             'facebook' => 63206,
+            'meta_facebook' => 63206,
             'linkedin' => 3000,
             'google_business' => 1500,
             'youtube' => 5000,

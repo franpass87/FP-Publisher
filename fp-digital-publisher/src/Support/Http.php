@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FP\Publisher\Support;
 
 use FP\Publisher\Infra\Options;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Logging\Logger;
 use FP\Publisher\Support\Strings;
 use RuntimeException;
@@ -16,7 +17,6 @@ use function is_array;
 use function is_numeric;
 use function is_string;
 use function json_decode;
-use function sanitize_key;
 use function sprintf;
 use function strtoupper;
 use function wp_remote_request;
@@ -143,7 +143,7 @@ final class Http
 
         foreach ($context as $key => $value) {
             if ($key === 'channel' || $key === 'integration') {
-                $normalized[$key] = sanitize_key((string) $value);
+                $normalized[$key] = Channels::normalize((string) $value);
                 continue;
             }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FP\Publisher\Infra;
 
 use DateTimeZone;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Logging\Logger;
 use RuntimeException;
 use Throwable;
@@ -20,6 +21,7 @@ use function function_exists;
 use function get_option;
 use function in_array;
 use function is_array;
+use function is_scalar;
 use function is_string;
 use function preg_match;
 use function preg_replace;
@@ -191,7 +193,7 @@ final class Options
     {
         return match ($segments[0] ?? '') {
             'brands' => array_values(array_filter(array_map('sanitize_text_field', (array) $value))),
-            'channels' => array_values(array_filter(array_map('sanitize_text_field', (array) $value))),
+            'channels' => self::sanitizeChannelList($value),
             'alert_emails' => array_values(array_filter(array_map(
                 static fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL) ? sanitize_email($email) : null,
                 (array) $value
@@ -221,6 +223,24 @@ final class Options
         }
 
         return $value;
+    }
+
+    private static function sanitizeChannelList(mixed $value): array
+    {
+        $normalized = [];
+
+        foreach ((array) $value as $channel) {
+            $slug = Channels::normalize(is_scalar($channel) ? (string) $channel : '');
+            if ($slug === '') {
+                continue;
+            }
+
+            if (! isset($normalized[$slug])) {
+                $normalized[$slug] = $slug;
+            }
+        }
+
+        return array_values($normalized);
     }
 
     private static function sanitizeQueueValue(array $segments, mixed $value): mixed
@@ -268,7 +288,7 @@ final class Options
                 continue;
             }
 
-            $channel = isset($window['channel']) ? sanitize_key((string) $window['channel']) : '';
+            $channel = isset($window['channel']) ? Channels::normalize((string) $window['channel']) : '';
             $tz = isset($window['timezone']) && is_string($window['timezone']) && $window['timezone'] !== ''
                 ? self::sanitizeBlackoutWindowTimezone($window['timezone'], $timezone, $channel !== '' ? $channel : null)
                 : $timezone;
@@ -452,7 +472,7 @@ final class Options
         $channels = [];
 
         foreach ((array) $value as $channel => $config) {
-            $key = sanitize_key((string) $channel);
+            $key = Channels::normalize((string) $channel);
             if ($key === '') {
                 continue;
             }
@@ -478,7 +498,7 @@ final class Options
         $channels = [];
 
         foreach ((array) $value as $channel => $config) {
-            $key = sanitize_key((string) $channel);
+            $key = Channels::normalize((string) $channel);
             if ($key === '' || ! is_array($config)) {
                 continue;
             }

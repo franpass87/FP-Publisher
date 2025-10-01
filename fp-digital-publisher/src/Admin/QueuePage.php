@@ -6,6 +6,7 @@ namespace FP\Publisher\Admin;
 
 use FP\Publisher\Infra\Capabilities;
 use FP\Publisher\Infra\Queue;
+use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Strings;
 
@@ -39,7 +40,8 @@ final class QueuePage
         }
 
         $status = isset($_GET['status']) ? sanitize_key((string) wp_unslash($_GET['status'])) : '';
-        $channel = isset($_GET['channel']) ? sanitize_key((string) wp_unslash($_GET['channel'])) : '';
+        $channelParam = isset($_GET['channel']) ? (string) wp_unslash($_GET['channel']) : '';
+        $channel = Channels::normalize($channelParam);
         $search = isset($_GET['s']) ? (string) wp_unslash($_GET['s']) : '';
         $page = isset($_GET['paged']) ? max(1, (int) $_GET['paged']) : 1;
 

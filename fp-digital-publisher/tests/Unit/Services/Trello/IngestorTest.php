@@ -6,11 +6,13 @@ namespace FP\Publisher\Tests\Unit\Services\Trello;
 
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Services\Trello\Ingestor;
+use FP\Publisher\Support\Channels;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 use function json_encode;
+use function strlen;
 use function wp_stub_http_last_request;
 use function wp_stub_http_queue_response;
 use function wp_stub_http_reset;
@@ -132,6 +134,27 @@ final class IngestorTest extends TestCase
             'list_id' => 'list-xyz',
             'card_ids' => ['card-9'],
         ]);
+    }
+
+    public function testIngestClampsChannelNamesToQueueLimit(): void
+    {
+        $this->queueTrelloResponse();
+
+        $longChannel = 'channel' . str_repeat('abc123', 20);
+
+        $plans = Ingestor::ingest([
+            'api_key' => 'key-123',
+            'token' => 'token-456',
+            'brand' => 'Brand ACME',
+            'channel' => $longChannel,
+            'list_id' => 'list-xyz',
+            'card_ids' => ['card-1'],
+        ]);
+
+        self::assertNotEmpty($plans);
+        $expectedChannel = Channels::normalize($longChannel);
+        self::assertSame($expectedChannel, $plans[0]->channels()[0]);
+        self::assertLessThanOrEqual(64, strlen($expectedChannel));
     }
 
     private function queueTrelloResponse(): void
