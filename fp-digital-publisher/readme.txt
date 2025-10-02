@@ -4,7 +4,7 @@ Donate link: https://francescopasseri.com
 Tags: social media, scheduling, content calendar, approvals, queue
 Requires at least: 6.4
 Tested up to: 6.6
-Requires PHP: 8.1
+Requires PHP: 8.0
 Stable tag: 0.1.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
