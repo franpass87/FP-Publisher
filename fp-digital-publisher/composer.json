@@ -1,13 +1,18 @@
 {
     "name": "francescopasseri/fp-digital-publisher",
-    "description": "FP Digital Publisher WordPress plugin.",
+    "description": "Centralizes scheduling and publishing across WordPress and social channels with queue-driven workflows.",
     "type": "wordpress-plugin",
     "license": "MIT",
+    "homepage": "https://francescopasseri.com",
+    "support": {
+        "issues": "https://francescopasseri.com"
+    },
     "authors": [
         {
             "name": "Francesco Passeri",
             "email": "info@francescopasseri.com",
-            "homepage": "https://francescopasseri.com"
+            "homepage": "https://francescopasseri.com",
+            "role": "Developer"
         }
     ],
     "require": {
@@ -35,7 +40,10 @@
     "scripts": {
         "test": "phpunit --configuration=phpunit.xml.dist --testdox",
         "test:integration": "phpunit --configuration=phpunit.integration.xml.dist --testdox",
-        "make-pot": "wp --allow-root i18n make-pot . languages/fp-publisher.pot --exclude=vendor,node_modules,tests,dist"
+        "make-pot": "wp --allow-root i18n make-pot . languages/fp-publisher.pot --exclude=vendor,node_modules,tests,dist",
+        "sync:author": "node tools/sync-author-metadata.js --apply=${APPLY:-false}",
+        "sync:docs": "node tools/sync-author-metadata.js --docs --apply=${APPLY:-false}",
+        "changelog:from-git": "conventional-changelog -p angular -i CHANGELOG.md -s || true"
     },
     "config": {
         "preferred-install": "dist",

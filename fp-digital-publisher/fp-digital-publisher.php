@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: FP Digital Publisher
- * Description: Omnichannel digital publishing orchestrator for social and owned media workflows.
+ * Description: Centralizes scheduling and publishing across WordPress and social channels with queue-driven workflows and SPA tools.
  * Version: 0.1.1
  * Author: Francesco Passeri
  * Author URI: https://francescopasseri.com

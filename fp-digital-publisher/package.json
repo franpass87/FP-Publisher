@@ -1,13 +1,22 @@
 {
   "name": "fp-digital-publisher",
   "version": "0.1.0",
-  "description": "Development tooling for the FP Digital Publisher plugin.",
+  "description": "Build tooling for the FP Digital Publisher plugin.",
   "private": true,
   "scripts": {
     "build": "node tools/build.mjs",
-    "dev": "node tools/build.mjs --watch"
+    "dev": "node tools/build.mjs --watch",
+    "sync:author": "node tools/sync-author-metadata.js --apply=${APPLY:-false}",
+    "sync:docs": "node tools/sync-author-metadata.js --docs --apply=${APPLY:-false}",
+    "changelog:from-git": "conventional-changelog -p angular -i CHANGELOG.md -s || true"
+  },
+  "author": "Francesco Passeri <info@francescopasseri.com> (https://francescopasseri.com)",
+  "homepage": "https://francescopasseri.com",
+  "bugs": {
+    "url": "https://francescopasseri.com"
   },
   "devDependencies": {
+    "conventional-changelog-cli": "^3.0.0",
     "esbuild": "^0.23.0"
   }
 }
