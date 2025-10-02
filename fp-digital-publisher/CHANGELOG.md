@@ -1,30 +1,29 @@
 # Changelog
-
-Tutte le modifiche rilevanti al plugin FP Digital Publisher saranno documentate in questo file.
+All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
-- Avviata implementazione playbook Codex con tracciamento stato e branch dedicato.
-- Ampliate suite di test PHPUnit con stub WordPress e client fittizi per coprire coda, scheduler, dispatcher canali e supporto.
-- Preparata suite d'integrazione WordPress con script di bootstrap, test su attivazione/cron/capabilities/rewrite e workflow CI dedicato.
-- Completata l'esecuzione locale della suite WP con installer basato su sorgenti GitHub, configurazione MariaDB e callback plugin compatibili con l'ambiente di test.
-- Introdotto `TransientErrorClassifier` per distinguere errori transitori WP/API e aggiornati i dispatcher con test su deadlock, timeout e codici HTTP 4xx/5xx.
-- Consolidato l'housekeeping del database con tabella archivio, indici ottimizzati, retention configurabile e cron giornaliero che archivia job e ripulisce asset scaduti.
-- Evoluto l'ingest Trello con selezione multipla delle card, supporto OAuth facoltativo, anteprima via REST e modal dedicata che importa le bozze aggiornando automaticamente il calendario.
-- Completata la localizzazione: dominio testuale `fp-publisher`, stringhe admin/SPA in inglese, tooling WP-CLI per generare POT/PO e pacchetto `it_IT` mantenuto sui sorgenti (POT/PO) con compilazione MO demandata alla fase di build.
-- Aggiunta documentazione strutturata: guide utente per calendario/approvazioni/alert, guide developer su architettura/DB/QA e FAQ di supporto collegate al README.
-- Inseriti i nuovi hook `fp_pub_payload_pre_send`, `fp_pub_retry_decision` e l'azione `fp_pub_published`, con documentazione aggiornata e test a copertura dell'estendibilità.
-- Reso l'asset pipeline più resiliente con cron orario che elimina file e record scaduti e cache dei termini di categorie/tag con TTL configurabile per ridurre le query WordPress.
-- Rimossi artefatti generati dal controllo versione (es. `composer.lock`) e aggiornate le regole di ignore per evitare il tracciamento di file binari.
+### Changed
+- Prepared repeatable scripts to sync author metadata and documentation across plugin assets.
 
-- Automatizzato il rilascio con workflow GitHub Actions che copre test PHP 8.1-8.3, lint PHPCS e crea lo ZIP tramite script dedicato.
+## [0.1.1] - 2025-10-01
+### Added
+- Smart alerts that aggregate expiring tokens, failed jobs, and schedule gaps with daily and weekly cron dispatches.【F:fp-digital-publisher/src/Services/Alerts.php†L37-L111】
+- Short link management with rewrite endpoints, REST helpers, and analytics metadata stored under `fp_pub_links`.【F:fp-digital-publisher/src/Services/Links.php†L14-L188】
+- WP-CLI queue command for listing and running jobs directly from the terminal.【F:fp-digital-publisher/src/Support/Cli/QueueCommand.php†L20-L122】
+- Build tooling for the admin SPA using esbuild with watch and production modes.【F:fp-digital-publisher/tools/build.mjs†L1-L78】
 
-- Verificato il completamento del playbook Codex: tutti gli step risultano chiusi e pronti per la PR finale.
-## [0.1.0] - In sviluppo
-- Impostazione iniziale del progetto.
-- Connettore Meta con pubblicazione Facebook/Instagram, anteprima payload e primo commento automatico.
-- Connettore Google Business Profile con gestione OAuth, elenco sedi e pubblicazione post con CTA e media.
-- Publisher WordPress con gestione multisite, template dinamici, categorie/tag/featured e builder UTM.
-- Motore di templating avanzato con preset UTM per canale, servizio di preflight qualità e API REST di verifica pianificazioni.
-- Asset pipeline con upload diretto Meta/TikTok/YouTube o fallback locale con pulizia programmata, validatori media e ingest Trello per creare piani draft da board/list.
-- Interfaccia calendario/kanban con suggerimenti best-time, workflow approvazioni commentabile e nuove rotte REST per status e commenti.
-- Smart alerts quotidiani/settimanali, servizio short link con rewrite `/go/`, replay job falliti via REST e documentazione connettori/UTM aggiornata.
+### Changed
+- Normalized scheduler blackout handling and channel concurrency checks when evaluating runnable jobs.【F:fp-digital-publisher/src/Services/Scheduler.php†L20-L83】
+- Hardened payload trimming helpers to better support multibyte strings when preparing connector payloads.【F:fp-digital-publisher/src/Support/Strings.php†L19-L84】
+
+### Fixed
+- Removed placeholder REST route implementations and replaced them with capability-aware endpoints.【F:fp-digital-publisher/src/Api/Routes.php†L72-L206】
+
+## [0.1.0] - 2025-09-30
+### Added
+- Core loader that bootstraps migrations, options, capabilities, admin assets, REST routes, queue services, connectors, and CLI integration on plugin load.【F:fp-digital-publisher/src/Loader.php†L7-L47】
+- Omnichannel dispatchers for Meta, TikTok, YouTube, Google Business Profile, and WordPress with retry hooks and published events.【F:fp-digital-publisher/src/Services/Meta/Dispatcher.php†L34-L178】【F:fp-digital-publisher/src/Services/TikTok/Dispatcher.php†L27-L64】【F:fp-digital-publisher/src/Services/YouTube/Dispatcher.php†L27-L64】【F:fp-digital-publisher/src/Services/GoogleBusiness/Dispatcher.php†L27-L61】【F:fp-digital-publisher/src/Services/WordPress/Dispatcher.php†L24-L62】
+- Queue, archive, asset, plan, token, comment, and short link tables managed via automated migrations.【F:fp-digital-publisher/src/Infra/DB/Migrations.php†L17-L181】
+- Admin SPA with custom roles, capabilities, menu entries, and asset pipeline to manage calendars, approvals, templates, alerts, and logs.【F:fp-digital-publisher/src/Admin/Menu.php†L26-L70】【F:fp-digital-publisher/src/Admin/Assets.php†L15-L68】【F:fp-digital-publisher/src/Infra/Capabilities.php†L18-L89】
+- REST API surface and queue worker infrastructure with cron-based execution and retry orchestration.【F:fp-digital-publisher/src/Api/Routes.php†L72-L206】【F:fp-digital-publisher/src/Services/Worker.php†L17-L47】
+- Documentation for connectors, scheduler, queue schema, and user workflows under `docs/`.

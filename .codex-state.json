@@ -1,20 +1,18 @@
 {
-  "phase": "fix_complete",
-  "started_at": "2025-10-01T20:47:51+00:00",
-  "last_run_at": "2025-10-01T21:39:15Z",
-  "repo_root": ".",
-  "file_manifest_hash": "74489831ff48080e11bd6698f11fb2a189e5cc6df40c77b9d7e29ec973781798",
-  "issues_total": 5,
-  "issues_resolved": [
-    "ISSUE-001",
-    "ISSUE-004",
-    "ISSUE-002",
-    "ISSUE-003",
-    "ISSUE-005"
+  "task": "sync-author-and-docs",
+  "version": 1,
+  "progress_percent": 100,
+  "steps_completed": [
+    "scan",
+    "context",
+    "description",
+    "metadata",
+    "readme-sync",
+    "changelog",
+    "docs",
+    "lint",
+    "report"
   ],
-  "issues_remaining": [],
-  "issues_fixed": 5,
-  "last_fixed_issue": "ISSUE-005",
-  "batches_completed": 4,
-  "last_commit": "8e9c1778ddaba955e580f33d019d028dd1e94dff"
+  "dry_run": false,
+  "last_run": "2025-10-02T09:27:46+00:00"
 }

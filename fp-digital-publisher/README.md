@@ -1,171 +1,91 @@
 # FP Digital Publisher
 
-FP Digital Publisher è un plugin WordPress progettato per orchestrare campagne editoriali su canali social e owned media con un approccio modulare e scalabile.
+> <!-- sync:short-description:start -->
+Centralizes scheduling and publishing across WordPress and social channels with queue-driven workflows and SPA tools.
+<!-- sync:short-description:end -->
 
-## Table of contents
+## Plugin overview
 
-- [Requisiti](#requisiti)
-- [Installazione](#installazione)
-- [Delta della fase](#delta-della-fase)
-- [Sviluppo locale](#sviluppo-locale)
-- [Testing](#testing)
-- [UI Polish Delta](#ui-polish-delta)
-- [UI Kit](#ui-kit)
-- [Documentazione](#documentazione)
-- [FAQ](#faq)
-- [Release process](#release-process)
+| Field | Value |
+| --- | --- |
+| **Name** | FP Digital Publisher |
+| **Version** | <!-- sync:version -->0.1.1<!-- /sync:version --> |
+| **Author** | <!-- sync:author -->[Francesco Passeri](https://francescopasseri.com) <info@francescopasseri.com><!-- /sync:author --> |
+| **Author URI** | <!-- sync:author-uri -->https://francescopasseri.com<!-- /sync:author-uri --> |
+| **Plugin Homepage** | <!-- sync:plugin-uri -->https://francescopasseri.com<!-- /sync:plugin-uri --> |
+| **Requires WordPress** | <!-- sync:wp-requires -->6.4<!-- /sync:wp-requires --> |
+| **Tested up to** | <!-- sync:wp-tested -->6.6<!-- /sync:wp-tested --> |
+| **Requires PHP** | <!-- sync:php-requires -->8.1<!-- /sync:php-requires --> |
+| **License** | MIT |
+| **Text Domain** | fp-publisher |
 
-## Requisiti
-- WordPress >= 6.4
-- PHP >= 8.1
+## What it does
 
-## Installazione
-1. Clonare il repository nella directory `wp-content/plugins/`.
-2. Installare le dipendenze PHP tramite Composer (in fasi successive).
-3. Attivare il plugin dalla dashboard di WordPress.
+FP Digital Publisher orchestrates omnichannel campaign planning with a resilient job queue, editorial calendar, approval workflows, and connectors for Meta, TikTok, YouTube, Google Business Profile, and WordPress publishing targets. The plugin exposes REST endpoints, cron-based workers, and a SPA-driven admin to keep social and owned media in sync.
 
-## Delta della fase
-- Fase 0: bootstrap del plugin, struttura iniziale del progetto e autoloader PSR-4.
-- Fase 1: gestione opzioni sicure, ruoli/capacità dedicate e infrastruttura i18n con avvisi critici.
-- Fase 2: migrazioni database per coda, asset, piani, token, commenti e short-link con documentazione schema.
-- Fase 3: shell SPA amministrativa con menu dedicato, asset sorgente e namespace REST iniziale.
-- Fase 4: modelli dominio pianificazione, utility di supporto (array/date/validazione/sicurezza/http) e stub test unitari.
-- Fase 5: servizio scheduler con coda resilienti, worker cron, API REST di enqueue/test e specifica tecnica della queue.
-- Fase 6: connettore Meta (Facebook/Instagram) con modalità anteprima e catena primo commento IG.
-- Fase 7: connettore TikTok con upload chunked, gestione token/refresh e pubblicazione via coda.
-- Fase 8: connettore YouTube con upload resumable, gestione Shorts, scheduling tramite publishAt ed errori normalizzati.
-- Fase 9: connettore Google Business Profile con post WHAT'S NEW/EVENT/OFFER, gestione media e CTA, elenco sedi e token refresh.
-- Fase 10: publisher WordPress con templating titolo/slug/estratto, UTM builder, categorie/tag/featured e supporto multisite.
-- Fase 11: motore template con placeholder contestuali, preset UTM per canale, servizio di preflight con punteggio qualità e blocco scheduling da REST.
-- Fase 12: asset pipeline con upload diretto verso Meta/YouTube/TikTok o fallback locale sicuro con TTL, validatori media per ratio/durata/bitrate e ingest Trello per generare piani draft da board/list selezionate.
-- Fase 13: interfaccia calendario/kanban con suggerimenti orari, workflow approvazioni con commenti menzionabili e nuove API REST dedicate.
-- Fase 14: smart alerts giornalieri/settimanali, servizio short link con rewrite `/go/`, replay job falliti con idempotenza estesa e nuova documentazione di hardening.
+## Features
 
-## Sviluppo locale
-- Eseguire `composer install` per predisporre il bootstrap dei test PHP.
-- Configurare un ambiente WordPress >= 6.4 e attivare il plugin dalla dashboard.
-- Installare le dipendenze JavaScript con `npm install` ed eseguire `npm run dev` per lo sviluppo (watch) o `npm run build` per generare i bundle ESM in `assets/dist/`.
+- Queue and scheduler that claim runnable jobs, honor channel blackouts, and trigger channel dispatchers via the `fp_publisher_process_job` hook.【F:fp-digital-publisher/src/Services/Scheduler.php†L20-L83】【F:fp-digital-publisher/src/Services/Worker.php†L17-L47】
+- Connectors for Meta, TikTok, YouTube, Google Business Profile, and WordPress that filter payloads, retry transient errors, and emit published events.【F:fp-digital-publisher/src/Services/Meta/Dispatcher.php†L34-L118】【F:fp-digital-publisher/src/Services/TikTok/Dispatcher.php†L27-L64】【F:fp-digital-publisher/src/Services/YouTube/Dispatcher.php†L27-L64】【F:fp-digital-publisher/src/Services/GoogleBusiness/Dispatcher.php†L27-L61】【F:fp-digital-publisher/src/Services/WordPress/Dispatcher.php†L24-L62】
+- Short link service with rewrite endpoint `/go/<slug>`, REST helpers, and UTM presets to support owned media tracking.【F:fp-digital-publisher/src/Services/Links.php†L14-L118】
+- Alerts subsystem that raises emails for expiring tokens, failed jobs, and scheduling gaps with daily and weekly cron schedules.【F:fp-digital-publisher/src/Services/Alerts.php†L37-L111】
+- Admin SPA assets, menu entries, and capabilities bootstrap to segregate planning, approvals, templates, alerts, and logs per role.【F:fp-digital-publisher/src/Admin/Menu.php†L26-L70】【F:fp-digital-publisher/src/Admin/Notices.php†L25-L56】【F:fp-digital-publisher/src/Infra/Capabilities.php†L18-L89】
+- REST API surface that secures CRUD operations for plans, jobs, templates, alerts, settings, and link management behind custom capabilities.【F:fp-digital-publisher/src/Api/Routes.php†L72-L206】
+- WP-CLI command `wp fp-publisher queue` to inspect and run jobs from the terminal.【F:fp-digital-publisher/src/Support/Cli/QueueCommand.php†L20-L113】
 
-## Testing
-- `composer validate` per verificare la correttezza del `composer.json`.
-- `composer test` (dopo `composer install`) per avviare gli stub di test PHP con bootstrap e output TestDox (`./vendor/bin/phpunit --bootstrap tests/bootstrap.php --testdox tests`).
+## Installation
 
-## Operatività
-- Logging strutturato: tutte le code e i connettori utilizzano un logger PSR-3 centralizzato (`Support\Logging\Logger`) che arricchisce i messaggi con contesto (ID job, canale, stato HTTP) instradandoli verso `error_log`.
-- WP-CLI: disponibili i comandi `wp fp-publisher queue list` (filtri per stato, canale, ricerca) e `wp fp-publisher queue run --limit=<n>` per processare manualmente i job schedulati.
-- Dashboard coda: voce di menu **Queue** con tabella paginata, filtri e ricerca per indagare rapidamente job falliti o in attesa.
-- Timeout e retry configurabili: nuove chiavi `integrations.http` e `integrations.queue` nelle opzioni permettono override per canale di timeout, backoff e strategie di retry.
+1. Upload the `fp-digital-publisher` directory to `wp-content/plugins/` or clone the repository in place.
+2. Install PHP dependencies with `composer install` and JavaScript tooling with `npm install` inside the plugin folder.
+3. Activate the plugin from **Plugins → Installed Plugins**.
+4. Visit **FP Publisher → Settings** to configure channel credentials, blackout windows, and queue preferences.
 
-## UI Polish Delta
-- Fase U0: introdotti design token condivisi, palette e reset controlli di base per l'SPA amministrativa.
-- Fase U1: aggiunti componenti riutilizzabili (badge di stato, toolbar sticky, empty state, skeleton, tooltip, modal e toast host) con styling coerente e bus notifiche minimale.
-- Fase U2: migliorata la pagina Calendario con toggle densità, schede drag con handle, skeleton di caricamento, azione "Suggerisci orario" e CTA "Importa da Trello" per le giornate vuote.
-- Fase U3: arricchito il Composer con stepper di avanzamento, chip Preflight interattivo, anteprima hashtag nel primo commento e validazioni inline con tooltip bloccanti.
-- Fase U4: introdotto workflow approvazioni con timeline, CTA "Approva e invia", gestione richieste modifiche e commenti con menzioni @ e annunci aria-live.
-- Fase U5: rifinite le viste Alert & Log con tab tematiche, filtri brand/canale, azioni contestuali e copia rapida di payload e stack con badge di stato.
-- Fase U6: rinnovata la gestione Short Link con tabella compatta, menu azioni (apri/copia/modifica/disattiva) e modal di creazione/modifica con validazione URL e anteprima UTM.
-- Fase U7: introdotto focus outline coerente, attributi aria-expanded/controls sui toggle, annunci polite per Preflight e Toast, oltre a centralizzare le stringhe UI Short Link/Composer nelle funzioni di traduzione.
-- Fase U8: aggiunta vetrina demo dei componenti UI, guida documentale e sezione README “UI Kit” con snippet di utilizzo.
+## Usage
 
-## UI Kit
+### Plan and approve content
+- Create editorial plans through the SPA calendar, assign channels, schedule run dates, and leverage approval workflows enforced by custom capabilities.【F:fp-digital-publisher/src/Services/Approvals.php†L40-L83】
+- Use the preflight APIs and templating service to validate payloads before enqueueing jobs.【F:fp-digital-publisher/src/Api/Routes.php†L517-L618】
 
-La libreria UI dell’admin SPA offre token condivisi e componenti accessibili riutilizzabili. Di seguito alcuni esempi rapidi.
+### Monitor the queue
+- Inspect queue jobs, archive history, and rerun failures with the built-in log pages and CLI helpers.【F:fp-digital-publisher/src/Infra/Queue.php†L667-L693】【F:fp-digital-publisher/src/Support/Cli/QueueCommand.php†L20-L122】
+- Configure cron cadence and concurrency through plugin options to balance throughput and rate limits.【F:fp-digital-publisher/src/Services/Worker.php†L30-L47】【F:fp-digital-publisher/src/Infra/Options.php†L41-L108】
 
-### StatusBadge
+### Manage connectors and links
+- Refresh OAuth tokens, monitor expiring credentials, and receive alerts when intervention is required.【F:fp-digital-publisher/src/Services/Alerts.php†L89-L111】
+- Create short links with optional UTM payloads and route them through `/go/<slug>` for campaign tracking.【F:fp-digital-publisher/src/Services/Links.php†L35-L118】
 
-```tsx
-import StatusBadge from 'assets/ui/components/StatusBadge';
+## Hooks and filters
 
-export const Example = () => <StatusBadge status="approved" />;
-```
+| Hook | Type | Description |
+| --- | --- | --- |
+| `fp_publisher_process_job` | action | Fired for each runnable job claimed by the scheduler before dispatching to connectors.【F:fp-digital-publisher/src/Services/Worker.php†L41-L47】 |
+| `fp_pub_payload_pre_send` | filter | Allows last-minute payload adjustments for any channel dispatcher.【F:fp-digital-publisher/src/Services/Meta/Dispatcher.php†L34-L52】 |
+| `fp_pub_retry_decision` | filter | Gives integrators control over retry policies after transient errors.【F:fp-digital-publisher/src/Services/TikTok/Dispatcher.php†L46-L64】 |
+| `fp_pub_published` | action | Emits successful publish events with channel context and remote IDs.【F:fp-digital-publisher/src/Services/Meta/Dispatcher.php†L98-L118】 |
+| `fp_publisher_assets_ttl` | filter | Overrides media retention in the asset pipeline before cleanup runs.【F:fp-digital-publisher/src/Services/Assets/Pipeline.php†L43-L114】 |
+| `fp_publisher_role_capabilities` | filter | Extends capabilities assigned to custom FP Publisher roles.【F:fp-digital-publisher/src/Infra/Capabilities.php†L18-L89】 |
 
-_Screenshot: badge di stato nelle varianti principali_
+## Support
 
-### StickyToolbar + DensityToggle
+- Documentation: [docs/](docs/) inside the repository, including overview, architecture, and FAQ guides.
+- Issues & feedback: [https://francescopasseri.com](https://francescopasseri.com) • email [info@francescopasseri.com](mailto:info@francescopasseri.com).
 
-```tsx
-import { useState } from 'react';
-import StickyToolbar from 'assets/ui/components/StickyToolbar';
-import DensityToggle from 'assets/ui/components/DensityToggle';
+## Changelog
 
-export const ToolbarExample = () => {
-  const [mode, setMode] = useState<'compact' | 'comfort'>('comfort');
+See [CHANGELOG.md](CHANGELOG.md) for a complete, SemVer-compatible history.
 
-  return (
-    <StickyToolbar>
-      <h2>Elenco contenuti</h2>
-      <DensityToggle mode={mode} onChange={setMode} />
-    </StickyToolbar>
-  );
-};
-```
+## Development
 
-_Screenshot: toolbar con toggle densità sopra un elenco_
+- `composer install` then `composer test` and `composer test:integration` for PHP suites.
+- `npm install` then `npm run dev` for the SPA development server or `npm run build` for production bundles.
+- `npm run sync:author` / `npm run sync:docs` to reapply metadata and description updates.
+- `npm run changelog:from-git` to scaffold release notes from conventional commits.
 
-### EmptyState, SkeletonCard e ToastHost
+## Assumptions
 
-```tsx
-import EmptyState from 'assets/ui/components/EmptyState';
-import SkeletonCard from 'assets/ui/components/SkeletonCard';
-import ToastHost, { pushToast } from 'assets/ui/components/ToastHost';
+- Tested up to WordPress 6.6 based on the latest stable core at the time of this documentation update (2025-10-02).
+- Issues and support requests are handled via the main site until a public tracker is announced.
 
-export const FeedbackExample = () => (
-  <>
-    <ToastHost placement="top-end" />
-    <SkeletonCard lines={3} />
-    <EmptyState
-      title="Nessun elemento"
-      primaryAction={{
-        label: 'Crea',
-        onClick: () => pushToast({ title: 'Creato!' }),
-      }}
-    />
-  </>
-);
-```
+## License
 
-_Screenshot: skeleton, empty state e toast host in pagina_
-
-### Modal e Tooltip
-
-```tsx
-import { useState } from 'react';
-import Tooltip from 'assets/ui/components/Tooltip';
-import Modal from 'assets/ui/components/Modal';
-
-export const ModalExample = () => {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <>
-      <Tooltip content="Apri dettaglio">
-        <button type="button" onClick={() => setOpen(true)}>
-          Dettagli
-        </button>
-      </Tooltip>
-      <Modal isOpen={open} onDismiss={() => setOpen(false)} title="Anteprima">
-        …
-      </Modal>
-    </>
-  );
-};
-```
-
-_Screenshot: bottone con tooltip e modale aperta_
-
-## Documentazione
-
-- [Guide utente](docs/user/) – configurazione connettori, calendario editoriale, workflow approvazioni, replay, short link e alert.
-- [Guide developer](docs/dev/) – panoramica architetturale, schema database, QA checklist e catalogo hook.
-- [Roadmap](docs/ROADMAP.md) – evoluzioni consigliate con priorità, integrazioni pianificate e miglioramenti operativi.
-- [FAQ](docs/faq.md) – risposte rapide a problemi comuni su token, pubblicazioni e permessi.
-
-## Release process
-
-1. Aggiorna la versione del plugin con `bash build.sh --bump=patch` oppure imposta manualmente con `bash build.sh --set-version=1.2.3`.
-2. Recupera lo ZIP generato in `build/` (nome: `fp-digital-publisher-<timestamp>.zip`) e caricalo nell'installazione WordPress.
-3. In alternativa, crea un tag `vX.Y.Z` su GitHub per ottenere automaticamente lo ZIP tramite l'artifact `plugin-zip` del workflow *Build plugin ZIP*.
-
-## FAQ
-
-Consulta la [FAQ dedicata](docs/faq.md) per approfondimenti su token scaduti, errori di pubblicazione, replay e permessi mancanti.
+Released under the MIT License. See [LICENSE](LICENSE).
