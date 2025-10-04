@@ -3,30 +3,44 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN_DIR="${ROOT_DIR}/fp-digital-publisher"
-PLUGIN_SLUG="fp-publisher"
+PLUGIN_SLUG="$(basename "${PLUGIN_DIR}")"
+BUILD_DIR="${PLUGIN_DIR}/build"
+STAGING_DIR="${BUILD_DIR}/${PLUGIN_SLUG}"
 DIST_DIR="${PLUGIN_DIR}/dist"
 OUT_FILE="${DIST_DIR}/${PLUGIN_SLUG}.zip"
 
-rm -rf "${DIST_DIR}"
-mkdir -p "${DIST_DIR}"
+rm -rf "${DIST_DIR}" "${STAGING_DIR}"
+mkdir -p "${DIST_DIR}" "${STAGING_DIR}"
 
 if [[ ! -d "${PLUGIN_DIR}/vendor" ]]; then
     echo "Composer vendor directory missing. Run 'composer install --no-dev' before packaging." >&2
     exit 1
 fi
 
-cd "${ROOT_DIR}"
-zip -r "${OUT_FILE}" fp-digital-publisher \
-    -x "fp-digital-publisher/.git/**" \
-    -x "fp-digital-publisher/.github/**" \
-    -x "fp-digital-publisher/docs/**" \
-    -x "fp-digital-publisher/tests/**" \
-    -x "fp-digital-publisher/node_modules/**" \
-    -x "fp-digital-publisher/dist/**" \
-    -x "fp-digital-publisher/package*.json" \
-    -x "fp-digital-publisher/composer.*" \
-    -x "fp-digital-publisher/tools/**" \
-    -x "fp-digital-publisher/*.lock" \
-    -x "fp-digital-publisher/*.md"
+RSYNC_EXCLUDES=(
+    "--exclude=.git"
+    "--exclude=.github"
+    "--exclude=tests"
+    "--exclude=docs"
+    "--exclude=node_modules"
+    "--exclude=dist"
+    "--exclude=build"
+    "--exclude=build.sh"
+    "--exclude=package*.json"
+    "--exclude=composer.*"
+    "--exclude=*.lock"
+    "--exclude=*.md"
+    "--exclude=.idea"
+    "--exclude=.vscode"
+    "--exclude=.gitattributes"
+    "--exclude=.gitignore"
+    "--exclude=tools"
+)
+
+rsync -a --delete "${RSYNC_EXCLUDES[@]}" "${PLUGIN_DIR}/" "${STAGING_DIR}/"
+
+pushd "${BUILD_DIR}" > /dev/null
+zip -rq "${OUT_FILE}" "${PLUGIN_SLUG}"
+popd > /dev/null
 
 echo "ZIP created at ${OUT_FILE}"
