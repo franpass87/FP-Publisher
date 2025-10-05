@@ -17,13 +17,19 @@ if [[ ! -d "${PLUGIN_DIR}/vendor" ]]; then
     exit 1
 fi
 
+ASSETS_DIR="${PLUGIN_DIR}/assets/dist"
+if [[ ! -d "${ASSETS_DIR}" ]] || [[ -z "$(find "${ASSETS_DIR}" -mindepth 1 -print -quit)" ]]; then
+    echo "Built assets not found in assets/dist. Run 'npm run build' before packaging." >&2
+    exit 1
+fi
+
 RSYNC_EXCLUDES=(
     "--exclude=.git"
     "--exclude=.github"
     "--exclude=tests"
     "--exclude=docs"
     "--exclude=node_modules"
-    "--exclude=dist"
+    "--exclude=/dist"
     "--exclude=build"
     "--exclude=build.sh"
     "--exclude=package*.json"
