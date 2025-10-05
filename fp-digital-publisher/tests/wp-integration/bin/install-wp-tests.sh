@@ -27,14 +27,42 @@ fetch() {
   local target="$2"
   if [[ ! -f "${target}" ]]; then
     info "Downloading ${url}"
-    curl -Lsf "${url}" -o "${target}"
+    curl -LsSf --retry 5 --retry-delay 5 --retry-connrefused "${url}" -o "${target}"
   fi
+}
+
+resolve_wp_version() {
+  local version="$1"
+
+  if [[ "${version}" =~ ^[0-9]+\.[0-9]+$ ]]; then
+    local tag_query
+    if ! tag_query=$(git ls-remote --tags --refs https://github.com/WordPress/wordpress-develop.git "refs/tags/${version}.*" 2>/dev/null); then
+      info "Failed to query WordPress tags for ${version}; using ${version}" >&2
+      tag_query=""
+    fi
+
+    local latest
+    latest=$(printf '%s\n' "${tag_query}" \
+      | awk -F/ '{print $3}' \
+      | sort -V \
+      | tail -n 1)
+
+    if [[ -n "${latest}" ]]; then
+      info "Resolved WordPress ${version} to ${latest}" >&2
+      version="${latest}"
+    elif [[ -n "${tag_query}" ]]; then
+      info "No patch releases found for WordPress ${version}; using ${version}" >&2
+    fi
+  fi
+
+  echo "${version}"
 }
 
 if [[ "${WP_VERSION}" == "latest" ]]; then
   WP_REF="heads/trunk"
   ARCHIVE_SLUG="wordpress-develop-trunk"
 else
+  WP_VERSION="$(resolve_wp_version "${WP_VERSION}")"
   WP_REF="refs/tags/${WP_VERSION}"
   ARCHIVE_SLUG="wordpress-develop-${WP_VERSION}"
 fi
