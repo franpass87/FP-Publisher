@@ -45,8 +45,12 @@ final class Strings
     {
         $width = max(0, $width);
 
-        if ($width === 0 && $trimMarker === '') {
-            return '';
+        if ($width === 0) {
+            if ($trimMarker === '' || $value === '') {
+                return '';
+            }
+
+            return $trimMarker;
         }
 
         if (self::mbFunctionAvailable('mb_strimwidth')) {
