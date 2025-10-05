@@ -48,4 +48,25 @@ final class ValidationTest extends TestCase
         $values = Validation::arrayOfStrings(['a', 'b'], 'items');
         $this->assertSame(['a', 'b'], $values);
     }
+
+    public function testArrayOfStringsTrimsWhitespace(): void
+    {
+        $values = Validation::arrayOfStrings(["  alpha  ", "\tBeta\n"], 'items');
+
+        $this->assertSame(['alpha', 'Beta'], $values);
+    }
+
+    public function testArrayOfStringsAllowsEmptyStringsWhenEnabled(): void
+    {
+        $values = Validation::arrayOfStrings(['   ', ''], 'items', true);
+
+        $this->assertSame(['', ''], $values);
+    }
+
+    public function testArrayOfStringsRejectsWhitespaceOnlyValuesWhenNotAllowed(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        Validation::arrayOfStrings(['   '], 'items');
+    }
 }
