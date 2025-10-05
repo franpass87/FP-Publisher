@@ -10,13 +10,13 @@ function Ensure-Tool {
     [string]$WingetId
   )
   if (Get-Command $Name -ErrorAction SilentlyContinue) {
-    Write-Host "✔ $Name già presente"
+    Write-Host "$Name presente"
     return
   }
   if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     throw "winget non disponibile. Installa $Name manualmente."
   }
-  Write-Host "↻ Installo $Name via winget..."
+  Write-Host "Installo $Name via winget..."
   winget install -e --id $WingetId --source winget --accept-source-agreements --accept-package-agreements | Out-Null
 }
 
@@ -31,25 +31,26 @@ Set-Location $PluginDir
 
 # 3) JS: install & build
 if (-not (Test-Path (Join-Path $PluginDir 'node_modules'))) {
-  Write-Host '↻ npm ci'
+  Write-Host 'npm ci'
   npm ci --no-audit --no-fund
 }
-Write-Host '↻ npm run build'
+Write-Host 'npm run build'
 npm run build
 
 # 4) PHP: composer install, test, phpcs
 if (-not (Test-Path (Join-Path $PluginDir 'vendor'))) {
-  Write-Host '↻ composer install'
+  Write-Host 'composer install'
   composer install --no-interaction --no-progress --prefer-dist
 }
 
-Write-Host '↻ composer test'
+Write-Host 'composer test'
 composer test
 
-Write-Host '↻ composer test:integration (continua anche se WP tests non disponibili)'
-composer test:integration || Write-Host 'Test integrazione saltati/non disponibili'
+Write-Host 'composer test:integration (continua anche se WP tests non disponibili)'
+composer test:integration
+if (-not $?) { Write-Host 'Test integrazione saltati/non disponibili' }
 
-Write-Host '↻ PHPCS'
+Write-Host 'PHPCS'
 if (Test-Path (Join-Path $PluginDir 'vendor/bin/phpcs')) {
   ./vendor/bin/phpcs --standard=phpcs.xml.dist src
 } elseif (Get-Command phpcs -ErrorAction SilentlyContinue) {
@@ -58,5 +59,5 @@ if (Test-Path (Join-Path $PluginDir 'vendor/bin/phpcs')) {
   Write-Host 'PHPCS non disponibile'
 }
 
-Write-Host '✔ Completato'
+Write-Host 'Completato'
 
