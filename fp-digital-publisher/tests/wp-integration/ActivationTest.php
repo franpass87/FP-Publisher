@@ -43,6 +43,6 @@ final class ActivationTest extends WP_UnitTestCase
             $this->assertSame($table, $exists, "Failed asserting that {$table} exists after activation");
         }
 
-        $this->assertSame('2024093001', get_option('fp_publisher_db_version'));
+        $this->assertSame(Migrations::version(), get_option('fp_publisher_db_version'));
     }
 }

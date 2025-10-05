@@ -17,6 +17,11 @@ final class Migrations
     private const OPTION_KEY = 'fp_publisher_db_version';
     private const VERSION = '2024100102';
 
+    public static function version(): string
+    {
+        return self::VERSION;
+    }
+
     public static function install(): void
     {
         self::migrate();

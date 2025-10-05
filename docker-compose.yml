@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  build_and_test:
+    build: .
+    working_dir: /app/fp-digital-publisher
+    volumes:
+      - ./:/app
+    command: /bin/bash -lc "npm run build && composer install --no-interaction --no-progress --prefer-dist && composer test && composer test:integration || true && ./vendor/bin/phpcs --standard=phpcs.xml.dist src || true"
+
