@@ -119,7 +119,15 @@ final class Validation
         return array_values(self::arrayOf(
             $values,
             static function (mixed $value) use ($field, $allowEmpty): string {
-                return self::string($value, $field, $allowEmpty);
+                $string = self::string($value, $field, $allowEmpty);
+
+                $trimmed = trim($string);
+
+                if ($trimmed === '') {
+                    return '';
+                }
+
+                return $trimmed;
             },
             $field
         ));
