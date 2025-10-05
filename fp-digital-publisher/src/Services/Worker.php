@@ -55,12 +55,49 @@ final class Worker
 
     public static function process(): void
     {
+        global $wpdb;
+
         $limit = max(1, (int) Options::get('queue.max_concurrent', 5));
         $jobs = Scheduler::getRunnableJobs(Dates::now('UTC'), $limit);
 
+        $processed = 0;
+        $errors = 0;
+
         foreach ($jobs as $job) {
-            /** @var array<string, mixed> $job */
-            do_action('fp_publisher_process_job', $job);
+            try {
+                /** @var array<string, mixed> $job */
+                do_action('fp_publisher_process_job', $job);
+                $processed++;
+            } catch (\Throwable $e) {
+                $errors++;
+                // Log error but continue processing other jobs
+                if (function_exists('\FP\Publisher\Support\Logging\Logger::get')) {
+                    \FP\Publisher\Support\Logging\Logger::get()->error('Job processing failed in worker', [
+                        'job_id' => $job['id'] ?? null,
+                        'channel' => $job['channel'] ?? null,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Prevent memory leaks by clearing object cache periodically
+            if ($processed % 10 === 0) {
+                wp_cache_flush();
+            }
+        }
+
+        // Clean up database connection to prevent connection pool exhaustion
+        if (method_exists($wpdb, 'close')) {
+            $wpdb->close();
+        }
+
+        // Log worker statistics if debugging enabled
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log(sprintf(
+                'FP Publisher Worker: Processed %d jobs, %d errors',
+                $processed,
+                $errors
+            ));
         }
     }
 }

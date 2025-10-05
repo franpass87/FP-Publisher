@@ -51,12 +51,16 @@ final class Approvals
 
         $targetStatus = Validation::enum($targetStatus, PostPlan::statuses(), 'plan.status');
 
-        $table = $wpdb->prefix . 'fp_pub_plans';
-        $row = $wpdb->get_row($wpdb->prepare("SELECT id, brand, status, approvals_json FROM {$table} WHERE id = %d", $planId), ARRAY_A);
+        // Start transaction for data consistency
+        $wpdb->query('START TRANSACTION');
 
-        if (! is_array($row)) {
-            throw new RuntimeException(__('Plan not found.', 'fp-publisher'));
-        }
+        try {
+            $table = $wpdb->prefix . 'fp_pub_plans';
+            $row = $wpdb->get_row($wpdb->prepare("SELECT id, brand, status, approvals_json FROM {$table} WHERE id = %d FOR UPDATE", $planId), ARRAY_A);
+
+            if (! is_array($row)) {
+                throw new RuntimeException(__('Plan not found.', 'fp-publisher'));
+            }
 
         $currentStatus = (string) $row['status'];
         if (! array_key_exists($currentStatus, self::TRANSITIONS)) {
@@ -107,16 +111,26 @@ final class Approvals
             ['%d']
         );
 
-        if ($updated === false || $updated <= 0) {
-            throw new RuntimeException(__('Unable to update the plan status.', 'fp-publisher'));
-        }
+            if ($updated === false || $updated <= 0) {
+                throw new RuntimeException(__('Unable to update the plan status.', 'fp-publisher'));
+            }
 
-        return [
-            'id' => (int) $row['id'],
-            'status' => $targetStatus,
-            'brand' => (string) $row['brand'],
-            'approvals' => $approvals,
-            'updated_at' => $timestamp->format(DateTimeInterface::ATOM),
-        ];
+            // Commit transaction
+            $wpdb->query('COMMIT');
+
+            return [
+                'id' => (int) $row['id'],
+                'status' => $targetStatus,
+                'brand' => (string) $row['brand'],
+                'approvals' => $approvals,
+                'updated_at' => $timestamp->format(DateTimeInterface::ATOM),
+            ];
+        } catch (\Throwable $e) {
+            // Rollback on any error
+            $wpdb->query('ROLLBACK');
+
+            // Re-throw the exception
+            throw $e;
+        }
     }
 }

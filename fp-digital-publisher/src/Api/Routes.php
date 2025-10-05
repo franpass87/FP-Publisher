@@ -22,6 +22,7 @@ use FP\Publisher\Services\Scheduler;
 use FP\Publisher\Services\Trello\Ingestor as TrelloIngestor;
 use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
+use FP\Publisher\Support\RateLimiter;
 use InvalidArgumentException;
 use RuntimeException;
 use WP_Error;
@@ -938,6 +939,32 @@ final class Routes
 
     private static function authorize(WP_REST_Request $request, string $capability)
     {
+        // Rate limiting check (before authentication to prevent brute force)
+        // Skip in unit tests when methods are not available
+        if (method_exists($request, 'get_route') && method_exists($request, 'get_method')) {
+            $userId = get_current_user_id();
+            $route = $request->get_route();
+            $method = $request->get_method();
+            $rateLimitKey = sprintf('user:%d:%s:%s', $userId, $route, $method);
+
+            // Different limits based on method
+            $maxRequests = match($method) {
+                'GET' => 300,    // 300 GET requests per minute
+                'POST' => 60,    // 60 POST requests per minute
+                'PUT', 'PATCH' => 60,  // 60 PUT/PATCH per minute
+                'DELETE' => 30,  // 30 DELETE per minute
+                default => 60
+            };
+
+            if (!RateLimiter::check($rateLimitKey, $maxRequests, 60)) {
+                return new WP_Error(
+                    'fp_publisher_rate_limit_exceeded',
+                    esc_html__('Too many requests. Please wait a moment and try again.', 'fp-publisher'),
+                    ['status' => 429]
+                );
+            }
+        }
+
         if (self::requiresNonce($request) && ! self::verifyNonce($request)) {
             return new WP_Error(
                 'fp_publisher_invalid_nonce',
