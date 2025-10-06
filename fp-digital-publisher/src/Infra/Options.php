@@ -46,6 +46,15 @@ final class Options
         'factor' => 2.0,
         'max' => 3600,
     ];
+    private const CACHE_GROUP = 'fp_publisher';
+    private const CACHE_TTL = 3600; // 1 hour
+
+    /**
+     * In-memory cache for current request
+     *
+     * @var array<string, mixed>|null
+     */
+    private static ?array $memoryCache = null;
 
     public static function bootstrap(): void
     {
@@ -62,9 +71,28 @@ final class Options
 
     public static function all(): array
     {
+        // Check in-memory cache first (fastest)
+        if (self::$memoryCache !== null) {
+            return self::$memoryCache;
+        }
+
+        // Check object cache (fast)
+        $cacheKey = 'options_all';
+        $cached = wp_cache_get($cacheKey, self::CACHE_GROUP);
+
+        if (is_array($cached)) {
+            self::$memoryCache = $cached;
+            return $cached;
+        }
+
+        // Fetch from database and build options (slowest)
         $stored = self::getRaw();
         $options = array_replace_recursive(self::getDefaults(), $stored);
         $options['tokens'] = self::decryptTokens($stored['tokens'] ?? []);
+
+        // Cache the result
+        wp_cache_set($cacheKey, $options, self::CACHE_GROUP, self::CACHE_TTL);
+        self::$memoryCache = $options;
 
         return $options;
     }
@@ -136,6 +164,18 @@ final class Options
 
             throw new RuntimeException('Unable to persist configuration changes.');
         }
+
+        // Invalidate cache after update
+        self::invalidateCache();
+    }
+
+    /**
+     * Invalidate all options cache
+     */
+    private static function invalidateCache(): void
+    {
+        wp_cache_delete('options_all', self::CACHE_GROUP);
+        self::$memoryCache = null;
     }
 
     public static function getTokens(): array
@@ -164,6 +204,9 @@ final class Options
 
             throw new RuntimeException('Unable to persist token changes.');
         }
+
+        // Invalidate cache after token update
+        self::invalidateCache();
     }
 
     private static function sanitizeTokenService(string $service): string

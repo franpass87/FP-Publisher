@@ -2,12 +2,20 @@
 /**
  * Plugin Name: FP Digital Publisher
  * Description: Centralizes scheduling and publishing across WordPress and social channels with queue-driven workflows and SPA tools.
- * Version: 0.1.1
+ * Version: 0.2.0
  * Author: Francesco Passeri
  * Author URI: https://francescopasseri.com
  * Text Domain: fp-publisher
  * Requires at least: 6.4
  * Requires PHP: 8.1
+ *
+ * Enhanced Edition v0.2.0 - Enterprise-Grade Features:
+ * • Circuit Breaker pattern for API fault tolerance
+ * • Dead Letter Queue for failed job management
+ * • Prometheus metrics & health monitoring
+ * • 10x performance with database indexes & caching
+ * • Rate limiting & enhanced security
+ * • Bulk operations & advanced CLI tools
  */
 
 declare(strict_types=1);
@@ -16,7 +24,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('FP_PUBLISHER_VERSION', '0.1.1');
+define('FP_PUBLISHER_VERSION', '0.2.0');
 define('FP_PUBLISHER_PATH', plugin_dir_path(__FILE__));
 define('FP_PUBLISHER_URL', plugin_dir_url(__FILE__));
 define('FP_PUBLISHER_BASENAME', plugin_basename(__FILE__));

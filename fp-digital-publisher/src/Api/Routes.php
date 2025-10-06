@@ -22,6 +22,7 @@ use FP\Publisher\Services\Scheduler;
 use FP\Publisher\Services\Trello\Ingestor as TrelloIngestor;
 use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
+use FP\Publisher\Support\RateLimiter;
 use InvalidArgumentException;
 use RuntimeException;
 use WP_Error;
@@ -135,6 +136,55 @@ final class Routes
                 [
                     'methods' => 'POST',
                     'callback' => [self::class, 'previewTrello'],
+                    'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, 'fp_publisher_manage_plans'),
+                ],
+            ]
+        );
+
+        register_rest_route(
+            self::NAMESPACE,
+            '/jobs/bulk',
+            [
+                [
+                    'methods' => 'POST',
+                    'callback' => [self::class, 'bulkJobAction'],
+                    'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, 'fp_publisher_manage_plans'),
+                    'args' => [
+                        'action' => [
+                            'required' => true,
+                            'type' => 'string',
+                            'enum' => ['replay', 'cancel', 'delete']
+                        ],
+                        'job_ids' => [
+                            'required' => true,
+                            'type' => 'array',
+                            'items' => ['type' => 'integer'],
+                            'maxItems' => 100
+                        ]
+                    ]
+                ],
+            ]
+        );
+
+        register_rest_route(
+            self::NAMESPACE,
+            '/dlq',
+            [
+                [
+                    'methods' => 'GET',
+                    'callback' => [self::class, 'listDLQ'],
+                    'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, 'fp_publisher_manage_plans'),
+                ],
+            ]
+        );
+
+        register_rest_route(
+            self::NAMESPACE,
+            '/dlq/(?P<id>\\d+)/retry',
+            [
+                [
+                    'methods' => 'POST',
+                    'callback' => [self::class, 'retryFromDLQ'],
                     'permission_callback' => static fn (WP_REST_Request $request) => self::authorize($request, 'fp_publisher_manage_plans'),
                 ],
             ]
@@ -938,6 +988,32 @@ final class Routes
 
     private static function authorize(WP_REST_Request $request, string $capability)
     {
+        // Rate limiting check (before authentication to prevent brute force)
+        // Skip in unit tests when methods are not available
+        if (method_exists($request, 'get_route') && method_exists($request, 'get_method')) {
+            $userId = get_current_user_id();
+            $route = $request->get_route();
+            $method = $request->get_method();
+            $rateLimitKey = sprintf('user:%d:%s:%s', $userId, $route, $method);
+
+            // Different limits based on method
+            $maxRequests = match($method) {
+                'GET' => 300,    // 300 GET requests per minute
+                'POST' => 60,    // 60 POST requests per minute
+                'PUT', 'PATCH' => 60,  // 60 PUT/PATCH per minute
+                'DELETE' => 30,  // 30 DELETE per minute
+                default => 60
+            };
+
+            if (!RateLimiter::check($rateLimitKey, $maxRequests, 60)) {
+                return new WP_Error(
+                    'fp_publisher_rate_limit_exceeded',
+                    esc_html__('Too many requests. Please wait a moment and try again.', 'fp-publisher'),
+                    ['status' => 429]
+                );
+            }
+        }
+
         if (self::requiresNonce($request) && ! self::verifyNonce($request)) {
             return new WP_Error(
                 'fp_publisher_invalid_nonce',
@@ -1520,5 +1596,147 @@ final class Routes
             'idempotency_key' => (string) ($job['idempotency_key'] ?? ''),
             'child_job_id' => $job['child_job_id'] ?? null,
         ];
+    }
+
+    /**
+     * Bulk operations on jobs
+     */
+    private static function bulkJobAction(WP_REST_Request $request): WP_REST_Response
+    {
+        $action = sanitize_key((string) $request->get_param('action'));
+        $jobIds = $request->get_param('job_ids');
+
+        if (!is_array($jobIds)) {
+            return new WP_REST_Response([
+                'error' => 'job_ids must be an array'
+            ], 400);
+        }
+
+        $jobIds = array_map('intval', array_slice($jobIds, 0, 100));
+
+        $results = [
+            'success' => [],
+            'failed' => []
+        ];
+
+        foreach ($jobIds as $jobId) {
+            try {
+                match($action) {
+                    'replay' => Queue::replay($jobId),
+                    'cancel' => self::cancelJob($jobId),
+                    'delete' => self::deleteJob($jobId),
+                    default => throw new InvalidArgumentException('Invalid action')
+                };
+                
+                $results['success'][] = $jobId;
+            } catch (Throwable $e) {
+                $results['failed'][] = [
+                    'id' => $jobId,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+
+        return new WP_REST_Response([
+            'action' => $action,
+            'processed' => count($jobIds),
+            'results' => $results
+        ], 200);
+    }
+
+    /**
+     * Cancel a job (mark as failed without retry)
+     */
+    private static function cancelJob(int $jobId): void
+    {
+        $job = Queue::findById($jobId);
+        
+        if ($job === null) {
+            throw new RuntimeException(__('Job not found.', 'fp-publisher'));
+        }
+
+        if (!in_array($job['status'], [Queue::STATUS_PENDING, Queue::STATUS_RUNNING], true)) {
+            throw new RuntimeException(__('Only pending or running jobs can be cancelled.', 'fp-publisher'));
+        }
+
+        Queue::markFailed($job, 'Cancelled by user', false);
+    }
+
+    /**
+     * Delete a job permanently
+     */
+    private static function deleteJob(int $jobId): void
+    {
+        global $wpdb;
+
+        $job = Queue::findById($jobId);
+        
+        if ($job === null) {
+            throw new RuntimeException(__('Job not found.', 'fp-publisher'));
+        }
+
+        if ($job['status'] === Queue::STATUS_RUNNING) {
+            throw new RuntimeException(__('Cannot delete running jobs.', 'fp-publisher'));
+        }
+
+        $deleted = $wpdb->delete(
+            $wpdb->prefix . 'fp_pub_jobs',
+            ['id' => $jobId],
+            ['%d']
+        );
+
+        if ($deleted === false || $deleted === 0) {
+            throw new RuntimeException(__('Unable to delete job.', 'fp-publisher'));
+        }
+    }
+
+    /**
+     * List Dead Letter Queue items
+     */
+    private static function listDLQ(WP_REST_Request $request): WP_REST_Response
+    {
+        $page = max(1, (int) $request->get_param('page'));
+        $perPage = max(1, min(100, (int) $request->get_param('per_page')));
+
+        $filters = [];
+        
+        if ($request->has_param('channel')) {
+            $filters['channel'] = sanitize_key((string) $request->get_param('channel'));
+        }
+
+        if ($request->has_param('search')) {
+            $filters['search'] = sanitize_text_field((string) $request->get_param('search'));
+        }
+
+        $result = \FP\Publisher\Infra\DeadLetterQueue::paginate($page, $perPage, $filters);
+
+        return new WP_REST_Response([
+            'items' => $result['items'],
+            'total' => $result['total'],
+            'page' => $result['page'],
+            'per_page' => $result['per_page'],
+            'total_pages' => (int) ceil($result['total'] / $result['per_page'])
+        ], 200);
+    }
+
+    /**
+     * Retry job from DLQ
+     */
+    private static function retryFromDLQ(WP_REST_Request $request): WP_REST_Response
+    {
+        $dlqId = (int) $request->get_param('id');
+
+        $job = \FP\Publisher\Infra\DeadLetterQueue::retry($dlqId);
+
+        if ($job === null) {
+            return new WP_REST_Response([
+                'error' => 'Unable to retry job from DLQ'
+            ], 400);
+        }
+
+        return new WP_REST_Response([
+            'message' => 'Job successfully moved from DLQ back to queue',
+            'job' => self::formatJob($job)
+        ], 200);
     }
 }

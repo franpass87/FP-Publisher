@@ -27,6 +27,11 @@ final class QueueCommand extends WP_CLI_Command
         }
 
         WP_CLI::add_command('fp-publisher queue', static::class);
+        WP_CLI::add_command('fp-publisher diagnostics', DiagnosticsCommand::class);
+        WP_CLI::add_command('fp-publisher metrics', MetricsCommand::class);
+        WP_CLI::add_command('fp-publisher circuit-breaker', CircuitBreakerCommand::class);
+        WP_CLI::add_command('fp-publisher dlq', DLQCommand::class);
+        WP_CLI::add_command('fp-publisher cache', CacheCommand::class);
     }
 
     /**

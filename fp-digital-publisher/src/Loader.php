@@ -8,10 +8,14 @@ use FP\Publisher\Admin\Assets;
 use FP\Publisher\Admin\Menu;
 use FP\Publisher\Admin\Notices;
 use FP\Publisher\Admin\UI\Enqueue as UiEnqueue;
+use FP\Publisher\Api\HealthCheck;
+use FP\Publisher\Api\OpenApiSpec;
 use FP\Publisher\Api\Routes;
 use FP\Publisher\Infra\Capabilities;
 use FP\Publisher\Infra\DB\Migrations;
+use FP\Publisher\Infra\DB\OptimizationMigration;
 use FP\Publisher\Infra\Options;
+use FP\Publisher\Monitoring\Metrics;
 use FP\Publisher\Services\Assets\Pipeline as AssetPipeline;
 use FP\Publisher\Services\Alerts;
 use FP\Publisher\Services\GoogleBusiness\Dispatcher as GoogleBusinessDispatcher;
@@ -30,6 +34,7 @@ final class Loader
     public static function init(): void
     {
         Migrations::maybeUpgrade();
+        OptimizationMigration::maybeRun();
         Options::bootstrap();
         I18n::register();
         Capabilities::register();
@@ -38,6 +43,9 @@ final class Loader
         UiEnqueue::register();
         Assets::register();
         Routes::register();
+        HealthCheck::register();
+        OpenApiSpec::register();
+        Metrics::register();
         AssetPipeline::register();
         Alerts::register();
         Links::register();

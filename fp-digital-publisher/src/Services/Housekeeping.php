@@ -100,16 +100,23 @@ final class Housekeeping
         }
 
         $archivedAt = Dates::now('UTC')->format('Y-m-d H:i:s');
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
         $wpdb->query(
             $wpdb->prepare(
                 "INSERT INTO {$archiveTable} (id, status, channel, payload_json, run_at, attempts, error, idempotency_key, remote_id, created_at, updated_at, child_job_id, archived_at)
-                SELECT id, status, channel, payload_json, run_at, attempts, error, idempotency_key, remote_id, created_at, updated_at, child_job_id, %s FROM {$jobsTable} WHERE id IN ({$idList})
+                SELECT id, status, channel, payload_json, run_at, attempts, error, idempotency_key, remote_id, created_at, updated_at, child_job_id, %s FROM {$jobsTable} WHERE id IN ({$placeholders})
                 ON DUPLICATE KEY UPDATE status = VALUES(status), channel = VALUES(channel), payload_json = VALUES(payload_json), run_at = VALUES(run_at), attempts = VALUES(attempts), error = VALUES(error), remote_id = VALUES(remote_id), updated_at = VALUES(updated_at), child_job_id = VALUES(child_job_id), archived_at = VALUES(archived_at)",
-                $archivedAt
+                $archivedAt,
+                ...$ids
             )
         );
 
-        $wpdb->query("DELETE FROM {$jobsTable} WHERE id IN ({$idList})");
+        $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM {$jobsTable} WHERE id IN ({$placeholders})",
+                ...$ids
+            )
+        );
     }
 
     public static function purgeExpiredAssets(): void
@@ -177,11 +184,12 @@ final class Housekeeping
             return;
         }
 
-        $idList = implode(',', array_map('absint', $ids));
-        if ($idList === '') {
-            return;
-        }
-
-        $wpdb->query("DELETE FROM {$table} WHERE id IN ({$idList})");
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM {$table} WHERE id IN ({$placeholders})",
+                ...$ids
+            )
+        );
     }
 }

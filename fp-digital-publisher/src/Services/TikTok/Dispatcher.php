@@ -7,7 +7,10 @@ namespace FP\Publisher\Services\TikTok;
 use FP\Publisher\Api\TikTok\Client;
 use FP\Publisher\Api\TikTok\TikTokException;
 use FP\Publisher\Infra\Queue;
+use FP\Publisher\Monitoring\Metrics;
 use FP\Publisher\Support\Channels;
+use FP\Publisher\Support\CircuitBreaker;
+use FP\Publisher\Support\CircuitBreakerOpenException;
 use FP\Publisher\Support\TransientErrorClassifier;
 use Throwable;
 
@@ -32,6 +35,7 @@ final class Dispatcher
      */
     public static function handle(array $job): void
     {
+        $start = microtime(true);
         $channel = Channels::normalize((string) ($job['channel'] ?? ''));
         if ($channel !== self::CHANNEL) {
             return;
@@ -48,22 +52,54 @@ final class Dispatcher
             $payload = $filteredPayload;
         }
 
-        try {
-            $result = Client::publishVideo($payload);
-            $remoteId = isset($result['id']) && is_string($result['id']) ? $result['id'] : '';
+        $circuitBreaker = new CircuitBreaker('tiktok_api', 5, 120, 60);
 
+        try {
+            $result = $circuitBreaker->call(function() use ($payload) {
+                return Client::publishVideo($payload);
+            });
+            
+            $remoteId = isset($result['id']) && is_string($result['id']) ? $result['id'] : '';
             $remoteId = $remoteId !== '' ? $remoteId : null;
 
             Queue::markCompleted($jobId, $remoteId);
             do_action('fp_pub_published', $channel, $remoteId, $job);
+            
+            Metrics::incrementCounter('jobs_processed_total', 1, [
+                'channel' => $channel,
+                'status' => 'success'
+            ]);
+        } catch (CircuitBreakerOpenException $e) {
+            Queue::markFailed($job, $e->getMessage(), true);
+            Metrics::incrementCounter('jobs_errors_total', 1, [
+                'channel' => $channel,
+                'error_type' => 'circuit_breaker_open'
+            ]);
         } catch (TikTokException $exception) {
             $retryable = (bool) apply_filters('fp_pub_retry_decision', $exception->isRetryable(), $exception, $job);
             Queue::markFailed($job, $exception->getMessage(), $retryable);
+            
+            Metrics::incrementCounter('jobs_errors_total', 1, [
+                'channel' => $channel,
+                'error_type' => 'tiktok_exception',
+                'retryable' => $retryable ? 'true' : 'false'
+            ]);
         } catch (Throwable $throwable) {
             $retryable = TransientErrorClassifier::shouldRetry($throwable);
             $retryable = (bool) apply_filters('fp_pub_retry_decision', $retryable, $throwable, $job);
             $message = wp_strip_all_tags($throwable->getMessage());
             Queue::markFailed($job, $message !== '' ? $message : 'TikTok connector error.', $retryable);
+            
+            Metrics::incrementCounter('jobs_errors_total', 1, [
+                'channel' => $channel,
+                'error_type' => 'throwable',
+                'retryable' => $retryable ? 'true' : 'false'
+            ]);
+        } finally {
+            $duration = (microtime(true) - $start) * 1000;
+            Metrics::recordTiming('job_processing_duration_ms', $duration, [
+                'channel' => $channel
+            ]);
         }
     }
 }
