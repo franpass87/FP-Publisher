@@ -9,6 +9,7 @@ use FP\Publisher\Admin\Menu;
 use FP\Publisher\Admin\Notices;
 use FP\Publisher\Admin\UI\Enqueue as UiEnqueue;
 use FP\Publisher\Api\HealthCheck;
+use FP\Publisher\Api\OpenApiSpec;
 use FP\Publisher\Api\Routes;
 use FP\Publisher\Infra\Capabilities;
 use FP\Publisher\Infra\DB\Migrations;
@@ -43,6 +44,7 @@ final class Loader
         Assets::register();
         Routes::register();
         HealthCheck::register();
+        OpenApiSpec::register();
         Metrics::register();
         AssetPipeline::register();
         Alerts::register();
