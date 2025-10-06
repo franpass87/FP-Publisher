@@ -8,7 +8,10 @@ use FP\Publisher\Api\Meta\Client;
 use FP\Publisher\Api\Meta\MetaException;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Infra\Queue;
+use FP\Publisher\Monitoring\Metrics;
 use FP\Publisher\Support\Channels;
+use FP\Publisher\Support\CircuitBreaker;
+use FP\Publisher\Support\CircuitBreakerOpenException;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\TransientErrorClassifier;
 use Throwable;
@@ -39,7 +42,9 @@ final class Dispatcher
      */
     public static function handle(array $job): void
     {
+        $start = microtime(true);
         $channel = Channels::normalize((string) ($job['channel'] ?? ''));
+        
         if (! in_array($channel, [self::CHANNEL_FACEBOOK, self::CHANNEL_INSTAGRAM], true)) {
             return;
         }
@@ -54,18 +59,56 @@ final class Dispatcher
         try {
             if ($type === 'ig_first_comment') {
                 self::handleFirstComment($job, $payload);
+                Metrics::incrementCounter('jobs_processed_total', 1, [
+                    'channel' => $channel,
+                    'type' => 'comment',
+                    'status' => 'success'
+                ]);
                 return;
             }
 
             self::handlePublish($job, $payload, $channel);
+            
+            Metrics::incrementCounter('jobs_processed_total', 1, [
+                'channel' => $channel,
+                'type' => 'publish',
+                'status' => 'success'
+            ]);
         } catch (MetaException $exception) {
             $retryable = (bool) apply_filters('fp_pub_retry_decision', $exception->isRetryable(), $exception, $job);
             Queue::markFailed($job, $exception->getMessage(), $retryable);
+            
+            Metrics::incrementCounter('jobs_processed_total', 1, [
+                'channel' => $channel,
+                'type' => 'publish',
+                'status' => 'error'
+            ]);
+            Metrics::incrementCounter('jobs_errors_total', 1, [
+                'channel' => $channel,
+                'error_type' => 'meta_exception',
+                'retryable' => $retryable ? 'true' : 'false'
+            ]);
         } catch (Throwable $throwable) {
             $retryable = TransientErrorClassifier::shouldRetry($throwable);
             $retryable = (bool) apply_filters('fp_pub_retry_decision', $retryable, $throwable, $job);
             $message = wp_strip_all_tags($throwable->getMessage());
             Queue::markFailed($job, $message !== '' ? $message : 'Meta connector error.', $retryable);
+            
+            Metrics::incrementCounter('jobs_processed_total', 1, [
+                'channel' => $channel,
+                'type' => 'publish',
+                'status' => 'error'
+            ]);
+            Metrics::incrementCounter('jobs_errors_total', 1, [
+                'channel' => $channel,
+                'error_type' => 'throwable',
+                'retryable' => $retryable ? 'true' : 'false'
+            ]);
+        } finally {
+            $duration = (microtime(true) - $start) * 1000;
+            Metrics::recordTiming('job_processing_duration_ms', $duration, [
+                'channel' => $channel
+            ]);
         }
     }
 
@@ -87,9 +130,20 @@ final class Dispatcher
             }
         }
 
-        $result = $channel === self::CHANNEL_FACEBOOK
-            ? Client::publishFacebookPost($payload)
-            : Client::publishInstagramMedia($payload);
+        // Use circuit breaker to protect against cascading failures
+        $circuitBreaker = new CircuitBreaker('meta_api', 5, 120, 60);
+        
+        try {
+            $result = $circuitBreaker->call(function() use ($channel, $payload) {
+                return $channel === self::CHANNEL_FACEBOOK
+                    ? Client::publishFacebookPost($payload)
+                    : Client::publishInstagramMedia($payload);
+            });
+        } catch (CircuitBreakerOpenException $e) {
+            // Circuit breaker is open - schedule retry with longer delay
+            Queue::markFailed($job, $e->getMessage(), true);
+            return;
+        }
 
         $remoteId = '';
         if (is_array($result)) {

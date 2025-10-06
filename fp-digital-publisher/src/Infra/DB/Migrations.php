@@ -161,6 +161,21 @@ final class Migrations
                 UNIQUE KEY slug (slug),
                 KEY clicks (clicks),
                 KEY active (active)
+            ) {$charsetCollate};",
+            "CREATE TABLE {$prefix}fp_pub_jobs_dlq (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                original_job_id BIGINT UNSIGNED NOT NULL,
+                channel VARCHAR(64) NOT NULL,
+                payload_json LONGTEXT NULL,
+                final_error TEXT NOT NULL,
+                total_attempts SMALLINT UNSIGNED NOT NULL,
+                first_attempt_at DATETIME NOT NULL,
+                moved_to_dlq_at DATETIME NOT NULL,
+                metadata_json LONGTEXT NULL,
+                PRIMARY KEY  (id),
+                KEY original_job (original_job_id),
+                KEY channel (channel),
+                KEY moved_to_dlq_at (moved_to_dlq_at)
             ) {$charsetCollate};"
         ];
 
@@ -184,6 +199,7 @@ final class Migrations
             "{$prefix}fp_pub_tokens",
             "{$prefix}fp_pub_comments",
             "{$prefix}fp_pub_links",
+            "{$prefix}fp_pub_jobs_dlq",
         ];
     }
 }

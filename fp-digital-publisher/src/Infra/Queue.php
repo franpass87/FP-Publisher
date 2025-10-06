@@ -7,6 +7,7 @@ namespace FP\Publisher\Infra;
 use DateInterval;
 use DateTimeImmutable;
 use Exception;
+use FP\Publisher\Infra\DeadLetterQueue;
 use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Strings;
@@ -395,6 +396,9 @@ final class Queue
         }
 
         Logger::get()->error('Job failed permanently.', $context);
+
+        // Move to Dead Letter Queue
+        DeadLetterQueue::moveJob($job, $sanitizedError, $attempts);
     }
 
     /**

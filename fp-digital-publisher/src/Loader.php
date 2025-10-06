@@ -14,6 +14,7 @@ use FP\Publisher\Infra\Capabilities;
 use FP\Publisher\Infra\DB\Migrations;
 use FP\Publisher\Infra\DB\OptimizationMigration;
 use FP\Publisher\Infra\Options;
+use FP\Publisher\Monitoring\Metrics;
 use FP\Publisher\Services\Assets\Pipeline as AssetPipeline;
 use FP\Publisher\Services\Alerts;
 use FP\Publisher\Services\GoogleBusiness\Dispatcher as GoogleBusinessDispatcher;
@@ -42,6 +43,7 @@ final class Loader
         Assets::register();
         Routes::register();
         HealthCheck::register();
+        Metrics::register();
         AssetPipeline::register();
         Alerts::register();
         Links::register();
