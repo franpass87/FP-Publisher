@@ -6,6 +6,8 @@ namespace FP\Publisher\Support\Cli;
 
 use FP\Publisher\Infra\DeadLetterQueue;
 use FP\Publisher\Infra\Queue;
+use FP\Publisher\Support\ContainerRegistry;
+use FP\Publisher\Support\Contracts\QueueInterface;
 use FP\Publisher\Services\Worker;
 use FP\Publisher\Support\CircuitBreaker;
 use FP\Publisher\Support\Dates;
@@ -134,8 +136,10 @@ final class DiagnosticsCommand
         WP_CLI::line('📋 Queue Status:');
 
         try {
-            $pending = count(Queue::dueJobs(Dates::now('UTC'), 1000));
-            $running = Queue::runningChannels();
+            /** @var QueueInterface $queue */
+            $queue = ContainerRegistry::get()->get(QueueInterface::class);
+            $pending = count($queue->dueJobs(Dates::now('UTC'), 1000));
+            $running = $queue->runningChannels();
             $totalRunning = array_sum($running);
 
             $statusIcon = match(true) {
@@ -155,7 +159,7 @@ final class DiagnosticsCommand
             }
 
             // Recent activity
-            $result = Queue::paginate(1, 10);
+            $result = $queue->paginate(1, 10, []);
             WP_CLI::line("  Total Jobs (all time): {$result['total']}");
         } catch (\Throwable $e) {
             WP_CLI::error("  ❌ Queue check failed: " . $e->getMessage());

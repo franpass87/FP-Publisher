@@ -8,6 +8,30 @@ Use this checklist to verify new features before shipping.
 * Run `composer test` and `composer test:integration` to catch regressions early.
 * Ensure the `WP_TESTS_DIR` constant is set when running tests from an IDE.
 
+## Smoke tests (Docker)
+
+Use the provided scripts for a quick end-to-end verification (REST + WP-CLI):
+
+PowerShell (Windows):
+
+```
+./tools/smoke-tests.ps1 -ProjectDir fp-digital-publisher -ComposeFile docker-compose.yml
+```
+
+Bash/macOS/Linux:
+
+```
+bash tools/smoke-tests.sh
+```
+
+The scripts will:
+- start the WordPress stack via Docker Compose
+- install Composer dependencies inside the container
+- activate the plugin
+- check `GET /wp-json/fp-publisher/v1/health`
+- run `wp fp-publisher diagnostics --component=queue`
+- enqueue a test job and run the queue once
+
 ## Functional testing
 
 * Validate connector flows for Meta, TikTok, YouTube, Google Business, and WordPress.

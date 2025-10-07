@@ -17,3 +17,13 @@ fornendo una visione sintetica delle evoluzioni da pianificare.
 | Media | **Console di audit per i log** | Offrire un'interfaccia WordPress dedicata ai log strutturati, con filtri e ricerca, per semplificare la diagnosi senza dover accedere ai file di sistema. |
 | Media | **Libreria asset con gestione diritti e scadenze** | Potenziare il repository multimediale introducendo metadati su usage rights, brand kit e scadenze automatiche per evitare l'uso improprio di contenuti scaduti. |
 | Bassa | **A/B test nativi sul calendario editoriale** | Consentire la creazione di varianti di copy e creatività, distribuite automaticamente via queue con raccolta dei risultati per iterare rapidamente sulle campagne. |
+
+## Tecnica: migrazione a `type="module"` e code splitting
+
+- Obiettivo: abilitare ES Modules e suddivisione del bundle per migliorare TTI e caching.
+- Passi proposti:
+  1. Aggiungere build parallela ESM in `tools/build.mjs` (format: `esm`, `splitting: true`, `chunkNames`).
+  2. Aggiornare enqueue in `src/Admin/Assets.php` per usare `<script type="module">` per browser moderni e `<script nomodule>` fallback (IIFE attuale).
+  3. Introdurre dynamic `import()` su viste pesanti (es. pagine secondarie nella SPA) per carico on‑demand.
+  4. QA: testare su WP 6.4+ (Edge/Chrome/Firefox/Safari), verificare che il fallback `nomodule` resti funzionale.
+  5. Telemetria: misurare dimensione/chunk e TTI prima/dopo.

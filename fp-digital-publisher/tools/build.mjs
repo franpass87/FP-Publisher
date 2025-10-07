@@ -34,6 +34,9 @@ const buildOptions = {
   legalComments: 'none',
   logLevel: 'info',
   plugins: [wpI18nPlugin],
+  loader: {
+    '.css': 'css',
+  },
 };
 
 async function ensureOutDir() {

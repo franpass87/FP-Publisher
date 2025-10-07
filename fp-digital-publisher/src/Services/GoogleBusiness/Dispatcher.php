@@ -6,7 +6,8 @@ namespace FP\Publisher\Services\GoogleBusiness;
 
 use FP\Publisher\Api\GoogleBusiness\Client;
 use FP\Publisher\Api\GoogleBusiness\GoogleBusinessException;
-use FP\Publisher\Infra\Queue;
+use FP\Publisher\Support\ContainerRegistry;
+use FP\Publisher\Support\Contracts\QueueInterface;
 use FP\Publisher\Monitoring\Metrics;
 use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\CircuitBreaker;
@@ -60,7 +61,9 @@ final class Dispatcher
             });
             
             $remoteId = isset($result['name']) && is_string($result['name']) ? $result['name'] : null;
-            Queue::markCompleted($jobId, $remoteId);
+            /** @var QueueInterface $queue */
+            $queue = ContainerRegistry::get()->get(QueueInterface::class);
+            $queue->markCompleted($jobId, $remoteId);
             do_action('fp_pub_published', $channel, $remoteId, $job);
             
             Metrics::incrementCounter('jobs_processed_total', 1, [
@@ -68,14 +71,18 @@ final class Dispatcher
                 'status' => 'success'
             ]);
         } catch (CircuitBreakerOpenException $e) {
-            Queue::markFailed($job, $e->getMessage(), true);
+            /** @var QueueInterface $queue */
+            $queue = ContainerRegistry::get()->get(QueueInterface::class);
+            $queue->markFailed($job, $e->getMessage(), true);
             Metrics::incrementCounter('jobs_errors_total', 1, [
                 'channel' => $channel,
                 'error_type' => 'circuit_breaker_open'
             ]);
         } catch (GoogleBusinessException $exception) {
             $retryable = (bool) apply_filters('fp_pub_retry_decision', $exception->isRetryable(), $exception, $job);
-            Queue::markFailed($job, $exception->getMessage(), $retryable);
+            /** @var QueueInterface $queue */
+            $queue = ContainerRegistry::get()->get(QueueInterface::class);
+            $queue->markFailed($job, $exception->getMessage(), $retryable);
             
             Metrics::incrementCounter('jobs_errors_total', 1, [
                 'channel' => $channel,
@@ -86,7 +93,9 @@ final class Dispatcher
             $retryable = TransientErrorClassifier::shouldRetry($throwable);
             $retryable = (bool) apply_filters('fp_pub_retry_decision', $retryable, $throwable, $job);
             $message = wp_strip_all_tags($throwable->getMessage());
-            Queue::markFailed($job, $message !== '' ? $message : 'Google Business connector error.', $retryable);
+            /** @var QueueInterface $queue */
+            $queue = ContainerRegistry::get()->get(QueueInterface::class);
+            $queue->markFailed($job, $message !== '' ? $message : 'Google Business connector error.', $retryable);
             
             Metrics::incrementCounter('jobs_errors_total', 1, [
                 'channel' => $channel,

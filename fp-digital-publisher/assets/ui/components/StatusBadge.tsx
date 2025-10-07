@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { __, _x } from '@wordpress/i18n';
+import styles from './StatusBadge.module.css';
 
 type StatusKey =
   | 'draft'
@@ -94,26 +95,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 }) => {
   const config = STATUS_MAP[status];
 
-  const mergedClassName = ['fp-ui-status-badge', className]
+  const mergedClassName = [styles.root, 'fp-ui-status-badge', className]
     .filter(Boolean)
     .join(' ');
 
   const fallbackLabel = config?.label ?? __(status, 'fp-publisher');
 
   const badgeStyle: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 'var(--space-1)',
-    padding: '2px 10px',
-    minHeight: '20px',
-    fontSize: 'var(--font-size-sm)',
-    fontWeight: 'var(--font-weight-medium)',
-    lineHeight: 1.2,
-    borderRadius: '999px',
-    border: '1px solid transparent',
-    textTransform: 'uppercase',
-    letterSpacing: '0.02em',
     backgroundColor: config?.tone.background,
     color: config?.tone.text,
     borderColor: config?.tone.border,

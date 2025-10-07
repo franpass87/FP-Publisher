@@ -1,4 +1,5 @@
 import * as React from 'react';
+import styles from './EmptyState.module.css';
 
 export interface EmptyStateAction {
   label: string;
@@ -26,33 +27,9 @@ const renderAction = (
 
   const { href, label, onClick, target, rel } = action;
   const computedRel = target === '_blank' && !rel ? 'noreferrer noopener' : rel;
-  const commonStyle: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 'var(--space-1)',
-    minHeight: '36px',
-    padding: '0 var(--space-4)',
-    fontSize: 'var(--font-size-md)',
-    fontWeight: 'var(--font-weight-medium)',
-    borderRadius: 'calc(var(--radius) / 1.5)',
-    border: '1px solid transparent',
-    cursor: 'pointer',
-    transition: 'background-color 120ms ease, color 120ms ease, border-color 120ms ease',
-  };
+  const commonClass = styles.button;
 
-  const variantStyle: React.CSSProperties =
-    variant === 'primary'
-      ? {
-          backgroundColor: 'var(--primary)',
-          borderColor: 'var(--primary)',
-          color: '#fff',
-        }
-      : {
-          backgroundColor: 'transparent',
-          borderColor: 'var(--border)',
-          color: 'var(--text)',
-        };
+  const variantClass = variant === 'primary' ? styles.primary : styles.secondary;
 
   if (href) {
     return (
@@ -61,8 +38,7 @@ const renderAction = (
         target={target}
         rel={computedRel}
         onClick={onClick as React.MouseEventHandler<HTMLAnchorElement>}
-        style={{ ...commonStyle, ...variantStyle, textDecoration: 'none' }}
-        className={`fp-ui-empty-state__action is-${variant}`}
+        className={[styles.button, variantClass, `fp-ui-empty-state__action is-${variant}`].join(' ')}
       >
         {label}
       </a>
@@ -73,8 +49,7 @@ const renderAction = (
     <button
       type="button"
       onClick={onClick as React.MouseEventHandler<HTMLButtonElement>}
-      style={{ ...commonStyle, ...variantStyle }}
-      className={`fp-ui-empty-state__action is-${variant}`}
+      className={[commonClass, variantClass, `fp-ui-empty-state__action is-${variant}`].join(' ')}
     >
       {label}
     </button>
@@ -92,61 +67,24 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   children,
   ...rest
 }) => {
-  const mergedClassName = ['fp-ui-empty-state', className]
+  const mergedClassName = [styles.container, 'fp-ui-empty-state', className]
     .filter(Boolean)
     .join(' ');
 
-  const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    textAlign: 'center',
-    padding: 'var(--space-6)',
-    gap: 'var(--space-3)',
-    backgroundColor: 'var(--panel)',
-    borderRadius: 'var(--radius)',
-    border: '1px dashed rgba(95, 107, 124, 0.25)',
-    color: 'var(--text)',
-    boxShadow: 'var(--shadow-1)',
-    ...style,
-  };
+  const containerStyle: React.CSSProperties = { ...style };
 
   return (
     <div {...rest} className={mergedClassName} style={containerStyle}>
       {illustration}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        <h3
-          style={{
-            fontSize: 'var(--font-size-xl)',
-            margin: 0,
-          }}
-        >
+        <h3 className={styles.title}>
           {title}
         </h3>
-        {hint ? (
-          <p
-            style={{
-              margin: 0,
-              color: 'var(--muted)',
-              fontSize: 'var(--font-size-md)',
-            }}
-          >
-            {hint}
-          </p>
-        ) : null}
+        {hint ? <p className={styles.hint}>{hint}</p> : null}
       </div>
       {children}
       {primaryAction || secondaryAction ? (
-        <div
-          className="fp-ui-empty-state__actions"
-          style={{
-            display: 'flex',
-            gap: 'var(--space-2)',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-          }}
-        >
+        <div className={[styles.actions, 'fp-ui-empty-state__actions'].join(' ')}>
           {primaryAction ? renderAction(primaryAction, 'primary') : null}
           {secondaryAction ? renderAction(secondaryAction, 'secondary') : null}
         </div>

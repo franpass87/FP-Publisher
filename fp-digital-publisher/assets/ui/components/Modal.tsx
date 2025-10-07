@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { __ } from '@wordpress/i18n';
+import styles from './Modal.module.css';
 
 export type ModalSize = 'sm' | 'md' | 'lg';
 
@@ -154,54 +155,20 @@ export const Modal: React.FC<ModalProps> = ({
     return null;
   }
 
-  const overlayStyle: React.CSSProperties = {
-    position: 'fixed',
-    inset: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 'var(--space-6)',
-    zIndex: 1000,
-  };
+  const overlayStyle: React.CSSProperties = {};
 
   const contentStyle: React.CSSProperties = {
-    position: 'relative',
     width: `min(100%, ${getModalWidth(size)})`,
-    maxHeight: '80vh',
-    overflowY: 'auto',
-    backgroundColor: 'var(--panel)',
-    borderRadius: 'calc(var(--radius) * 0.9)',
-    boxShadow: 'var(--shadow-2)',
-    border: '1px solid rgba(208, 215, 226, 0.7)',
-    padding: 'var(--space-5)',
-    outline: 'none',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'var(--space-4)',
   };
 
-  const closeButtonStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: 'var(--space-3)',
-    right: 'var(--space-3)',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    border: '1px solid rgba(208, 215, 226, 0.8)',
-    borderRadius: '999px',
-    width: '32px',
-    height: '32px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-  };
+  const closeButtonStyle: React.CSSProperties = {};
 
   return createPortal(
     <div
       ref={overlayRef}
       role="presentation"
       onMouseDown={handleOverlayClick}
-      className="fp-ui-modal__overlay"
+      className={styles.overlay}
       style={overlayStyle}
     >
       <div
@@ -211,7 +178,7 @@ export const Modal: React.FC<ModalProps> = ({
         aria-labelledby={title ? titleId : undefined}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className="fp-ui-modal__content"
+        className={styles.content}
         style={contentStyle}
         onKeyDown={handleKeyDown}
       >
@@ -219,7 +186,7 @@ export const Modal: React.FC<ModalProps> = ({
           type="button"
           onClick={onDismiss}
           aria-label={closeLabel}
-          className="fp-ui-modal__close"
+          className={styles.closeButton}
           style={closeButtonStyle}
         >
           <span aria-hidden="true">×</span>
@@ -256,23 +223,10 @@ export const Modal: React.FC<ModalProps> = ({
             ) : null}
           </header>
         ) : null}
-        <div
-          className="fp-ui-modal__body"
-          style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
-        >
+        <div className={styles.body}>
           {children}
         </div>
-        {footer ? (
-          <footer
-            style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: 'var(--space-2)',
-            }}
-          >
-            {footer}
-          </footer>
-        ) : null}
+        {footer ? <footer className={styles.footer}>{footer}</footer> : null}
       </div>
     </div>,
     portalElement

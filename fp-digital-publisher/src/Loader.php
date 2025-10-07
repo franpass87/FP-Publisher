@@ -28,11 +28,21 @@ use FP\Publisher\Services\WordPress\Dispatcher as WordPressDispatcher;
 use FP\Publisher\Services\Worker;
 use FP\Publisher\Support\Cli\QueueCommand;
 use FP\Publisher\Support\I18n;
+use FP\Publisher\Support\Container;
+use FP\Publisher\Support\CoreProvider;
+use FP\Publisher\Support\ContainerRegistry;
 
 final class Loader
 {
     public static function init(): void
     {
+        // Initialize lightweight service container and core services
+        $container = new Container();
+        ContainerRegistry::set($container);
+        $core = new CoreProvider();
+        $core->register($container);
+        $core->boot($container);
+
         Migrations::maybeUpgrade();
         OptimizationMigration::maybeRun();
         Options::bootstrap();

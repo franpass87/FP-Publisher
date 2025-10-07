@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace FP\Publisher\Services\WordPress;
 
-use FP\Publisher\Infra\Queue;
+use FP\Publisher\Support\ContainerRegistry;
+use FP\Publisher\Support\Contracts\QueueInterface;
 use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\TransientErrorClassifier;
 use Throwable;
@@ -48,20 +49,26 @@ final class Dispatcher
         try {
             $result = Publisher::process($job, $payload);
             if ($result['preview'] ?? false) {
-                Queue::markCompleted($jobId, null);
+                /** @var QueueInterface $queue */
+                $queue = ContainerRegistry::get()->get(QueueInterface::class);
+                $queue->markCompleted($jobId, null);
                 return;
             }
 
             $remoteId = isset($result['post_id']) ? (string) $result['post_id'] : '';
             $remoteId = $remoteId !== '' ? $remoteId : null;
 
-            Queue::markCompleted($jobId, $remoteId);
+            /** @var QueueInterface $queue */
+            $queue = ContainerRegistry::get()->get(QueueInterface::class);
+            $queue->markCompleted($jobId, $remoteId);
             do_action('fp_pub_published', $channel, $remoteId, $job);
         } catch (Throwable $throwable) {
             $retryable = TransientErrorClassifier::shouldRetry($throwable);
             $retryable = (bool) apply_filters('fp_pub_retry_decision', $retryable, $throwable, $job);
             $message = wp_strip_all_tags($throwable->getMessage());
-            Queue::markFailed(
+            /** @var QueueInterface $queue */
+            $queue = ContainerRegistry::get()->get(QueueInterface::class);
+            $queue->markFailed(
                 $job,
                 $message !== '' ? $message : 'Errore nella pubblicazione del blog WordPress.',
                 $retryable

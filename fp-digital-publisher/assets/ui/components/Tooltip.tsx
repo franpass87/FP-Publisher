@@ -1,4 +1,5 @@
 import * as React from 'react';
+import styles from './Tooltip.module.css';
 
 export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 
@@ -80,22 +81,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     onBlur: composeEventHandler(children.props.onBlur, hide),
   });
 
-  const tooltipStyle: React.CSSProperties = {
-    position: 'absolute',
-    zIndex: 20,
-    padding: '6px 10px',
-    borderRadius: '6px',
-    backgroundColor: 'rgba(31, 41, 51, 0.92)',
-    color: '#fff',
-    fontSize: 'var(--font-size-sm)',
-    fontWeight: 'var(--font-weight-medium)',
-    lineHeight: 1.2,
-    maxWidth: '240px',
-    boxShadow: 'var(--shadow-1)',
-    pointerEvents: 'none',
-    opacity: open ? 1 : 0,
-    transition: 'opacity 120ms ease, transform 120ms ease',
-  };
+  const tooltipStyle: React.CSSProperties = { opacity: open ? 1 : 0 };
 
   const getPositionStyles = (): React.CSSProperties => {
     switch (placement) {
@@ -127,13 +113,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     }
   };
 
-  const arrowStyle: React.CSSProperties = {
-    position: 'absolute',
-    width: '8px',
-    height: '8px',
-    backgroundColor: 'inherit',
-    transform: 'rotate(45deg)',
-  };
+  const arrowStyle: React.CSSProperties = {};
 
   const getArrowPosition = (): React.CSSProperties => {
     switch (placement) {
@@ -150,18 +130,16 @@ export const Tooltip: React.FC<TooltipProps> = ({
   };
 
   return (
-    <span
-      className="fp-ui-tooltip-wrapper"
-      style={{ position: 'relative', display: 'inline-flex' }}
-    >
+    <span className={styles.wrapper}>
       {child}
       <span
         role="tooltip"
         id={tooltipId}
         aria-hidden={!open}
+        className={styles.tooltip}
         style={{ ...tooltipStyle, ...getPositionStyles() }}
       >
-        <span style={{ ...arrowStyle, ...getArrowPosition() }} />
+        <span className={styles.arrow} style={{ ...arrowStyle, ...getArrowPosition() }} />
         <span>{content}</span>
       </span>
     </span>

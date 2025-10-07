@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { __ } from '@wordpress/i18n';
+import styles from './ToastHost.module.css';
 
 type ToastIntent = 'neutral' | 'success' | 'warning' | 'danger';
 
@@ -147,17 +148,14 @@ export const ToastHost: React.FC<ToastHostProps> = ({
     };
   }, [maxToasts]);
 
-  const hostStyle = React.useMemo(
-    () => getPlacementStyles(placement),
-    [placement]
-  );
+  const hostStyle = React.useMemo(() => getPlacementStyles(placement), [placement]);
 
   return (
     <div
       role="region"
       aria-live="polite"
       aria-label={__('Notifications', 'fp-publisher')}
-      className="fp-ui-toast-host"
+      className={styles.host}
       style={hostStyle}
     >
       {toasts.length === 0 ? (
@@ -176,32 +174,17 @@ export const ToastHost: React.FC<ToastHostProps> = ({
         return (
           <article
             key={toast.id}
-            className="fp-ui-toast"
+            className={styles.toast}
             role="status"
             style={{
-              minWidth: '260px',
-              maxWidth: '360px',
               backgroundColor: colors.background,
               border: `1px solid ${colors.border}`,
               color: colors.text,
-              borderRadius: 'calc(var(--radius) / 1.5)',
-              boxShadow: 'var(--shadow-1)',
-              padding: 'var(--space-3)',
-              pointerEvents: 'auto',
-              display: 'grid',
-              gap: 'var(--space-2)',
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                gap: 'var(--space-2)',
-              }}
-            >
+            <div className={styles.toastHeader}>
               <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
-                <strong style={{ fontSize: 'var(--font-size-md)' }}>
+                <strong className={styles.toastTitle}>
                   {toast.title}
                 </strong>
                 {toast.description ? (
@@ -234,15 +217,7 @@ export const ToastHost: React.FC<ToastHostProps> = ({
                     toast.action?.onClick(event);
                     dismissToast(toast.id);
                   }}
-                  style={{
-                    backgroundColor: 'var(--primary)',
-                    border: '1px solid var(--primary)',
-                    color: '#fff',
-                    padding: '6px 12px',
-                    borderRadius: '999px',
-                    fontSize: 'var(--font-size-sm)',
-                    cursor: 'pointer',
-                  }}
+                  className={styles.toastActionButton}
                 >
                   {toast.action.label}
                 </button>

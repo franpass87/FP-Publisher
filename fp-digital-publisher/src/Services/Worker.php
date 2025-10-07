@@ -6,6 +6,8 @@ namespace FP\Publisher\Services;
 
 use FP\Publisher\Infra\Options;
 use FP\Publisher\Support\Dates;
+use FP\Publisher\Support\ContainerRegistry;
+use FP\Publisher\Support\Contracts\SchedulerInterface;
 
 use function __;
 use function add_action;
@@ -58,7 +60,10 @@ final class Worker
         global $wpdb;
 
         $limit = max(1, (int) Options::get('queue.max_concurrent', 5));
-        $jobs = Scheduler::getRunnableJobs(Dates::now('UTC'), $limit);
+        $container = ContainerRegistry::get();
+        /** @var SchedulerInterface $scheduler */
+        $scheduler = $container->get(SchedulerInterface::class);
+        $jobs = $scheduler->getRunnableJobs(Dates::now('UTC'), $limit);
 
         $processed = 0;
         $errors = 0;

@@ -6,6 +6,7 @@ namespace FP\Publisher\Admin;
 
 use FP\Publisher\Infra\Capabilities;
 use FP\Publisher\Infra\Queue;
+use FP\Publisher\Support\ContainerRegistry;
 use FP\Publisher\Support\Channels;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Strings;
@@ -45,7 +46,9 @@ final class QueuePage
         $search = isset($_GET['s']) ? (string) wp_unslash($_GET['s']) : '';
         $page = isset($_GET['paged']) ? max(1, (int) $_GET['paged']) : 1;
 
-        $result = Queue::paginate($page, self::PER_PAGE, [
+        /** @var \FP\Publisher\Support\Contracts\QueueInterface $queue */
+        $queue = ContainerRegistry::get()->get(\FP\Publisher\Support\Contracts\QueueInterface::class);
+        $result = $queue->paginate($page, self::PER_PAGE, [
             'status' => $status !== '' ? $status : null,
             'channel' => $channel !== '' ? $channel : null,
             'search' => $search !== '' ? $search : null,

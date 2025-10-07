@@ -6,6 +6,8 @@ namespace FP\Publisher\Api;
 
 use DateTimeInterface;
 use FP\Publisher\Infra\Queue;
+use FP\Publisher\Support\ContainerRegistry;
+use FP\Publisher\Support\Contracts\QueueInterface;
 use FP\Publisher\Services\Worker;
 use FP\Publisher\Support\Dates;
 use WP_REST_Response;
@@ -139,8 +141,10 @@ final class HealthCheck
     private static function checkQueue(): array
     {
         try {
-            $pendingJobs = count(Queue::dueJobs(Dates::now('UTC'), 1000));
-            $runningChannels = Queue::runningChannels();
+            /** @var QueueInterface $queue */
+            $queue = ContainerRegistry::get()->get(QueueInterface::class);
+            $pendingJobs = count($queue->dueJobs(Dates::now('UTC'), 1000));
+            $runningChannels = $queue->runningChannels();
             $runningJobs = array_sum($runningChannels);
 
             // Thresholds for alerting

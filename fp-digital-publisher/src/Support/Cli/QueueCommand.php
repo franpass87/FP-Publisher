@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace FP\Publisher\Support\Cli;
 
 use FP\Publisher\Infra\Queue;
-use FP\Publisher\Services\Scheduler;
+use FP\Publisher\Support\ContainerRegistry;
+use FP\Publisher\Support\Contracts\SchedulerInterface;
 use FP\Publisher\Support\Dates;
 use FP\Publisher\Support\Strings;
 use WP_CLI;
@@ -68,7 +69,11 @@ final class QueueCommand extends WP_CLI_Command
             'search' => is_string($search) && $search !== '' ? $search : null,
         ]);
 
-        $result = Queue::paginate($page, $perPage, $filters);
+        /** @var SchedulerInterface $scheduler */
+        $scheduler = ContainerRegistry::get()->get(SchedulerInterface::class);
+        /** @var \FP\Publisher\Support\Contracts\QueueInterface $queue */
+        $queue = ContainerRegistry::get()->get(\FP\Publisher\Support\Contracts\QueueInterface::class);
+        $result = $queue->paginate($page, $perPage, $filters);
         $items = $result['items'];
 
         if ($items === []) {
@@ -114,7 +119,9 @@ final class QueueCommand extends WP_CLI_Command
         $limit = $limit > 0 ? $limit : 1;
 
         $now = Dates::now('UTC');
-        $jobs = Scheduler::getRunnableJobs($now, $limit);
+        /** @var SchedulerInterface $scheduler */
+        $scheduler = ContainerRegistry::get()->get(SchedulerInterface::class);
+        $jobs = $scheduler->getRunnableJobs($now, $limit);
 
         if ($jobs === []) {
             WP_CLI::success(__('No runnable jobs found.', 'fp-publisher'));

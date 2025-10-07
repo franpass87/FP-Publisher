@@ -662,7 +662,10 @@ final class Routes
         );
 
         try {
-            $job = Queue::enqueue($channel, $payload, $runAt, $idempotencyKey);
+            $container = \FP\Publisher\Support\ContainerRegistry::get();
+            /** @var \FP\Publisher\Support\Contracts\QueueInterface $queue */
+            $queue = $container->get(\FP\Publisher\Support\Contracts\QueueInterface::class);
+            $job = $queue->enqueue($channel, $payload, $runAt, $idempotencyKey);
         } catch (RuntimeException $exception) {
             return new WP_Error(
                 'fp_publisher_queue_error',
@@ -688,7 +691,10 @@ final class Routes
         }
 
         $runAt = self::extractRunAt($request);
-        $result = Scheduler::evaluate($channel, $runAt);
+        $container = \FP\Publisher\Support\ContainerRegistry::get();
+        /** @var \FP\Publisher\Support\Contracts\SchedulerInterface $scheduler */
+        $scheduler = $container->get(\FP\Publisher\Support\Contracts\SchedulerInterface::class);
+        $result = $scheduler->evaluate($channel, $runAt);
 
         return new WP_REST_Response([
             'channel' => $channel,
@@ -709,7 +715,10 @@ final class Routes
         }
 
         try {
-            $job = Queue::replay($jobId);
+            $container = \FP\Publisher\Support\ContainerRegistry::get();
+            /** @var \FP\Publisher\Support\Contracts\QueueInterface $queue */
+            $queue = $container->get(\FP\Publisher\Support\Contracts\QueueInterface::class);
+            $job = $queue->replay($jobId);
         } catch (RuntimeException $exception) {
             return new WP_Error(
                 'fp_publisher_replay_failed',
@@ -1619,10 +1628,14 @@ final class Routes
             'failed' => []
         ];
 
+        $container = \FP\Publisher\Support\ContainerRegistry::get();
+        /** @var \FP\Publisher\Support\Contracts\QueueInterface $queue */
+        $queue = $container->get(\FP\Publisher\Support\Contracts\QueueInterface::class);
+
         foreach ($jobIds as $jobId) {
             try {
                 match($action) {
-                    'replay' => Queue::replay($jobId),
+                    'replay' => $queue->replay($jobId),
                     'cancel' => self::cancelJob($jobId),
                     'delete' => self::deleteJob($jobId),
                     default => throw new InvalidArgumentException('Invalid action')
@@ -1649,17 +1662,20 @@ final class Routes
      */
     private static function cancelJob(int $jobId): void
     {
-        $job = Queue::findById($jobId);
+        $container = \FP\Publisher\Support\ContainerRegistry::get();
+        /** @var \FP\Publisher\Support\Contracts\QueueInterface $queue */
+        $queue = $container->get(\FP\Publisher\Support\Contracts\QueueInterface::class);
+        $job = $queue->findById($jobId);
         
         if ($job === null) {
             throw new RuntimeException(__('Job not found.', 'fp-publisher'));
         }
 
-        if (!in_array($job['status'], [Queue::STATUS_PENDING, Queue::STATUS_RUNNING], true)) {
+        if (!in_array($job['status'], [\FP\Publisher\Infra\Queue::STATUS_PENDING, \FP\Publisher\Infra\Queue::STATUS_RUNNING], true)) {
             throw new RuntimeException(__('Only pending or running jobs can be cancelled.', 'fp-publisher'));
         }
 
-        Queue::markFailed($job, 'Cancelled by user', false);
+        $queue->markFailed($job, 'Cancelled by user', false);
     }
 
     /**
@@ -1669,13 +1685,16 @@ final class Routes
     {
         global $wpdb;
 
-        $job = Queue::findById($jobId);
+        $container = \FP\Publisher\Support\ContainerRegistry::get();
+        /** @var \FP\Publisher\Support\Contracts\QueueInterface $queue */
+        $queue = $container->get(\FP\Publisher\Support\Contracts\QueueInterface::class);
+        $job = $queue->findById($jobId);
         
         if ($job === null) {
             throw new RuntimeException(__('Job not found.', 'fp-publisher'));
         }
 
-        if ($job['status'] === Queue::STATUS_RUNNING) {
+        if ($job['status'] === \FP\Publisher\Infra\Queue::STATUS_RUNNING) {
             throw new RuntimeException(__('Cannot delete running jobs.', 'fp-publisher'));
         }
 
