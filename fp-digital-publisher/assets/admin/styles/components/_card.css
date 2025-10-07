@@ -1,0 +1,59 @@
+/**
+ * Component - Card
+ * Card container riutilizzabile
+ */
+
+.fp-card {
+  background: var(--fp-color-white);
+  border: 1px solid var(--fp-color-gray-200);
+  border-radius: var(--fp-radius-lg);
+  overflow: hidden;
+  transition: box-shadow var(--fp-transition-fast);
+}
+
+.fp-card:hover {
+  box-shadow: var(--fp-shadow-md);
+}
+
+.fp-card__header {
+  padding: var(--fp-space-lg);
+  border-bottom: 1px solid var(--fp-color-gray-200);
+}
+
+.fp-card__title {
+  margin: 0;
+  font-size: var(--fp-font-size-lg);
+  font-weight: var(--fp-font-weight-semibold);
+  color: var(--fp-color-black);
+}
+
+.fp-card__subtitle {
+  margin: var(--fp-space-xs) 0 0;
+  font-size: var(--fp-font-size-sm);
+  color: var(--fp-color-gray-600);
+}
+
+.fp-card__body {
+  padding: var(--fp-space-lg);
+}
+
+.fp-card__footer {
+  padding: var(--fp-space-lg);
+  border-top: 1px solid var(--fp-color-gray-200);
+  background: var(--fp-color-gray-50);
+}
+
+/* Varianti */
+.fp-card--elevated {
+  box-shadow: var(--fp-shadow-lg);
+}
+
+.fp-card--interactive {
+  cursor: pointer;
+  transition: all var(--fp-transition-fast);
+}
+
+.fp-card--interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--fp-shadow-xl);
+}

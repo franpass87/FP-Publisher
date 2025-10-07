@@ -1,0 +1,60 @@
+/**
+ * Base Reset & Normalizzazione
+ * Stili base per garantire consistenza cross-browser
+ */
+
+.fp-publisher-admin__mount {
+  min-height: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fp-color-white);
+  border: 1px solid var(--fp-color-gray-200);
+  border-radius: var(--fp-radius-lg);
+  padding: var(--fp-space-2xl);
+}
+
+.fp-publisher-admin__mount * {
+  box-sizing: border-box;
+}
+
+.fp-publisher-admin__mount button {
+  font-family: var(--fp-font-family);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+}
+
+.fp-publisher-admin__mount input,
+.fp-publisher-admin__mount textarea,
+.fp-publisher-admin__mount select {
+  font-family: var(--fp-font-family);
+  font-size: var(--fp-font-size-base);
+}
+
+.fp-publisher-admin__mount h1,
+.fp-publisher-admin__mount h2,
+.fp-publisher-admin__mount h3,
+.fp-publisher-admin__mount h4,
+.fp-publisher-admin__mount h5,
+.fp-publisher-admin__mount h6 {
+  margin: 0;
+  font-weight: var(--fp-font-weight-semibold);
+}
+
+.fp-publisher-admin__mount p {
+  margin: 0;
+  line-height: var(--fp-line-height-normal);
+}
+
+.fp-publisher-admin__mount a {
+  color: var(--fp-color-primary);
+  text-decoration: none;
+}
+
+.fp-publisher-admin__mount a:hover {
+  color: var(--fp-color-primary-hover);
+  text-decoration: underline;
+}
