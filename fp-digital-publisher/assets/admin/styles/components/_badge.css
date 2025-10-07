@@ -1,0 +1,59 @@
+/**
+ * Component - Badge
+ * Badge e etichette per stati
+ */
+
+.fp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fp-space-xs);
+  padding: 2px var(--fp-space-sm);
+  font-size: var(--fp-font-size-xs);
+  font-weight: var(--fp-font-weight-medium);
+  line-height: var(--fp-line-height-tight);
+  border-radius: var(--fp-radius-full);
+  white-space: nowrap;
+}
+
+/* Varianti colore */
+.fp-badge--neutral {
+  background: var(--fp-color-gray-100);
+  color: var(--fp-color-gray-700);
+}
+
+.fp-badge--primary {
+  background: var(--fp-color-primary-light);
+  color: var(--fp-color-primary);
+}
+
+.fp-badge--success {
+  background: var(--fp-color-success-light);
+  color: var(--fp-color-success);
+}
+
+.fp-badge--warning {
+  background: var(--fp-color-warning-light);
+  color: var(--fp-color-warning);
+}
+
+.fp-badge--danger {
+  background: var(--fp-color-danger-light);
+  color: var(--fp-color-danger);
+}
+
+/* Dimensioni */
+.fp-badge--sm {
+  padding: 1px var(--fp-space-xs);
+  font-size: 10px;
+}
+
+.fp-badge--lg {
+  padding: var(--fp-space-xs) var(--fp-space-md);
+  font-size: var(--fp-font-size-sm);
+}
+
+/* Con icona */
+.fp-badge__icon {
+  width: 12px;
+  height: 12px;
+}

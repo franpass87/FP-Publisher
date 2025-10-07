@@ -1,0 +1,43 @@
+/**
+ * Layout - Shell
+ * Struttura principale dell'applicazione admin
+ */
+
+.fp-publisher-shell {
+  width: 100%;
+  max-width: 1080px;
+}
+
+.fp-publisher-shell__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--fp-space-lg);
+  margin-bottom: var(--fp-space-xl);
+}
+
+.fp-publisher-shell__title {
+  margin: 0;
+  font-size: var(--fp-font-size-3xl);
+  font-weight: var(--fp-font-weight-semibold);
+  color: var(--fp-color-black);
+}
+
+.fp-publisher-shell__subtitle {
+  margin: var(--fp-space-xs) 0 0;
+  font-size: var(--fp-font-size-md);
+  color: var(--fp-color-gray-700);
+}
+
+.fp-publisher-shell__version {
+  font-size: var(--fp-font-size-sm);
+  font-weight: var(--fp-font-weight-medium);
+  color: var(--fp-color-gray-700);
+  margin-top: var(--fp-space-sm);
+}
+
+.fp-publisher-shell__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--fp-space-xl);
+}

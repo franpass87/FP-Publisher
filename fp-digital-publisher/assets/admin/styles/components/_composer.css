@@ -1,0 +1,77 @@
+/**
+ * Component - Composer
+ * Editor per la composizione dei contenuti
+ */
+
+.fp-composer {
+  background: var(--fp-color-white);
+  border-radius: var(--fp-radius-lg);
+  padding: var(--fp-space-2xl);
+  border: 1px solid var(--fp-color-gray-200);
+}
+
+.fp-composer__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--fp-space-lg);
+  margin-bottom: var(--fp-space-2xl);
+}
+
+.fp-composer__header h2 {
+  margin-bottom: var(--fp-space-xs);
+  font-size: var(--fp-font-size-xl);
+}
+
+.fp-composer__subtitle {
+  margin: 0;
+  font-size: var(--fp-font-size-base);
+  color: var(--fp-color-gray-700);
+}
+
+.fp-composer__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fp-space-2xl);
+}
+
+.fp-composer__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fp-space-lg);
+}
+
+.fp-composer__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--fp-space-md);
+  padding-top: var(--fp-space-2xl);
+  border-top: 1px solid var(--fp-color-gray-200);
+}
+
+.fp-composer__score {
+  display: flex;
+  align-items: center;
+  gap: var(--fp-space-sm);
+  padding: var(--fp-space-sm) var(--fp-space-md);
+  background: var(--fp-color-gray-50);
+  border-radius: var(--fp-radius-md);
+  font-size: var(--fp-font-size-sm);
+  font-weight: var(--fp-font-weight-medium);
+}
+
+.fp-composer__score--good {
+  color: var(--fp-color-success);
+  background: var(--fp-color-success-light);
+}
+
+.fp-composer__score--warning {
+  color: var(--fp-color-warning);
+  background: var(--fp-color-warning-light);
+}
+
+.fp-composer__score--danger {
+  color: var(--fp-color-danger);
+  background: var(--fp-color-danger-light);
+}

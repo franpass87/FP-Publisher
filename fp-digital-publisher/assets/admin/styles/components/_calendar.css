@@ -1,0 +1,97 @@
+/**
+ * Component - Calendar
+ * Calendario per la pianificazione dei contenuti
+ */
+
+.fp-calendar {
+  background: var(--fp-color-white);
+  border-radius: var(--fp-radius-lg);
+  overflow: hidden;
+}
+
+.fp-calendar__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--fp-space-lg);
+  border-bottom: 1px solid var(--fp-color-gray-200);
+}
+
+.fp-calendar__title {
+  font-size: var(--fp-font-size-lg);
+  font-weight: var(--fp-font-weight-semibold);
+  color: var(--fp-color-black);
+}
+
+.fp-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--fp-color-gray-200);
+}
+
+.fp-calendar__day-header {
+  padding: var(--fp-space-sm);
+  text-align: center;
+  font-size: var(--fp-font-size-sm);
+  font-weight: var(--fp-font-weight-semibold);
+  color: var(--fp-color-gray-600);
+  background: var(--fp-color-gray-50);
+}
+
+.fp-calendar__cell {
+  min-height: 100px;
+  padding: var(--fp-space-sm);
+  background: var(--fp-color-white);
+  transition: background-color var(--fp-transition-fast);
+}
+
+.fp-calendar__cell:hover {
+  background: var(--fp-color-gray-50);
+}
+
+.fp-calendar__cell--today {
+  background: var(--fp-color-primary-light);
+}
+
+.fp-calendar__cell--selected {
+  background: var(--fp-color-primary);
+  color: var(--fp-color-white);
+}
+
+.fp-calendar__date {
+  font-size: var(--fp-font-size-sm);
+  font-weight: var(--fp-font-weight-medium);
+  margin-bottom: var(--fp-space-xs);
+}
+
+.fp-calendar__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fp-space-xs);
+}
+
+.fp-calendar__item {
+  padding: var(--fp-space-xs);
+  background: var(--fp-color-gray-100);
+  border-radius: var(--fp-radius-sm);
+  font-size: var(--fp-font-size-xs);
+  cursor: pointer;
+  transition: all var(--fp-transition-fast);
+}
+
+.fp-calendar__item:hover {
+  background: var(--fp-color-gray-200);
+  transform: translateY(-1px);
+}
+
+/* Compact variant */
+.fp-calendar--compact .fp-calendar__cell {
+  min-height: 60px;
+  padding: var(--fp-space-xs);
+}
+
+.fp-calendar--compact .fp-calendar__item {
+  padding: 2px var(--fp-space-xs);
+  font-size: 10px;
+}

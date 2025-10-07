@@ -1,0 +1,77 @@
+/**
+ * Utilities - Helper Classes
+ * Classi utility riutilizzabili
+ */
+
+/* Visibilità */
+.fp-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.fp-hidden {
+  display: none !important;
+}
+
+/* Spacing */
+.fp-mt-0 { margin-top: 0 !important; }
+.fp-mt-1 { margin-top: var(--fp-space-xs) !important; }
+.fp-mt-2 { margin-top: var(--fp-space-sm) !important; }
+.fp-mt-3 { margin-top: var(--fp-space-md) !important; }
+.fp-mt-4 { margin-top: var(--fp-space-lg) !important; }
+
+.fp-mb-0 { margin-bottom: 0 !important; }
+.fp-mb-1 { margin-bottom: var(--fp-space-xs) !important; }
+.fp-mb-2 { margin-bottom: var(--fp-space-sm) !important; }
+.fp-mb-3 { margin-bottom: var(--fp-space-md) !important; }
+.fp-mb-4 { margin-bottom: var(--fp-space-lg) !important; }
+
+/* Text Alignment */
+.fp-text-left { text-align: left !important; }
+.fp-text-center { text-align: center !important; }
+.fp-text-right { text-align: right !important; }
+
+/* Text Color */
+.fp-text-muted { color: var(--fp-color-gray-600) !important; }
+.fp-text-success { color: var(--fp-color-success) !important; }
+.fp-text-warning { color: var(--fp-color-warning) !important; }
+.fp-text-danger { color: var(--fp-color-danger) !important; }
+
+/* Display */
+.fp-flex { display: flex !important; }
+.fp-inline-flex { display: inline-flex !important; }
+.fp-block { display: block !important; }
+.fp-inline-block { display: inline-block !important; }
+.fp-grid { display: grid !important; }
+
+/* Flex utilities */
+.fp-items-center { align-items: center !important; }
+.fp-items-start { align-items: flex-start !important; }
+.fp-items-end { align-items: flex-end !important; }
+.fp-justify-center { justify-content: center !important; }
+.fp-justify-between { justify-content: space-between !important; }
+.fp-justify-end { justify-content: flex-end !important; }
+
+/* Gap */
+.fp-gap-1 { gap: var(--fp-space-xs) !important; }
+.fp-gap-2 { gap: var(--fp-space-sm) !important; }
+.fp-gap-3 { gap: var(--fp-space-md) !important; }
+.fp-gap-4 { gap: var(--fp-space-lg) !important; }
+
+/* Width */
+.fp-w-full { width: 100% !important; }
+.fp-w-auto { width: auto !important; }
+
+/* Truncate */
+.fp-truncate {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}

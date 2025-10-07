@@ -1,0 +1,97 @@
+/**
+ * Component - Button
+ * Stili per pulsanti e azioni
+ */
+
+.fp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fp-space-sm);
+  padding: var(--fp-space-sm) var(--fp-space-lg);
+  font-size: var(--fp-font-size-base);
+  font-weight: var(--fp-font-weight-medium);
+  line-height: var(--fp-line-height-tight);
+  border-radius: var(--fp-radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--fp-transition-fast);
+  white-space: nowrap;
+}
+
+/* Varianti */
+.fp-btn--primary {
+  background: var(--fp-color-primary);
+  color: var(--fp-color-white);
+  border-color: var(--fp-color-primary);
+}
+
+.fp-btn--primary:hover:not(:disabled) {
+  background: var(--fp-color-primary-hover);
+  border-color: var(--fp-color-primary-hover);
+}
+
+.fp-btn--secondary {
+  background: var(--fp-color-white);
+  color: var(--fp-color-black);
+  border-color: var(--fp-color-gray-200);
+}
+
+.fp-btn--secondary:hover:not(:disabled) {
+  background: var(--fp-color-gray-50);
+}
+
+.fp-btn--success {
+  background: var(--fp-color-success);
+  color: var(--fp-color-white);
+  border-color: var(--fp-color-success);
+}
+
+.fp-btn--warning {
+  background: var(--fp-color-warning);
+  color: var(--fp-color-black);
+  border-color: var(--fp-color-warning);
+}
+
+.fp-btn--danger {
+  background: var(--fp-color-danger);
+  color: var(--fp-color-white);
+  border-color: var(--fp-color-danger);
+}
+
+/* Dimensioni */
+.fp-btn--sm {
+  padding: var(--fp-space-xs) var(--fp-space-md);
+  font-size: var(--fp-font-size-sm);
+}
+
+.fp-btn--lg {
+  padding: var(--fp-space-md) var(--fp-space-xl);
+  font-size: var(--fp-font-size-md);
+}
+
+/* Stati */
+.fp-btn:disabled,
+.fp-btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.fp-btn:focus-visible {
+  outline: 2px solid var(--fp-color-primary);
+  outline-offset: 2px;
+}
+
+/* Link button */
+.fp-btn--link {
+  background: transparent;
+  border: none;
+  color: var(--fp-color-primary);
+  padding: 0;
+  text-decoration: underline;
+}
+
+.fp-btn--link:hover:not(:disabled) {
+  color: var(--fp-color-primary-hover);
+}
