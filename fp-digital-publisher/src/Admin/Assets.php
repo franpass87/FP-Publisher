@@ -81,7 +81,8 @@ final class Assets
         $styleAbsolutePath = FP_PUBLISHER_PATH . $styleRelativePath;
 
         if (! file_exists($styleAbsolutePath)) {
-            $styleRelativePath = 'assets/admin/index.css';
+            // Use modular CSS architecture as fallback
+            $styleRelativePath = 'assets/admin/styles/index.css';
             $styleAbsolutePath = FP_PUBLISHER_PATH . $styleRelativePath;
         }
 

@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const entryFile = path.join(projectRoot, 'assets/admin/index.tsx');
 const outDir = path.join(projectRoot, 'assets/dist/admin');
-const cssSource = path.join(projectRoot, 'assets/admin/index.css');
+const cssSource = path.join(projectRoot, 'assets/admin/styles/index.css');
+const cssSourceDir = path.join(projectRoot, 'assets/admin/styles');
 const cssTarget = path.join(outDir, 'index.css');
 
 const isWatch = process.argv.includes('--watch');
@@ -47,16 +48,42 @@ async function ensureOutDir() {
   await fsp.mkdir(outDir, { recursive: true });
 }
 
+async function resolveImports(cssPath, basePath) {
+  const content = await fsp.readFile(cssPath, 'utf8');
+  const dir = path.dirname(cssPath);
+  
+  // Match @import statements
+  const importRegex = /@import\s+['"]([^'"]+)['"]\s*;/g;
+  const matches = Array.from(content.matchAll(importRegex));
+  
+  let resolved = content;
+  
+  for (const match of matches) {
+    const importPath = match[1];
+    const fullPath = path.resolve(dir, importPath);
+    
+    try {
+      const importedContent = await resolveImports(fullPath, basePath);
+      const relativePath = path.relative(basePath, fullPath);
+      resolved = resolved.replace(match[0], `/* Imported from ${relativePath} */\n${importedContent}\n`);
+    } catch (err) {
+      console.warn(`[build] Warning: Could not resolve import ${importPath}`);
+    }
+  }
+  
+  return resolved;
+}
+
 async function copyCss() {
   await ensureOutDir();
-  let css = await fsp.readFile(cssSource, 'utf8');
+  let css = await resolveImports(cssSource, cssSourceDir);
   
   if (isProduction) {
     // Minify CSS for production
     css = minifyCss(css);
-    console.log('[build] Minified and copied admin CSS');
+    console.log('[build] Minified and bundled modular CSS');
   } else {
-    console.log('[build] Copied admin CSS');
+    console.log('[build] Bundled modular CSS');
   }
   
   await fsp.writeFile(cssTarget, css);
@@ -74,7 +101,8 @@ function minifyCss(css) {
 function watchCss() {
   const debounced = debounce(copyCss, 100);
   debounced();
-  const watcher = fs.watch(cssSource, debounced);
+  // Watch the entire styles directory for changes
+  const watcher = fs.watch(cssSourceDir, { recursive: true }, debounced);
   return () => watcher.close();
 }
 
