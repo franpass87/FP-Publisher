@@ -1,0 +1,55 @@
+# Git
+.git
+.github
+.gitignore
+.gitattributes
+
+# IDEs
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Documentation
+*.md
+!README.md
+docs/
+examples/
+
+# Tests
+tests/
+phpunit.xml.dist
+phpunit.integration.xml.dist
+phpcs.xml.dist
+
+# Build artifacts
+build/
+node_modules/
+vendor/
+*.log
+
+# Development tools
+tools/
+.editorconfig
+.eslintrc*
+.prettierrc*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.cache
+
+# Plugin specific
+fp-digital-publisher/tests/
+fp-digital-publisher/docs/
+fp-digital-publisher/examples/
+fp-digital-publisher/build/
+fp-digital-publisher/node_modules/
+fp-digital-publisher/tools/

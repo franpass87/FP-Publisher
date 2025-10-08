@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "build": "node tools/build.mjs",
+    "build:prod": "NODE_ENV=production node tools/build.mjs",
     "dev": "node tools/build.mjs --watch",
     "sync:author": "node tools/sync-author-metadata.js --apply=${APPLY:-false}",
     "sync:docs": "node tools/sync-author-metadata.js --docs --apply=${APPLY:-false}",
