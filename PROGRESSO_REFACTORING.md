@@ -2,7 +2,7 @@
 
 **Data**: 2025-10-08  
 **Branch**: `refactor/modularization`  
-**Status**: ✅ In corso - Phase 1 completata
+**Status**: ✅ In corso - Phase 2A completata
 
 ---
 
@@ -90,22 +90,39 @@ assets/admin/
 
 ---
 
+### Sprint 2: TypeScript - Phase 2A Constants & API (COMPLETATO ✅)
+
+**Commit**: `6f74400` - refactor(typescript): extract constants and API service - Phase 2A
+
+✅ **Costanti estratte** (4 file, ~300 righe):
+- `constants/copy.ts` - Tutti i testi i18n (copy object + messages + labels)
+- `constants/preflight.ts` - PREFLIGHT_INSIGHTS configuration
+- `constants/icons.ts` - SVG icons (GRIP_ICON)
+- `constants/index.ts` - barrel export aggiornato
+
+✅ **Services completati**:
+- `services/api.service.ts` - Client REST API centralizzato
+  * Tutti gli endpoint: plans, comments, approvals, alerts, logs, links
+  * BestTime suggestions, Trello integration
+  * WordPress users search (mentions)
+  * Type-safe responses
+  * Error handling
+
+**Progresso index.tsx**:
+- Prima: 4399 righe
+- Estratto: ~650 righe (tipi, costanti, services)
+- Resto: ~3749 righe
+- **Completato**: ~15%
+
+---
+
 ## 🔄 In Corso
 
-### Sprint 2: TypeScript - Phase 2 (IN CORSO 🔄)
+### Sprint 2: TypeScript - Phase 2B Components (IN CORSO 🔄)
 
 **Prossimi passi**:
 
-1. **Estrarre costanti `copy`** (~500 righe)
-   - [ ] `constants/copy.ts` - tutti i testi i18n
-   - [ ] Organizzare per sezione (composer, calendar, comments, etc.)
-
-2. **Creare API Service** (~200 righe)
-   - [ ] `services/api.service.ts` - centralizzare tutte le fetch API
-   - [ ] Metodi per plans, comments, approvals, alerts, logs, links
-   - [ ] Error handling centralizzato
-
-3. **Estrarre componenti principali** (~3000 righe)
+1. **Estrarre componenti principali** (~3000 righe)
    - [ ] Shell + ShellHeader
    - [ ] Composer (form, preview, preflight, stepper)
    - [ ] Calendar (grid, cell, toolbar)
@@ -157,9 +174,9 @@ assets/admin/
 
 ### TypeScript
 - **Prima**: 1 file (4399 righe)
-- **Estratto**: 13 file (~375 righe)
-- **Resto**: ~4024 righe in index.tsx
-- **Stato**: 🔄 In corso (~8.5% completato)
+- **Estratto**: 19 file (~900 righe)
+- **Resto**: ~3499 righe in index.tsx
+- **Stato**: 🔄 In corso (~20% completato)
 
 ### PHP
 - **Prima**: Routes.php (1761 righe)
@@ -175,7 +192,7 @@ assets/admin/
 | Componente | Prima | Dopo | Progress |
 |------------|-------|------|----------|
 | **CSS** | 1 file (1898 righe) | 15+ file (avg 80 righe) | ✅ 100% |
-| **TypeScript** | 1 file (4399 righe) | 50+ file (avg 120 righe) | 🔄 8.5% |
+| **TypeScript** | 1 file (4399 righe) | 50+ file (avg 120 righe) | 🔄 20% |
 | **PHP** | 1 file (1761 righe) | 14+ controller (avg 150 righe) | ⏸️ 0% |
 
 ### File Target
@@ -225,11 +242,18 @@ assets/admin/
 fp-digital-publisher/
 ├── assets/
 │   ├── admin/
-│   │   ├── index.tsx (4199 righe rimanenti) 🔄
+│   │   ├── index.tsx (3499 righe rimanenti) 🔄
 │   │   ├── index.legacy.css (backup)
-│   │   ├── types/ (10 file) ✅
-│   │   ├── constants/ (1 file) ✅
-│   │   ├── services/ (2 file) ✅
+│   │   ├── types/ (10 file + index) ✅
+│   │   ├── constants/ (4 file + index) ✅
+│   │   │   ├── config.ts
+│   │   │   ├── copy.ts
+│   │   │   ├── preflight.ts
+│   │   │   └── icons.ts
+│   │   ├── services/ (3 file + index) ✅
+│   │   │   ├── sanitization.service.ts
+│   │   │   ├── validation.service.ts
+│   │   │   └── api.service.ts
 │   │   ├── hooks/ (vuoto)
 │   │   ├── components/ (cartelle create, vuote)
 │   │   ├── utils/ (esistente, da verificare)
@@ -267,8 +291,8 @@ fp-digital-publisher/
 - [x] Types TypeScript estratti
 - [x] Constants base estratte
 - [x] Services base estratti
-- [ ] Constants copy estratte
-- [ ] API service creato
+- [x] Constants copy estratte
+- [x] API service creato
 - [ ] Componenti React estratti
 - [ ] index.tsx aggiornato con import
 - [ ] Build TypeScript testato
@@ -278,9 +302,9 @@ fp-digital-publisher/
 
 ---
 
-**Status generale**: ✅ Ottimo progresso - Foundation completata  
-**Prossimo milestone**: Estrarre componenti React (Phase 2)  
+**Status generale**: ✅ Ottimo progresso - Foundation + Constants/API completati  
+**Prossimo milestone**: Estrarre componenti React (Phase 2B)  
 **Rischi**: Nessuno al momento  
 **Blocchi**: Nessuno
 
-**Ultimo aggiornamento**: 2025-10-08 19:15 UTC
+**Ultimo aggiornamento**: 2025-10-08 19:35 UTC
