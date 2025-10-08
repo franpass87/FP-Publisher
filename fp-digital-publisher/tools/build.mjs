@@ -22,17 +22,21 @@ const wpI18nPlugin = {
   },
 };
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 const buildOptions = {
   entryPoints: [entryFile],
   bundle: true,
   format: 'iife',
   target: ['es2019'],
-  sourcemap: true,
-  minify: !isWatch,
+  sourcemap: isWatch ? true : false,
+  minify: !isWatch || isProduction,
   outdir: outDir,
   entryNames: 'index',
   legalComments: 'none',
   logLevel: 'info',
+  drop: isProduction ? ['console', 'debugger'] : [],
+  treeShaking: true,
   plugins: [wpI18nPlugin],
   loader: {
     '.css': 'css',
@@ -45,9 +49,26 @@ async function ensureOutDir() {
 
 async function copyCss() {
   await ensureOutDir();
-  const css = await fsp.readFile(cssSource, 'utf8');
+  let css = await fsp.readFile(cssSource, 'utf8');
+  
+  if (isProduction) {
+    // Minify CSS for production
+    css = minifyCss(css);
+    console.log('[build] Minified and copied admin CSS');
+  } else {
+    console.log('[build] Copied admin CSS');
+  }
+  
   await fsp.writeFile(cssTarget, css);
-  console.log('[build] Copied admin CSS');
+}
+
+function minifyCss(css) {
+  return css
+    .replace(/\/\*[\s\S]*?\*\//g, '') // Remove comments
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .replace(/\s*([{}:;,>+~])\s*/g, '$1') // Remove spaces around special characters
+    .replace(/;}/g, '}') // Remove last semicolon in block
+    .trim();
 }
 
 function watchCss() {

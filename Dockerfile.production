@@ -1,0 +1,84 @@
+# Multi-stage Dockerfile for Production
+# Stage 1: Build dependencies and assets
+FROM ubuntu:22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    COMPOSER_ALLOW_SUPERUSER=1 \
+    NODE_MAJOR=18 \
+    NODE_ENV=production
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl git unzip zip \
+    php8.1 php8.1-cli php8.1-mbstring php8.1-xml php8.1-curl php8.1-intl php8.1-zip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js LTS
+RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer -o composer-setup.php \
+    && php composer-setup.php --install-dir=/usr/local/bin --filename=composer \
+    && rm composer-setup.php
+
+WORKDIR /build
+
+# Copy dependency manifests
+COPY fp-digital-publisher/composer.json fp-digital-publisher/composer.lock ./
+COPY fp-digital-publisher/package.json fp-digital-publisher/package-lock.json ./
+
+# Install dependencies
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --prefer-dist \
+    --optimize-autoloader \
+    --classmap-authoritative
+
+RUN npm ci --omit=dev --no-audit --no-fund
+
+# Copy source code
+COPY fp-digital-publisher/ ./
+
+# Build production assets
+RUN npm run build:prod
+
+# Generate optimized autoloader
+RUN composer dump-autoload -o --classmap-authoritative --no-dev
+
+# Stage 2: Production runtime
+FROM php:8.1-cli-alpine AS production
+
+# Install only runtime dependencies
+RUN apk add --no-cache \
+    libzip \
+    libxml2 \
+    libintl \
+    icu-libs \
+    && rm -rf /var/cache/apk/*
+
+WORKDIR /app/fp-digital-publisher
+
+# Copy only necessary files from builder
+COPY --from=builder /build/vendor ./vendor
+COPY --from=builder /build/assets/dist ./assets/dist
+COPY --from=builder /build/src ./src
+COPY --from=builder /build/languages ./languages
+COPY --from=builder /build/templates ./templates
+COPY --from=builder /build/fp-digital-publisher.php ./
+COPY --from=builder /build/readme.txt ./
+COPY --from=builder /build/composer.json ./
+
+# Set permissions
+RUN chown -R www-data:www-data /app && \
+    chmod -R 755 /app
+
+USER www-data
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD php -r "echo 'OK';" || exit 1
+
+CMD ["php", "-v"]

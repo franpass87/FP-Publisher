@@ -85,6 +85,12 @@ elif [ -n "$BUMP_TYPE" ]; then
     esac
 fi
 
+# Build production assets
+if command -v npm &> /dev/null; then
+    echo "Building production assets..."
+    NODE_ENV=production npm run build:prod || npm run build
+fi
+
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 composer dump-autoload -o --classmap-authoritative
 
