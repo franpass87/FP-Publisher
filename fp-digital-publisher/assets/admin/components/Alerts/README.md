@@ -1,17 +1,17 @@
 # 🚨 Alerts Component
 
-Componente modulare per gestire avvisi e notifiche del sistema con tab navigation e filtri.
+Componente modulare per gestire avvisi, notifiche e alert di sistema organizzati per tab.
 
 ## 🎯 Struttura
 
 ```
 Alerts/
-├── types.ts              # Tipi TypeScript
-├── utils.ts              # Funzioni utility
-├── AlertsService.ts      # Chiamate API
-├── AlertsRenderer.ts     # Rendering HTML
-├── index.ts              # Barrel export
-└── README.md             # Questa documentazione
+├── types.ts            # Tipi TypeScript
+├── utils.ts            # Funzioni utility
+├── AlertsService.ts    # Chiamate API
+├── AlertsRenderer.ts   # Rendering HTML
+├── index.ts            # Barrel export
+└── README.md           # Questa documentazione
 ```
 
 ## 📦 Utilizzo
@@ -26,22 +26,22 @@ import {
   type AlertsI18n,
 } from './components/Alerts';
 
-// Config dei tab
+// Config tabs
 const tabConfig: Record<AlertTabKey, AlertTabConfig> = {
   'empty-week': {
     label: 'Empty Week',
     endpoint: 'alerts/empty-week',
-    empty: 'No empty weeks found',
+    empty: 'No empty weeks detected.',
   },
   'token-expiry': {
     label: 'Token Expiry',
     endpoint: 'alerts/token-expiry',
-    empty: 'No tokens expiring soon',
+    empty: 'All tokens are valid.',
   },
   'failed-jobs': {
     label: 'Failed Jobs',
     endpoint: 'alerts/failed-jobs',
-    empty: 'No failed jobs',
+    empty: 'No failed jobs.',
   },
 };
 
@@ -55,7 +55,7 @@ createAlertsService({
 // I18n
 const i18n: AlertsI18n = {
   loadingMessage: 'Loading alerts…',
-  emptyMessage: 'No alerts found',
+  emptyMessage: 'No alerts found.',
   errorMessage: 'Error loading alerts',
   severityLabels: {
     info: 'Info',
@@ -65,22 +65,22 @@ const i18n: AlertsI18n = {
   openDetailsLabel: 'Open details',
 };
 
-// Renderizza
+// Renderizza widget
 const container = document.getElementById('fp-alerts-widget');
 if (!container) return;
 
 renderAlertsWidget(
   container,
   tabConfig,
-  'empty-week', // active tab
-  ['All brands', 'Brand A', 'Brand B'], // brand options
-  ['All channels', 'Instagram', 'Facebook'], // channel options
-  '', // selected brand
-  '' // selected channel
+  'empty-week',
+  ['', 'Brand A', 'Brand B'],
+  ['', 'instagram', 'facebook'],
+  '',
+  ''
 );
 ```
 
-### 2. Caricare Alerts
+### 2. Caricare Alerts per Tab
 
 ```typescript
 import {
@@ -91,11 +91,11 @@ import {
   announceUpdate,
 } from './components/Alerts';
 
-async function loadAlerts(tabKey: AlertTabKey, filters = {}) {
+async function loadAlerts(tabKey: AlertTabKey, filters: AlertFilters = {}) {
   const panel = document.getElementById('fp-alerts-panel');
   if (!panel) return;
 
-  // Update tab UI
+  // Update tabs UI
   updateTabButtons(tabKey);
 
   // Show loading
@@ -106,76 +106,82 @@ async function loadAlerts(tabKey: AlertTabKey, filters = {}) {
     const data = await service.fetchAlerts(tabKey, filters);
 
     // Render alerts
-    panel.innerHTML = renderAlertsList(data.items || [], i18n);
+    const items = data.items || [];
+    panel.innerHTML = renderAlertsList(items, i18n);
 
-    announceUpdate(`Loaded ${data.items?.length || 0} alerts`);
+    // Announce
+    announceUpdate(`Loaded ${items.length} alerts`);
   } catch (error) {
     panel.innerHTML = renderError(i18n.errorMessage);
   }
 }
 ```
 
-### 3. Gestire Tab Navigation
+### 3. Gestire Tab Changes
 
 ```typescript
 import { updateTabButtons } from './components/Alerts';
 
-// Event listener per tab
-container.addEventListener('click', (e) => {
-  const button = (e.target as HTMLElement).closest('[data-alert-tab]');
-  if (!button || !(button instanceof HTMLButtonElement)) return;
+container.addEventListener('click', async (e) => {
+  const button = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-alert-tab]');
+  if (!button) return;
 
   const tabKey = button.dataset.alertTab as AlertTabKey;
   if (!tabKey) return;
 
-  loadAlerts(tabKey, currentFilters);
-});
-
-// Navigazione tastiera
-container.addEventListener('keydown', (e) => {
-  const button = e.target as HTMLElement;
-  if (!button.hasAttribute('data-alert-tab')) return;
-
-  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-    e.preventDefault();
-    const tabs = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('[data-alert-tab]')
-    );
-    const currentIndex = tabs.indexOf(button as HTMLButtonElement);
-    const nextIndex = e.key === 'ArrowRight' 
-      ? (currentIndex + 1) % tabs.length
-      : (currentIndex - 1 + tabs.length) % tabs.length;
-    
-    tabs[nextIndex]?.click();
-    tabs[nextIndex]?.focus();
-  }
+  await loadAlerts(tabKey, getCurrentFilters());
 });
 ```
 
 ### 4. Gestire Filtri
 
 ```typescript
-import { buildQueryString } from './components/Alerts';
-
 // Brand filter
-const brandSelect = container.querySelector<HTMLSelectElement>('#fp-alerts-brand');
-brandSelect?.addEventListener('change', () => {
+const brandSelect = document.getElementById('fp-alerts-brand') as HTMLSelectElement;
+brandSelect?.addEventListener('change', async () => {
   const filters = {
     brand: brandSelect.value,
-    channel: channelSelect?.value,
+    channel: channelSelect.value,
   };
-  loadAlerts(currentTab, filters);
+  
+  await loadAlerts(getCurrentTab(), filters);
 });
 
 // Channel filter
-const channelSelect = container.querySelector<HTMLSelectElement>('#fp-alerts-channel');
-channelSelect?.addEventListener('change', () => {
+const channelSelect = document.getElementById('fp-alerts-channel') as HTMLSelectElement;
+channelSelect?.addEventListener('change', async () => {
   const filters = {
-    brand: brandSelect?.value,
+    brand: brandSelect.value,
     channel: channelSelect.value,
   };
-  loadAlerts(currentTab, filters);
+  
+  await loadAlerts(getCurrentTab(), filters);
 });
+```
+
+### 5. Gestire Alert Actions
+
+```typescript
+container.addEventListener('click', (e) => {
+  const button = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-alert-action]');
+  if (!button) return;
+
+  const action = button.dataset.alertAction;
+  const target = button.dataset.alertTarget;
+
+  handleAlertAction(action, target);
+});
+
+function handleAlertAction(action: string, target?: string) {
+  if (action === 'calendar') {
+    const calendar = document.getElementById('fp-calendar');
+    calendar?.scrollIntoView({ behavior: 'smooth' });
+  } else if (action === 'job' && target) {
+    window.open(`/admin.php?page=fp-jobs&job=${target}`, '_blank');
+  } else if (action === 'token' && target) {
+    window.open(target, '_blank');
+  }
+}
 ```
 
 ## 🎨 Esempio Completo
@@ -189,13 +195,11 @@ import {
   updateTabButtons,
   announceUpdate,
   type AlertTabKey,
-  type AlertTabConfig,
-  type AlertsI18n,
   type AlertFilters,
 } from './components/Alerts';
 
 // Config
-const tabConfig: Record<AlertTabKey, AlertTabConfig> = {
+const tabConfig = {
   'empty-week': {
     label: 'Empty Week',
     endpoint: 'alerts/empty-week',
@@ -204,7 +208,7 @@ const tabConfig: Record<AlertTabKey, AlertTabConfig> = {
   'token-expiry': {
     label: 'Token Expiry',
     endpoint: 'alerts/token-expiry',
-    empty: 'No tokens expiring',
+    empty: 'All tokens valid',
   },
   'failed-jobs': {
     label: 'Failed Jobs',
@@ -213,16 +217,12 @@ const tabConfig: Record<AlertTabKey, AlertTabConfig> = {
   },
 };
 
-const i18n: AlertsI18n = {
-  loadingMessage: 'Loading alerts…',
-  emptyMessage: 'No alerts found',
-  errorMessage: 'Error loading alerts',
-  severityLabels: {
-    info: 'Info',
-    warning: 'Warning',
-    critical: 'Critical',
-  },
-  openDetailsLabel: 'Open details',
+const i18n = {
+  loadingMessage: 'Loading…',
+  emptyMessage: 'No alerts',
+  errorMessage: 'Error loading',
+  severityLabels: { info: 'Info', warning: 'Warning', critical: 'Critical' },
+  openDetailsLabel: 'Open',
 };
 
 // Setup
@@ -239,16 +239,17 @@ renderAlertsWidget(
   container,
   tabConfig,
   'empty-week',
-  ['', 'Brand A', 'Brand B'],
-  ['', 'Instagram', 'Facebook'],
+  ['', 'Brand A'],
+  ['', 'instagram'],
   '',
   ''
 );
 
+// State
 let currentTab: AlertTabKey = 'empty-week';
 let currentFilters: AlertFilters = {};
 
-// Load alerts function
+// Load alerts
 async function loadAlerts(tabKey: AlertTabKey, filters: AlertFilters = {}) {
   const panel = document.getElementById('fp-alerts-panel');
   if (!panel) return;
@@ -264,37 +265,19 @@ async function loadAlerts(tabKey: AlertTabKey, filters: AlertFilters = {}) {
     const data = await service.fetchAlerts(tabKey, filters);
     
     panel.innerHTML = renderAlertsList(data.items || [], i18n);
-    announceUpdate(`Loaded ${data.items?.length || 0} alerts`);
+    announceUpdate(`${data.items?.length || 0} alerts loaded`);
   } catch (error) {
     panel.innerHTML = renderError(i18n.errorMessage);
   }
 }
 
-// Tab navigation
-container.addEventListener('click', (e) => {
-  const button = (e.target as HTMLElement).closest('[data-alert-tab]');
-  if (button && button instanceof HTMLButtonElement) {
+// Event listeners
+container.addEventListener('click', async (e) => {
+  const button = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-alert-tab]');
+  if (button) {
     const tabKey = button.dataset.alertTab as AlertTabKey;
-    if (tabKey) loadAlerts(tabKey, currentFilters);
+    await loadAlerts(tabKey, currentFilters);
   }
-});
-
-// Filters
-const brandSelect = container.querySelector<HTMLSelectElement>('#fp-alerts-brand');
-const channelSelect = container.querySelector<HTMLSelectElement>('#fp-alerts-channel');
-
-brandSelect?.addEventListener('change', () => {
-  loadAlerts(currentTab, {
-    brand: brandSelect.value,
-    channel: channelSelect?.value,
-  });
-});
-
-channelSelect?.addEventListener('change', () => {
-  loadAlerts(currentTab, {
-    brand: brandSelect?.value,
-    channel: channelSelect.value,
-  });
 });
 
 // Initial load
@@ -303,19 +286,50 @@ loadAlerts('empty-week');
 
 ## 🧪 Testing
 
+### Test Utils
+
 ```typescript
 import { getSeverityTone, buildQueryString } from './components/Alerts';
 
 describe('Alerts Utils', () => {
   it('should get severity tone', () => {
-    expect(getSeverityTone('info')).toBe('neutral');
-    expect(getSeverityTone('warning')).toBe('warning');
     expect(getSeverityTone('critical')).toBe('danger');
+    expect(getSeverityTone('warning')).toBe('warning');
+    expect(getSeverityTone('info')).toBe('neutral');
   });
-
+  
   it('should build query string', () => {
-    const query = buildQueryString({ brand: 'BrandA', channel: 'instagram' });
-    expect(query).toBe('?brand=BrandA&channel=instagram');
+    const query = buildQueryString({ brand: 'A', channel: 'instagram' });
+    expect(query).toBe('?brand=A&channel=instagram');
+  });
+});
+```
+
+### Test Service
+
+```typescript
+import { AlertsService } from './components/Alerts';
+
+describe('Alerts Service', () => {
+  let service: AlertsService;
+  
+  beforeEach(() => {
+    service = new AlertsService({
+      restBase: '/wp-json/fp/v1',
+      nonce: 'test',
+      tabConfig,
+    });
+  });
+  
+  it('should fetch alerts', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [] }),
+    });
+    
+    const data = await service.fetchAlerts('empty-week');
+    
+    expect(data.items).toEqual([]);
   });
 });
 ```
@@ -324,42 +338,45 @@ describe('Alerts Utils', () => {
 
 ### Prima (monolitico)
 - ❌ ~250 righe in index.tsx
-- ❌ Logica tab navigation mista con rendering
-- ❌ Difficile testare filtri
+- ❌ Logica tabs mista con rendering
+- ❌ Difficile testare
 - ❌ Non riutilizzabile
 
 ### Dopo (modulare)
-- ✅ 5 file specializzati (~492 righe totali)
+- ✅ 5 file specializzati (~490 righe totali)
 - ✅ Service per API separato
-- ✅ Tab navigation testabile
-- ✅ Filtri isolati
-- ✅ Riutilizzabile (dashboard, monitoring)
+- ✅ Renderer indipendente
+- ✅ Utility functions pure
+- ✅ Facile testare ogni parte
+- ✅ Riutilizzabile
 
 ## 🎯 Pattern Utilizzati
 
-### Tab Navigation
-```
-updateTabButtons gestisce lo stato dei tab
-→ ARIA compliant
-→ Navigazione tastiera
-```
-
 ### Service Pattern
 ```
-AlertsService gestisce API per diversi tab
-→ Configurazione flessibile
-→ Filtri parametrici
+AlertsService gestisce API
+→ Separazione logica da UI
+→ Facilmente mockabile
+```
+
+### Tab Pattern
+```
+updateTabButtons gestisce state
+→ ARIA compliant
+→ Keyboard navigation
 ```
 
 ### Renderer Pattern
 ```
-Rendering separato per ogni elemento
-→ Facile estendere con nuovi alert types
+AlertsRenderer gestisce HTML
+→ Separazione rendering
+→ Facile migrazione React
 ```
 
 ---
 
-**Estratto da:** `index.tsx` (righe 1053-1174)  
+**Estratto da:** `index.tsx` (righe 1053-1174, 1255-1284)  
 **Linee di codice:** ~250 → 5 file × ~98 righe  
 **Riduzione complessità:** 75%  
-**Riutilizzabilità:** +100%
+**Riutilizzabilità:** +100%  
+**Features:** Tab navigation, Filtri, Actions, ARIA
