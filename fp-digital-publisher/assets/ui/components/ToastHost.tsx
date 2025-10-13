@@ -35,6 +35,9 @@ const DEFAULT_DURATION = 5000;
 const generateId = () =>
   Math.random().toString(36).slice(2) + Date.now().toString(36);
 
+// Store timeout IDs to clear them if toast is dismissed early
+const timeouts = new Map<string, number>();
+
 export const pushToast = (input: ToastInput) => {
   const toast: ToastRecord = {
     id: input.id ?? generateId(),
@@ -49,13 +52,24 @@ export const pushToast = (input: ToastInput) => {
   listeners.forEach((listener) => listener({ type: 'add', toast }));
 
   if (toast.duration && toast.duration > 0 && typeof window !== 'undefined') {
-    window.setTimeout(() => dismissToast(toast.id), toast.duration);
+    const timeoutId = window.setTimeout(() => {
+      dismissToast(toast.id);
+      timeouts.delete(toast.id);
+    }, toast.duration);
+    timeouts.set(toast.id, timeoutId);
   }
 
   return toast.id;
 };
 
 export const dismissToast = (id: string) => {
+  // Clear timeout if it exists
+  const timeoutId = timeouts.get(id);
+  if (timeoutId !== undefined && typeof window !== 'undefined') {
+    window.clearTimeout(timeoutId);
+    timeouts.delete(id);
+  }
+  
   listeners.forEach((listener) => listener({ type: 'remove', id }));
 };
 

@@ -10,6 +10,7 @@ interface Channel {
 }
 
 interface MediaFile {
+  id: string;
   url: string;
   type: 'image' | 'video';
   thumbnail?: string;
@@ -94,18 +95,19 @@ export const Composer = () => {
     Array.from(files).forEach(file => {
       const url = URL.createObjectURL(file);
       const type = file.type.startsWith('image/') ? 'image' : 'video';
+      const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      setMedia(prev => [...prev, { url, type }]);
+      setMedia(prev => [...prev, { id, url, type }]);
     });
   };
 
-  const removeMedia = (index: number) => {
+  const removeMedia = (id: string) => {
     setMedia(prev => {
-      const itemToRemove = prev[index];
+      const itemToRemove = prev.find(item => item.id === id);
       if (itemToRemove && itemToRemove.url.startsWith('blob:')) {
         URL.revokeObjectURL(itemToRemove.url);
       }
-      return prev.filter((_, i) => i !== index);
+      return prev.filter(item => item.id !== id);
     });
   };
 
@@ -185,6 +187,13 @@ export const Composer = () => {
 
       if (result.success) {
         alert(`✅ ${isDraft ? 'Bozza salvata' : 'Pubblicato'} con successo su ${result.published} canali!`);
+        
+        // Cleanup media URLs before resetting
+        media.forEach(item => {
+          if (item.url.startsWith('blob:')) {
+            URL.revokeObjectURL(item.url);
+          }
+        });
         
         // Reset form
         setMessage('');
@@ -301,8 +310,8 @@ export const Composer = () => {
 
             {media.length > 0 && (
               <div className="media-grid">
-                {media.map((file, index) => (
-                  <div key={index} className="media-item">
+                {media.map((file) => (
+                  <div key={file.id} className="media-item">
                     {file.type === 'image' ? (
                       <img src={file.url} alt="Preview" />
                     ) : (
@@ -310,7 +319,7 @@ export const Composer = () => {
                     )}
                     <button
                       className="remove-media"
-                      onClick={() => removeMedia(index)}
+                      onClick={() => removeMedia(file.id)}
                     >
                       ✕
                     </button>

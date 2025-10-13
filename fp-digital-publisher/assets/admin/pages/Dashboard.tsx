@@ -99,6 +99,18 @@ export const Dashboard = () => {
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
 
+    // Handle future dates
+    if (diffMs < 0) {
+      const absDiffMins = Math.abs(diffMins);
+      const absDiffHours = Math.abs(diffHours);
+      const absDiffDays = Math.abs(diffDays);
+      
+      if (absDiffMins < 1) return 'Ora';
+      if (absDiffMins < 60) return `Tra ${absDiffMins} min`;
+      if (absDiffHours < 24) return `Tra ${absDiffHours} ore`;
+      if (absDiffDays < 7) return `Tra ${absDiffDays} giorni`;
+    }
+
     if (diffMins < 1) return 'Adesso';
     if (diffMins < 60) return `${diffMins} min fa`;
     if (diffHours < 24) return `${diffHours} ore fa`;

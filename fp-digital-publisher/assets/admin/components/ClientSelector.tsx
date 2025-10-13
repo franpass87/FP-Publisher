@@ -74,7 +74,8 @@ export const ClientSelector = ({ onClientChange }: ClientSelectorProps) => {
     }
 
     // Trigger page reload to update all data
-    window.location.reload();
+    // Using replace() to avoid adding to browser history
+    window.location.replace(window.location.href);
   };
 
   const selectedClient = clients.find(c => c.id === selectedClientId);

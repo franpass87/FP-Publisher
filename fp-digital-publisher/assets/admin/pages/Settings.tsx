@@ -1,4 +1,4 @@
-import { createElement, useState, useEffect } from '@wordpress/element';
+import { createElement, useState, useEffect, useRef } from '@wordpress/element';
 
 interface PluginSettings {
   worker_enabled: boolean;
@@ -22,16 +22,35 @@ export const Settings = () => {
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
 
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
     try {
       // TODO: Implementare salvataggio settings via API
       await new Promise(resolve => setTimeout(resolve, 1000));
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      timeoutRef.current = window.setTimeout(() => {
+        setSaved(false);
+        timeoutRef.current = null;
+      }, 3000);
     } catch (error) {
       console.error('Failed to save settings:', error);
       alert('Errore durante il salvataggio delle impostazioni');
