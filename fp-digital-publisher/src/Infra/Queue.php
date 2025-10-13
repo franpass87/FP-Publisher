@@ -49,7 +49,8 @@ final class Queue
         array $payload,
         DateTimeImmutable $runAt,
         string $idempotencyKey,
-        ?int $childJobId = null
+        ?int $childJobId = null,
+        ?int $clientId = null
     ): array {
         global $wpdb;
 
@@ -73,6 +74,7 @@ final class Queue
         $payloadJson = self::encodePayload($payload);
         $now = Dates::now('UTC');
         $data = [
+            'client_id' => $clientId,
             'status' => self::STATUS_PENDING,
             'channel' => $channel,
             'payload_json' => $payloadJson,
@@ -715,6 +717,58 @@ final class Queue
         $fallback = Options::get('queue.retry_backoff', []);
 
         return is_array($fallback) ? $fallback : [];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<int, array<string, mixed>>
+     */
+    public static function listForClient(int $clientId, array $filters = []): array
+    {
+        global $wpdb;
+
+        $query = "SELECT * FROM " . self::table($wpdb) . " WHERE client_id = %d";
+        $params = [$clientId];
+
+        if (! empty($filters['status'])) {
+            $query .= " AND status = %s";
+            $params[] = $filters['status'];
+        }
+
+        if (! empty($filters['channel'])) {
+            $query .= " AND channel = %s";
+            $params[] = self::normalizeChannel($filters['channel']);
+        }
+
+        $limit = isset($filters['limit']) && is_numeric($filters['limit']) ? (int) $filters['limit'] : 100;
+        $offset = isset($filters['offset']) && is_numeric($filters['offset']) ? (int) $filters['offset'] : 0;
+
+        $query .= " ORDER BY run_at DESC LIMIT %d OFFSET %d";
+        $params[] = max(1, $limit);
+        $params[] = max(0, $offset);
+
+        $rows = $wpdb->get_results($wpdb->prepare($query, ...$params), ARRAY_A);
+
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        return array_map(fn ($row) => self::hydrate($row), $rows);
+    }
+
+    public static function countForClient(int $clientId, ?string $status = null): int
+    {
+        global $wpdb;
+
+        $query = "SELECT COUNT(*) FROM " . self::table($wpdb) . " WHERE client_id = %d";
+        $params = [$clientId];
+
+        if ($status !== null) {
+            $query .= " AND status = %s";
+            $params[] = $status;
+        }
+
+        return (int) $wpdb->get_var($wpdb->prepare($query, ...$params));
     }
 }
 
