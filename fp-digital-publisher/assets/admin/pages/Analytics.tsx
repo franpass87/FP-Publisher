@@ -1,4 +1,4 @@
-import React from 'react';
+import { createElement } from '@wordpress/element';
 import { useClient } from '../hooks/useClient';
 
 export const Analytics: React.FC = () => {

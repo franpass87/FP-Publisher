@@ -41,6 +41,7 @@ const buildOptions = {
   loader: {
     '.css': 'css',
   },
+  external: ['@wordpress/*'],
 };
 
 async function ensureOutDir() {

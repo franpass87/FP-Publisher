@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { createElement, useState, useEffect } from '@wordpress/element';
 
 interface Client {
   id: number;
@@ -245,7 +245,6 @@ const ClientModal: React.FC<ClientModalProps> = ({ client, onClose, onSave }) =>
     timezone: client?.timezone || 'Europe/Rome',
     color: client?.color || '#666666',
     status: client?.status || 'active',
-    billing_plan: client?.billing_plan || 'free',
   });
   const [saving, setSaving] = useState(false);
 

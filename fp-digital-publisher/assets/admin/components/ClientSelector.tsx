@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { createElement, useState, useEffect, useRef } from '@wordpress/element';
 
 interface Client {
   id: number;

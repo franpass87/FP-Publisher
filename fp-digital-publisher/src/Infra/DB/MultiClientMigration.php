@@ -151,14 +151,13 @@ final class MultiClientMigration
                 'name' => 'Default Client',
                 'slug' => 'default-client',
                 'status' => 'active',
-                'billing_plan' => 'free',
                 'timezone' => 'UTC',
                 'color' => '#666666',
                 'meta' => '{}',
                 'created_at' => $now,
                 'updated_at' => $now
             ],
-            ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
+            ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
         );
 
         $clientId = (int) $wpdb->insert_id;

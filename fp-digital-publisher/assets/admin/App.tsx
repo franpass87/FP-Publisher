@@ -1,4 +1,4 @@
-import React from 'react';
+import { createElement } from '@wordpress/element';
 import { Dashboard } from './pages/Dashboard';
 import { Composer } from './pages/Composer';
 import { Calendar } from './pages/Calendar';

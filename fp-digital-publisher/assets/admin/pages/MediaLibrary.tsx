@@ -1,4 +1,4 @@
-import React from 'react';
+import { createElement } from '@wordpress/element';
 
 export const MediaLibrary: React.FC = () => {
   return (

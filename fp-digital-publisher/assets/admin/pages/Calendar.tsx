@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { createElement, useState, useEffect } from '@wordpress/element';
 import { useClient } from '../hooks/useClient';
 
 interface CalendarEvent {

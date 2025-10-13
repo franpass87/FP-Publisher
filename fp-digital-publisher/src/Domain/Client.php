@@ -55,9 +55,6 @@ final class Client
         string $timezone,
         string $color,
         string $status,
-        string $billingPlan,
-        ?DateTimeImmutable $billingCycleStart,
-        ?DateTimeImmutable $billingCycleEnd,
         array $meta,
         ?DateTimeImmutable $createdAt,
         ?DateTimeImmutable $updatedAt
@@ -110,20 +107,6 @@ final class Client
                 'client.status'
             );
 
-            $billingPlan = Validation::enum(
-                $payload['billing_plan'] ?? self::PLAN_FREE,
-                self::billingPlans(),
-                'client.billing_plan'
-            );
-
-            $billingCycleStart = isset($payload['billing_cycle_start'])
-                ? Dates::ensure((string) $payload['billing_cycle_start'])
-                : null;
-
-            $billingCycleEnd = isset($payload['billing_cycle_end'])
-                ? Dates::ensure((string) $payload['billing_cycle_end'])
-                : null;
-
             $meta = is_array($payload['meta'] ?? null) ? $payload['meta'] : [];
 
             $createdAt = isset($payload['created_at'])
@@ -144,9 +127,6 @@ final class Client
                 $timezone,
                 $color,
                 $status,
-                $billingPlan,
-                $billingCycleStart,
-                $billingCycleEnd,
                 $meta,
                 $createdAt,
                 $updatedAt
@@ -166,19 +146,6 @@ final class Client
         ];
     }
 
-    /**
-     * @return array<int, string>
-     */
-    public static function billingPlans(): array
-    {
-        return [
-            self::PLAN_FREE,
-            self::PLAN_BASIC,
-            self::PLAN_PRO,
-            self::PLAN_AGENCY,
-            self::PLAN_ENTERPRISE,
-        ];
-    }
 
     public function id(): ?int
     {
@@ -225,21 +192,6 @@ final class Client
         return $this->status;
     }
 
-    public function billingPlan(): string
-    {
-        return $this->billingPlan;
-    }
-
-    public function billingCycleStart(): ?DateTimeImmutable
-    {
-        return $this->billingCycleStart;
-    }
-
-    public function billingCycleEnd(): ?DateTimeImmutable
-    {
-        return $this->billingCycleEnd;
-    }
-
     /**
      * @return array<string, mixed>
      */
@@ -273,53 +225,30 @@ final class Client
         return $this->status === self::STATUS_ARCHIVED;
     }
 
+    // Uso personale: nessun limite
     public function getMaxChannels(): int
     {
-        return match ($this->billingPlan) {
-            self::PLAN_FREE => 2,
-            self::PLAN_BASIC => 4,
-            self::PLAN_PRO => 6,
-            self::PLAN_AGENCY, self::PLAN_ENTERPRISE => PHP_INT_MAX,
-            default => 0,
-        };
+        return PHP_INT_MAX;
     }
 
     public function getMonthlyPostLimit(): int
     {
-        return match ($this->billingPlan) {
-            self::PLAN_FREE => 10,
-            self::PLAN_BASIC => 50,
-            self::PLAN_PRO, self::PLAN_AGENCY, self::PLAN_ENTERPRISE => PHP_INT_MAX,
-            default => 0,
-        };
+        return PHP_INT_MAX;
     }
 
     public function getMaxTeamMembers(): int
     {
-        return match ($this->billingPlan) {
-            self::PLAN_FREE => 1,
-            self::PLAN_BASIC => 3,
-            self::PLAN_PRO => 10,
-            self::PLAN_AGENCY, self::PLAN_ENTERPRISE => PHP_INT_MAX,
-            default => 1,
-        };
+        return PHP_INT_MAX;
     }
 
     public function getStorageLimitBytes(): int
     {
-        return match ($this->billingPlan) {
-            self::PLAN_FREE => 1024 * 1024 * 1024, // 1 GB
-            self::PLAN_BASIC => 5 * 1024 * 1024 * 1024, // 5 GB
-            self::PLAN_PRO => 20 * 1024 * 1024 * 1024, // 20 GB
-            self::PLAN_AGENCY => 100 * 1024 * 1024 * 1024, // 100 GB
-            self::PLAN_ENTERPRISE => PHP_INT_MAX,
-            default => 0,
-        };
+        return PHP_INT_MAX;
     }
 
     public function canPublishToChannels(int $count): bool
     {
-        return $count <= $this->getMaxChannels();
+        return true; // Sempre permesso
     }
 
     /**
@@ -337,9 +266,6 @@ final class Client
             'timezone' => $this->timezone,
             'color' => $this->color,
             'status' => $this->status,
-            'billing_plan' => $this->billingPlan,
-            'billing_cycle_start' => $this->billingCycleStart?->format('Y-m-d'),
-            'billing_cycle_end' => $this->billingCycleEnd?->format('Y-m-d'),
             'limits' => [
                 'max_channels' => $this->getMaxChannels(),
                 'max_posts_monthly' => $this->getMonthlyPostLimit(),

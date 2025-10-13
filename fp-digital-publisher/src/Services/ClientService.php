@@ -41,14 +41,11 @@ final class ClientService
                 'timezone' => $client->timezone(),
                 'color' => $client->color(),
                 'status' => $client->status(),
-                'billing_plan' => $client->billingPlan(),
-                'billing_cycle_start' => $client->billingCycleStart()?->format('Y-m-d'),
-                'billing_cycle_end' => $client->billingCycleEnd()?->format('Y-m-d'),
                 'meta' => wp_json_encode($client->meta()),
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
-            ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
+            ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
         );
 
         if ($inserted === false) {
@@ -152,14 +149,6 @@ final class ClientService
 
         if (isset($data['meta']) && is_array($data['meta'])) {
             $data['meta'] = wp_json_encode($data['meta']);
-        }
-
-        if (isset($data['billing_cycle_start']) && $data['billing_cycle_start'] instanceof DateTimeImmutable) {
-            $data['billing_cycle_start'] = $data['billing_cycle_start']->format('Y-m-d');
-        }
-
-        if (isset($data['billing_cycle_end']) && $data['billing_cycle_end'] instanceof DateTimeImmutable) {
-            $data['billing_cycle_end'] = $data['billing_cycle_end']->format('Y-m-d');
         }
 
         $updated = $wpdb->update(

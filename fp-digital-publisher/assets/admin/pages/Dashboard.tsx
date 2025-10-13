@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { createElement, useState, useEffect } from '@wordpress/element';
 import { useClient } from '../hooks/useClient';
 
 interface DashboardStats {
@@ -291,12 +291,6 @@ export const Dashboard: React.FC = () => {
                 {stats.published_month} / {currentClient.limits.max_posts_monthly === Number.MAX_SAFE_INTEGER 
                   ? '∞' 
                   : currentClient.limits.max_posts_monthly}
-              </span>
-            </div>
-            <div className="limit-item">
-              <span className="limit-label">Piano attuale:</span>
-              <span className="limit-value plan-badge">
-                {currentClient.billing_plan.toUpperCase()}
               </span>
             </div>
           </div>
