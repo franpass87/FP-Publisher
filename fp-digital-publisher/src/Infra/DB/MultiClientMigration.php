@@ -30,15 +30,11 @@ final class MultiClientMigration
             timezone VARCHAR(50) DEFAULT 'UTC',
             color VARCHAR(7) DEFAULT '#666666',
             status VARCHAR(20) DEFAULT 'active',
-            billing_plan VARCHAR(20) DEFAULT 'free',
-            billing_cycle_start DATE,
-            billing_cycle_end DATE,
             meta LONGTEXT,
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
             INDEX idx_status (status),
-            INDEX idx_slug (slug),
-            INDEX idx_billing_plan (billing_plan)
+            INDEX idx_slug (slug)
         ) $charset;";
 
         dbDelta($sql);

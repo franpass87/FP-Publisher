@@ -5,6 +5,9 @@ import { Calendar } from './pages/Calendar';
 import { Analytics } from './pages/Analytics';
 import { MediaLibrary } from './pages/MediaLibrary';
 import { ClientsManagement } from './pages/ClientsManagement';
+import { SocialAccounts } from './pages/SocialAccounts';
+import { Jobs } from './pages/Jobs';
+import { Settings } from './pages/Settings';
 import { ClientSelector } from './components/ClientSelector';
 
 // Import CSS
@@ -15,7 +18,7 @@ import './pages/ClientsManagement.css';
 import './pages/common.css';
 import './components/ClientSelector.css';
 
-export const App: React.FC = () => {
+export const App = () => {
   // Get current page from URL params
   const urlParams = new URLSearchParams(window.location.search);
   const page = urlParams.get('page') || 'fp-publisher';
@@ -40,6 +43,15 @@ export const App: React.FC = () => {
       
       case 'fp-publisher-clients':
         return <ClientsManagement />;
+      
+      case 'fp-publisher-accounts':
+        return <SocialAccounts />;
+      
+      case 'fp-publisher-jobs':
+        return <Jobs />;
+      
+      case 'fp-publisher-settings':
+        return <Settings />;
       
       default:
         return <Dashboard />;

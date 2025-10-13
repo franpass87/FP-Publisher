@@ -13,7 +13,7 @@ interface ClientSelectorProps {
   onClientChange?: (clientId: number | null) => void;
 }
 
-export const ClientSelector: React.FC<ClientSelectorProps> = ({ onClientChange }) => {
+export const ClientSelector = ({ onClientChange }: ClientSelectorProps) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | null>(() => {
     const saved = localStorage.getItem('fp_selected_client');

@@ -17,7 +17,7 @@ interface RecentJob {
   payload: any;
 }
 
-export const Dashboard: React.FC = () => {
+export const Dashboard = () => {
   const { selectedClientId, currentClient } = useClient();
   const [stats, setStats] = useState<DashboardStats>({
     scheduled: 0,

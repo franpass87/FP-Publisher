@@ -20,7 +20,7 @@ interface Client {
   created_at: string;
 }
 
-export const ClientsManagement: React.FC = () => {
+export const ClientsManagement = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -235,7 +235,7 @@ interface ClientModalProps {
   onSave: () => void;
 }
 
-const ClientModal: React.FC<ClientModalProps> = ({ client, onClose, onSave }) => {
+const ClientModal = ({ client, onClose, onSave }: ClientModalProps) => {
   const [formData, setFormData] = useState({
     name: client?.name || '',
     slug: client?.slug || '',

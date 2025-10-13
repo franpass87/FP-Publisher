@@ -16,7 +16,7 @@ interface MediaFile {
   duration?: number;
 }
 
-export const Composer: React.FC = () => {
+export const Composer = () => {
   const { selectedClientId, currentClient } = useClient();
   const [message, setMessage] = useState('');
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);

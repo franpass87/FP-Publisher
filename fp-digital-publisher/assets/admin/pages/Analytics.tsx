@@ -1,7 +1,7 @@
 import { createElement } from '@wordpress/element';
 import { useClient } from '../hooks/useClient';
 
-export const Analytics: React.FC = () => {
+export const Analytics = () => {
   const { currentClient } = useClient();
 
   return (

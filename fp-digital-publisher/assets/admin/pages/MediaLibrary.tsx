@@ -1,6 +1,6 @@
 import { createElement } from '@wordpress/element';
 
-export const MediaLibrary: React.FC = () => {
+export const MediaLibrary = () => {
   return (
     <div className="fp-media-library">
       <h1>🖼️ Libreria Media</h1>

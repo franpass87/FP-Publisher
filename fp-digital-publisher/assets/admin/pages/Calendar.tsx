@@ -10,7 +10,7 @@ interface CalendarEvent {
   status: string;
 }
 
-export const Calendar: React.FC = () => {
+export const Calendar = () => {
   const { selectedClientId } = useClient();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
