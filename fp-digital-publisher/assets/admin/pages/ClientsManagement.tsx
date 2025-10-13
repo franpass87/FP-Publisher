@@ -258,6 +258,22 @@ const ClientModal = ({ client, onClose, onSave }: ClientModalProps) => {
   });
   const [saving, setSaving] = useState(false);
 
+  // Update form data when client prop changes
+  useEffect(() => {
+    if (client) {
+      setFormData({
+        name: client.name || '',
+        slug: client.slug || '',
+        logo_url: client.logo_url || '',
+        website: client.website || '',
+        industry: client.industry || '',
+        timezone: client.timezone || 'Europe/Rome',
+        color: client.color || '#666666',
+        status: client.status || 'active',
+      });
+    }
+  }, [client]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -269,7 +285,7 @@ const ClientModal = ({ client, onClose, onSave }: ClientModalProps) => {
 
       const method = client ? 'PUT' : 'POST';
 
-      await fetch(url, {
+      const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -277,7 +293,12 @@ const ClientModal = ({ client, onClose, onSave }: ClientModalProps) => {
         body: JSON.stringify(formData),
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       onSave();
+      onClose();
     } catch (error) {
       console.error('Failed to save client:', error);
       alert('Errore durante il salvataggio del cliente');

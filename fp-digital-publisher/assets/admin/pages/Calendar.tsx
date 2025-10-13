@@ -95,9 +95,12 @@ export const Calendar = () => {
     }
 
     // Days of the month
+    const today = new Date();
+    const todayStr = today.toDateString();
     for (let day = 1; day <= daysInMonth; day++) {
       const dayEvents = getEventsForDay(day);
-      const isToday = new Date().toDateString() === new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toDateString();
+      const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+      const isToday = todayStr === dayDate.toDateString();
 
       days.push(
         <div key={day} className={`calendar-day ${isToday ? 'today' : ''}`}>

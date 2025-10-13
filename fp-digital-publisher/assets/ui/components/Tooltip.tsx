@@ -67,7 +67,9 @@ export const Tooltip: React.FC<TooltipProps> = ({
     setOpen(false);
   };
 
-  React.useEffect(() => clearTimer, []);
+  React.useEffect(() => {
+    return () => clearTimer();
+  }, []);
 
   const child = React.cloneElement(children, {
     'aria-describedby': open

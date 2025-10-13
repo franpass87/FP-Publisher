@@ -56,7 +56,7 @@ export const Composer = () => {
       
       const data = await response.json();
 
-      const channels: Channel[] = [
+      const baseChannels: Channel[] = [
         { id: 'meta_facebook', name: 'Facebook', icon: '📘', connected: false },
         { id: 'meta_instagram', name: 'Instagram', icon: '📷', connected: false },
         { id: 'youtube', name: 'YouTube', icon: '📹', connected: false },
@@ -65,13 +65,18 @@ export const Composer = () => {
         { id: 'wordpress_blog', name: 'WordPress', icon: '📝', connected: true },
       ];
 
-      // Mark connected channels
-      data.accounts?.forEach((account: any) => {
-        const channel = channels.find(c => c.id === account.channel);
-        if (channel) {
-          channel.connected = true;
-          channel.accountName = account.account_name;
+      // Mark connected channels (immutable way)
+      const connectedAccountIds = new Set(data.accounts?.map((a: any) => a.channel) || []);
+      const channels = baseChannels.map(channel => {
+        const account = data.accounts?.find((a: any) => a.channel === channel.id);
+        if (account) {
+          return {
+            ...channel,
+            connected: true,
+            accountName: account.account_name,
+          };
         }
+        return channel;
       });
 
       setAvailableChannels(channels);
@@ -95,7 +100,7 @@ export const Composer = () => {
     Array.from(files).forEach(file => {
       const url = URL.createObjectURL(file);
       const type = file.type.startsWith('image/') ? 'image' : 'video';
-      const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const id = `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
       setMedia(prev => [...prev, { id, url, type }]);
     });
@@ -402,7 +407,8 @@ export const Composer = () => {
                       <input
                         type="checkbox"
                         checked={selectedChannels.includes(channel.id)}
-                        onChange={() => {}}
+                        onChange={(e) => e.stopPropagation()}
+                        readOnly
                       />
                     </div>
                   )}
