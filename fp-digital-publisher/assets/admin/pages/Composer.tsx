@@ -32,6 +32,17 @@ export const Composer = () => {
     }
   }, [selectedClientId]);
 
+  // Cleanup object URLs to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      media.forEach(item => {
+        if (item.url.startsWith('blob:')) {
+          URL.revokeObjectURL(item.url);
+        }
+      });
+    };
+  }, [media]);
+
   const fetchConnectedAccounts = async () => {
     if (!selectedClientId) return;
 
@@ -84,7 +95,13 @@ export const Composer = () => {
   };
 
   const removeMedia = (index: number) => {
-    setMedia(prev => prev.filter((_, i) => i !== index));
+    setMedia(prev => {
+      const itemToRemove = prev[index];
+      if (itemToRemove && itemToRemove.url.startsWith('blob:')) {
+        URL.revokeObjectURL(itemToRemove.url);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handlePublish = async (isDraft: boolean = false) => {
@@ -109,7 +126,18 @@ export const Composer = () => {
       let publishAt = new Date().toISOString();
       
       if (scheduledDate && scheduledTime) {
-        publishAt = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
+        const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+        if (isNaN(scheduledDateTime.getTime())) {
+          alert('❌ Data o ora non valida');
+          setPublishing(false);
+          return;
+        }
+        if (scheduledDateTime < new Date()) {
+          alert('❌ La data di pubblicazione deve essere futura');
+          setPublishing(false);
+          return;
+        }
+        publishAt = scheduledDateTime.toISOString();
       }
 
       const response = await fetch('/wp-json/fp-publisher/v1/publish/multi-channel', {

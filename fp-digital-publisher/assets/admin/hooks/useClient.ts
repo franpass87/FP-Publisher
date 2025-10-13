@@ -18,7 +18,11 @@ interface Client {
 export const useClient = () => {
   const [selectedClientId, setSelectedClientId] = useState<number | null>(() => {
     const saved = localStorage.getItem('fp_selected_client');
-    return saved ? parseInt(saved) : null;
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      return !isNaN(parsed) ? parsed : null;
+    }
+    return null;
   });
 
   const [currentClient, setCurrentClient] = useState<Client | null>(null);

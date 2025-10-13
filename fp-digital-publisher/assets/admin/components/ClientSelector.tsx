@@ -17,7 +17,11 @@ export const ClientSelector = ({ onClientChange }: ClientSelectorProps) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | null>(() => {
     const saved = localStorage.getItem('fp_selected_client');
-    return saved ? parseInt(saved) : null;
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      return !isNaN(parsed) ? parsed : null;
+    }
+    return null;
   });
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
