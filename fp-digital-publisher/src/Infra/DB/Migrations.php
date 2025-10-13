@@ -181,6 +181,8 @@ final class Migrations
 
         dbDelta(implode("\n", $statements));
 
+        MultiClientMigration::install();
+
         update_option(self::OPTION_KEY, self::VERSION);
     }
 

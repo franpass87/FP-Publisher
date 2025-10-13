@@ -1,0 +1,117 @@
+.fp-client-selector {
+  position: relative;
+  display: inline-block;
+}
+
+.client-selector-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.client-selector-button:hover {
+  border-color: #999;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.selected-client {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.client-logo,
+.client-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.client-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.client-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.dropdown-icon {
+  font-size: 10px;
+  color: #999;
+  margin-left: 4px;
+}
+
+.client-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 280px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 1000;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dropdown-item:hover {
+  background: #f5f5f5;
+}
+
+.dropdown-item.active {
+  background: #f0f7ff;
+}
+
+.dropdown-item .check-icon {
+  margin-left: auto;
+  color: #2271b1;
+  font-weight: bold;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: #e5e5e5;
+  margin: 4px 0;
+}
+
+.dropdown-item.action-item {
+  color: #2271b1;
+  font-weight: 500;
+}
+
+.dropdown-item.action-item .icon {
+  font-size: 16px;
+}
+
+.fp-client-selector.loading {
+  padding: 8px 12px;
+  color: #999;
+  font-size: 14px;
+}

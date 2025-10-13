@@ -81,6 +81,9 @@ final class Routes
         self::registerCrudRoutes('links', 'fp_publisher_manage_links', [self::class, 'getLinks'], [self::class, 'saveLink']);
         self::registerReadRoute('besttime', 'fp_publisher_manage_plans', [self::class, 'getBestTime']);
 
+        ClientsController::registerRoutes();
+        PublishController::registerRoutes();
+
         register_rest_route(
             self::NAMESPACE,
             '/jobs/test',
