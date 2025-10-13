@@ -45,6 +45,11 @@ export const ClientSelector = ({ onClientChange }: ClientSelectorProps) => {
   const fetchClients = async () => {
     try {
       const response = await fetch('/wp-json/fp-publisher/v1/clients');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setClients(data.clients || []);
     } catch (error) {

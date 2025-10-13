@@ -1,4 +1,4 @@
-import { createElement, useState, useEffect } from '@wordpress/element';
+import { createElement, useState, useEffect, useCallback } from '@wordpress/element';
 import { useClient } from '../hooks/useClient';
 
 interface Job {
@@ -23,11 +23,7 @@ export const Jobs = () => {
   const [total, setTotal] = useState(0);
   const limit = 20;
 
-  useEffect(() => {
-    fetchJobs();
-  }, [selectedClientId, filter, page]);
-
-  const fetchJobs = async () => {
+  const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -41,6 +37,11 @@ export const Jobs = () => {
       params.set('offset', ((page - 1) * limit).toString());
 
       const response = await fetch(`/wp-json/fp-publisher/v1/jobs?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setJobs(data.jobs || []);
       setTotal(data.total || 0);
@@ -49,7 +50,11 @@ export const Jobs = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedClientId, filter, page, limit]);
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
 
   const getChannelIcon = (channel: string) => {
     const icons: Record<string, string> = {

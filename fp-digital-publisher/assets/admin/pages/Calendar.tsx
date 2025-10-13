@@ -1,4 +1,4 @@
-import { createElement, useState, useEffect } from '@wordpress/element';
+import { createElement, useState, useEffect, useCallback } from '@wordpress/element';
 import { useClient } from '../hooks/useClient';
 
 interface CalendarEvent {
@@ -16,34 +16,44 @@ export const Calendar = () => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [view, setView] = useState<'month' | 'week'>('month');
 
-  useEffect(() => {
-    if (selectedClientId) {
-      fetchEvents();
-    }
-  }, [selectedClientId, currentDate]);
-
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     if (!selectedClientId) return;
 
     try {
       const params = new URLSearchParams({ client_id: selectedClientId.toString() });
       const response = await fetch(`/wp-json/fp-publisher/v1/jobs?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
 
-      const calendarEvents: CalendarEvent[] = (data.jobs || []).map((job: any) => ({
-        id: job.id,
-        title: job.payload?.message?.substring(0, 50) || 'Post',
-        channel: job.channel,
-        date: job.run_at.split('T')[0],
-        time: job.run_at.split('T')[1]?.substring(0, 5) || '00:00',
-        status: job.status,
-      }));
+      const calendarEvents: CalendarEvent[] = (data.jobs || [])
+        .filter((job: any) => job.run_at) // Filtra job senza data
+        .map((job: any) => {
+          const parts = job.run_at.split('T');
+          return {
+            id: job.id,
+            title: job.payload?.message?.substring(0, 50) || 'Post',
+            channel: job.channel,
+            date: parts[0] || '',
+            time: parts[1]?.substring(0, 5) || '00:00',
+            status: job.status,
+          };
+        });
 
       setEvents(calendarEvents);
     } catch (error) {
       console.error('Failed to fetch events:', error);
     }
-  };
+  }, [selectedClientId]);
+
+  useEffect(() => {
+    if (selectedClientId) {
+      fetchEvents();
+    }
+  }, [selectedClientId, currentDate, fetchEvents]);
 
   const getDaysInMonth = () => {
     const year = currentDate.getFullYear();

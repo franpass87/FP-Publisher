@@ -40,6 +40,11 @@ export const useClient = () => {
     setLoading(true);
     try {
       const response = await fetch(`/wp-json/fp-publisher/v1/clients/${clientId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setCurrentClient(data);
     } catch (error) {
@@ -88,6 +93,11 @@ export const useClientJobs = (status?: string) => {
       }
 
       const response = await fetch(`/wp-json/fp-publisher/v1/jobs?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setJobs(data.jobs || []);
     } catch (error) {

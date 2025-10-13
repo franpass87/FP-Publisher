@@ -48,6 +48,11 @@ export const Composer = () => {
 
     try {
       const response = await fetch(`/wp-json/fp-publisher/v1/clients/${selectedClientId}/accounts`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
 
       const channels: Channel[] = [
@@ -171,6 +176,10 @@ export const Composer = () => {
           publish_at: publishAt,
         }),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       const result = await response.json();
 
@@ -429,7 +438,7 @@ export const Composer = () => {
                 <div className="preview-content">
                   {message}
                 </div>
-                {media.length > 0 && (
+                {media.length > 0 && media[0] && (
                   <div className="preview-media">
                     {media[0].type === 'image' ? (
                       <img src={media[0].url} alt="Preview" />

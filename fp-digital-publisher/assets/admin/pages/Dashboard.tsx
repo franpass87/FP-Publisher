@@ -1,4 +1,4 @@
-import { createElement, useState, useEffect } from '@wordpress/element';
+import { createElement, useState, useEffect, useCallback } from '@wordpress/element';
 import { useClient } from '../hooks/useClient';
 
 interface DashboardStats {
@@ -29,11 +29,7 @@ export const Dashboard = () => {
   const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [selectedClientId]);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -67,7 +63,11 @@ export const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedClientId]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const getChannelIcon = (channel: string): string => {
     const icons: Record<string, string> = {
