@@ -106,6 +106,12 @@ export class CommentsService {
 
     const users = await response.json();
     
+    // Valida che la risposta sia un array
+    if (!Array.isArray(users)) {
+      console.warn('searchUsers: expected array, got', typeof users);
+      return [];
+    }
+    
     // Mappa i dati WordPress al nostro formato
     return users.map((user: any) => ({
       id: user.id,

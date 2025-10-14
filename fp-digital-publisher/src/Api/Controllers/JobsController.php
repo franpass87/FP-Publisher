@@ -62,8 +62,12 @@ final class JobsController extends BaseController
 
     public static function enqueueJob(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        $type = sanitize_text_field(wp_unslash($request->get_param('type') ?? ''));
+        $type = sanitize_text_field($request->get_param('type') ?? '');
         $payload = $request->get_param('payload') ?? [];
+
+        if (!is_array($payload)) {
+            return self::error('invalid_payload', 'Il payload deve essere un array.');
+        }
 
         if ($type === '') {
             return self::error('missing_type', 'Il tipo di job è obbligatorio.');
@@ -75,7 +79,7 @@ final class JobsController extends BaseController
 
     public static function testJob(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        $jobId = sanitize_text_field(wp_unslash($request->get_param('job_id') ?? ''));
+        $jobId = sanitize_text_field($request->get_param('job_id') ?? '');
 
         if ($jobId === '') {
             return self::error('missing_job_id', 'L\'ID del job è obbligatorio.');
@@ -87,7 +91,7 @@ final class JobsController extends BaseController
 
     public static function replayJob(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        $jobId = sanitize_text_field(wp_unslash($request->get_param('job_id') ?? ''));
+        $jobId = sanitize_text_field($request->get_param('job_id') ?? '');
 
         if ($jobId === '') {
             return self::error('missing_job_id', 'L\'ID del job è obbligatorio.');

@@ -46,10 +46,10 @@ final class PlansController extends BaseController
 
     public static function listPlans(WP_REST_Request $request): WP_REST_Response
     {
-        $brand = sanitize_key(wp_unslash($request->get_param('brand') ?? ''));
-        $channel = sanitize_key(wp_unslash($request->get_param('channel') ?? ''));
-        $month = sanitize_text_field(wp_unslash($request->get_param('month') ?? ''));
-        $status = sanitize_text_field(wp_unslash($request->get_param('status') ?? ''));
+        $brand = sanitize_key($request->get_param('brand') ?? '');
+        $channel = sanitize_key($request->get_param('channel') ?? '');
+        $month = sanitize_text_field($request->get_param('month') ?? '');
+        $status = sanitize_text_field($request->get_param('status') ?? '');
 
         $start = null;
         $end = null;
@@ -78,7 +78,17 @@ final class PlansController extends BaseController
 
     private static function parseMonthRange(string $month): array
     {
-        [$year, $monthNum] = explode('-', $month) + ['', ''];
+        // Validate format YYYY-MM
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return [null, null];
+        }
+
+        $parts = explode('-', $month);
+        if (count($parts) !== 2) {
+            return [null, null];
+        }
+
+        [$year, $monthNum] = $parts;
         if ($year === '' || $monthNum === '') {
             return [null, null];
         }
