@@ -88,7 +88,7 @@ export const Jobs = () => {
     });
   };
 
-  const totalPages = Math.ceil(total / limit);
+  const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
 
   return (
     <div className="fp-jobs">

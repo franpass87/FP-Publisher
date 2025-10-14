@@ -7,7 +7,13 @@ export function formatTimeSlot(timeSlot: string): string {
 }
 
 export function formatScore(score: number): string {
-  return `${Math.round(score * 100)}%`;
+  // Validate score is a finite number
+  if (!Number.isFinite(score)) {
+    return '0%';
+  }
+  // Clamp score between 0 and 1
+  const clampedScore = Math.max(0, Math.min(1, score));
+  return `${Math.round(clampedScore * 100)}%`;
 }
 
 export function escapeHtml(text: string): string {
