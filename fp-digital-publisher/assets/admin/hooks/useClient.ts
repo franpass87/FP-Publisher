@@ -57,10 +57,15 @@ export const useClient = () => {
 
   const selectClient = (clientId: number | null) => {
     setSelectedClientId(clientId);
-    if (clientId) {
-      localStorage.setItem('fp_selected_client', clientId.toString());
-    } else {
-      localStorage.removeItem('fp_selected_client');
+    try {
+      if (clientId) {
+        localStorage.setItem('fp_selected_client', clientId.toString());
+      } else {
+        localStorage.removeItem('fp_selected_client');
+      }
+    } catch (error) {
+      // Handle localStorage quota exceeded or disabled
+      console.warn('Failed to save client selection to localStorage:', error);
     }
   };
 

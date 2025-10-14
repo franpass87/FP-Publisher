@@ -95,15 +95,38 @@ export const Composer = () => {
 
   const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
+
+    // Validate file size (max 50MB per file)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024;
+    const invalidFiles: string[] = [];
 
     Array.from(files).forEach(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        invalidFiles.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+        return;
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+        invalidFiles.push(`${file.name} (tipo non supportato)`);
+        return;
+      }
+
       const url = URL.createObjectURL(file);
       const type = file.type.startsWith('image/') ? 'image' : 'video';
       const id = `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
       setMedia(prev => [...prev, { id, url, type }]);
     });
+
+    // Show error for invalid files
+    if (invalidFiles.length > 0) {
+      alert(`File non validi:\n${invalidFiles.join('\n')}\n\nDimensione massima: 50MB`);
+    }
+
+    // Reset input to allow re-uploading the same file
+    e.target.value = '';
   };
 
   const removeMedia = (id: string) => {
