@@ -117,6 +117,11 @@ export const Composer = () => {
   };
 
   const handlePublish = async (isDraft: boolean = false) => {
+    // Prevent race condition - don't allow if already publishing
+    if (publishing) {
+      return;
+    }
+
     if (!selectedClientId) {
       alert('Seleziona un cliente prima di pubblicare');
       return;

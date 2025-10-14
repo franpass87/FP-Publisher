@@ -39,11 +39,23 @@ export const Dashboard = () => {
 
       // Fetch stats
       const [scheduled, completed, failed, accounts] = await Promise.all([
-        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=pending`).then(r => r.json()),
-        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=completed`).then(r => r.json()),
-        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=failed`).then(r => r.json()),
+        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=pending`).then(async r => {
+          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+          return r.json();
+        }),
+        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=completed`).then(async r => {
+          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+          return r.json();
+        }),
+        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=failed`).then(async r => {
+          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+          return r.json();
+        }),
         selectedClientId 
-          ? fetch(`/wp-json/fp-publisher/v1/clients/${selectedClientId}/accounts`).then(r => r.json())
+          ? fetch(`/wp-json/fp-publisher/v1/clients/${selectedClientId}/accounts`).then(async r => {
+              if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+              return r.json();
+            })
           : Promise.resolve({ total: 0 }),
       ]);
 
@@ -56,7 +68,10 @@ export const Dashboard = () => {
       });
 
       // Recent jobs
-      const recent = await fetch(`/wp-json/fp-publisher/v1/jobs?${params}&limit=10`).then(r => r.json());
+      const recent = await fetch(`/wp-json/fp-publisher/v1/jobs?${params}&limit=10`).then(async r => {
+        if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+        return r.json();
+      });
       setRecentJobs(recent.jobs || []);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
