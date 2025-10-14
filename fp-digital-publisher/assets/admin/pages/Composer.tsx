@@ -347,29 +347,35 @@ export const Composer = () => {
             <h3>⏰ Programmazione</h3>
             <div className="scheduling-inputs">
               <div className="input-group">
-                <label>Data</label>
+                <label htmlFor="scheduled-date">Data</label>
                 <input
+                  id="scheduled-date"
                   type="date"
                   value={scheduledDate}
                   onChange={(e) => setScheduledDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
+                  disabled={publishing}
                 />
               </div>
               <div className="input-group">
-                <label>Ora</label>
+                <label htmlFor="scheduled-time">Ora</label>
                 <input
+                  id="scheduled-time"
                   type="time"
                   value={scheduledTime}
                   onChange={(e) => setScheduledTime(e.target.value)}
+                  disabled={publishing}
                 />
               </div>
               {scheduledDate && scheduledTime && (
                 <button
+                  type="button"
                   className="button button-small"
                   onClick={() => {
                     setScheduledDate('');
                     setScheduledTime('');
                   }}
+                  disabled={publishing}
                 >
                   ✕ Rimuovi
                 </button>
