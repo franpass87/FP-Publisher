@@ -268,6 +268,9 @@ export const Composer = () => {
               placeholder="Cosa vuoi condividere?"
               className="message-textarea"
               rows={8}
+              aria-label="Messaggio del post"
+              disabled={publishing}
+              maxLength={maxChars}
             />
             <div className="editor-footer">
               <div className="char-counter">

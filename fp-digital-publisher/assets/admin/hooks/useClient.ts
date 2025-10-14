@@ -1,4 +1,4 @@
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useCallback } from '@wordpress/element';
 
 interface Client {
   id: number;
@@ -77,11 +77,7 @@ export const useClientJobs = (status?: string) => {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchJobs();
-  }, [selectedClientId, status]);
-
-  const fetchJobs = async () => {
+  const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -106,7 +102,11 @@ export const useClientJobs = (status?: string) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedClientId, status]);
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
 
   return { jobs, loading, refetch: fetchJobs };
 };
