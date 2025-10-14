@@ -10,6 +10,7 @@ interface Channel {
 }
 
 interface MediaFile {
+  id: string;
   url: string;
   type: 'image' | 'video';
   thumbnail?: string;
@@ -32,14 +33,30 @@ export const Composer = () => {
     }
   }, [selectedClientId]);
 
+  // Cleanup object URLs to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      media.forEach(item => {
+        if (item.url.startsWith('blob:')) {
+          URL.revokeObjectURL(item.url);
+        }
+      });
+    };
+  }, [media]);
+
   const fetchConnectedAccounts = async () => {
     if (!selectedClientId) return;
 
     try {
       const response = await fetch(`/wp-json/fp-publisher/v1/clients/${selectedClientId}/accounts`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
 
-      const channels: Channel[] = [
+      const baseChannels: Channel[] = [
         { id: 'meta_facebook', name: 'Facebook', icon: '📘', connected: false },
         { id: 'meta_instagram', name: 'Instagram', icon: '📷', connected: false },
         { id: 'youtube', name: 'YouTube', icon: '📹', connected: false },
@@ -48,13 +65,18 @@ export const Composer = () => {
         { id: 'wordpress_blog', name: 'WordPress', icon: '📝', connected: true },
       ];
 
-      // Mark connected channels
-      data.accounts?.forEach((account: any) => {
-        const channel = channels.find(c => c.id === account.channel);
-        if (channel) {
-          channel.connected = true;
-          channel.accountName = account.account_name;
+      // Mark connected channels (immutable way)
+      const connectedAccountIds = new Set(data.accounts?.map((a: any) => a.channel) || []);
+      const channels = baseChannels.map(channel => {
+        const account = data.accounts?.find((a: any) => a.channel === channel.id);
+        if (account) {
+          return {
+            ...channel,
+            connected: true,
+            accountName: account.account_name,
+          };
         }
+        return channel;
       });
 
       setAvailableChannels(channels);
@@ -73,21 +95,56 @@ export const Composer = () => {
 
   const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
+
+    // Validate file size (max 50MB per file)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024;
+    const invalidFiles: string[] = [];
 
     Array.from(files).forEach(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        invalidFiles.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+        return;
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+        invalidFiles.push(`${file.name} (tipo non supportato)`);
+        return;
+      }
+
       const url = URL.createObjectURL(file);
       const type = file.type.startsWith('image/') ? 'image' : 'video';
+      const id = `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
-      setMedia(prev => [...prev, { url, type }]);
+      setMedia(prev => [...prev, { id, url, type }]);
+    });
+
+    // Show error for invalid files
+    if (invalidFiles.length > 0) {
+      alert(`File non validi:\n${invalidFiles.join('\n')}\n\nDimensione massima: 50MB`);
+    }
+
+    // Reset input to allow re-uploading the same file
+    e.target.value = '';
+  };
+
+  const removeMedia = (id: string) => {
+    setMedia(prev => {
+      const itemToRemove = prev.find(item => item.id === id);
+      if (itemToRemove && itemToRemove.url.startsWith('blob:')) {
+        URL.revokeObjectURL(itemToRemove.url);
+      }
+      return prev.filter(item => item.id !== id);
     });
   };
 
-  const removeMedia = (index: number) => {
-    setMedia(prev => prev.filter((_, i) => i !== index));
-  };
-
   const handlePublish = async (isDraft: boolean = false) => {
+    // Prevent race condition - don't allow if already publishing
+    if (publishing) {
+      return;
+    }
+
     if (!selectedClientId) {
       alert('Seleziona un cliente prima di pubblicare');
       return;
@@ -109,7 +166,18 @@ export const Composer = () => {
       let publishAt = new Date().toISOString();
       
       if (scheduledDate && scheduledTime) {
-        publishAt = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
+        const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+        if (isNaN(scheduledDateTime.getTime())) {
+          alert('❌ Data o ora non valida');
+          setPublishing(false);
+          return;
+        }
+        if (scheduledDateTime < new Date()) {
+          alert('❌ La data di pubblicazione deve essere futura');
+          setPublishing(false);
+          return;
+        }
+        publishAt = scheduledDateTime.toISOString();
       }
 
       const response = await fetch('/wp-json/fp-publisher/v1/publish/multi-channel', {
@@ -144,10 +212,21 @@ export const Composer = () => {
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const result = await response.json();
 
       if (result.success) {
         alert(`✅ ${isDraft ? 'Bozza salvata' : 'Pubblicato'} con successo su ${result.published} canali!`);
+        
+        // Cleanup media URLs before resetting
+        media.forEach(item => {
+          if (item.url.startsWith('blob:')) {
+            URL.revokeObjectURL(item.url);
+          }
+        });
         
         // Reset form
         setMessage('');
@@ -212,6 +291,9 @@ export const Composer = () => {
               placeholder="Cosa vuoi condividere?"
               className="message-textarea"
               rows={8}
+              aria-label="Messaggio del post"
+              disabled={publishing}
+              maxLength={maxChars}
             />
             <div className="editor-footer">
               <div className="char-counter">
@@ -264,8 +346,8 @@ export const Composer = () => {
 
             {media.length > 0 && (
               <div className="media-grid">
-                {media.map((file, index) => (
-                  <div key={index} className="media-item">
+                {media.map((file) => (
+                  <div key={file.id} className="media-item">
                     {file.type === 'image' ? (
                       <img src={file.url} alt="Preview" />
                     ) : (
@@ -273,7 +355,7 @@ export const Composer = () => {
                     )}
                     <button
                       className="remove-media"
-                      onClick={() => removeMedia(index)}
+                      onClick={() => removeMedia(file.id)}
                     >
                       ✕
                     </button>
@@ -288,29 +370,35 @@ export const Composer = () => {
             <h3>⏰ Programmazione</h3>
             <div className="scheduling-inputs">
               <div className="input-group">
-                <label>Data</label>
+                <label htmlFor="scheduled-date">Data</label>
                 <input
+                  id="scheduled-date"
                   type="date"
                   value={scheduledDate}
                   onChange={(e) => setScheduledDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
+                  disabled={publishing}
                 />
               </div>
               <div className="input-group">
-                <label>Ora</label>
+                <label htmlFor="scheduled-time">Ora</label>
                 <input
+                  id="scheduled-time"
                   type="time"
                   value={scheduledTime}
                   onChange={(e) => setScheduledTime(e.target.value)}
+                  disabled={publishing}
                 />
               </div>
               {scheduledDate && scheduledTime && (
                 <button
+                  type="button"
                   className="button button-small"
                   onClick={() => {
                     setScheduledDate('');
                     setScheduledTime('');
                   }}
+                  disabled={publishing}
                 >
                   ✕ Rimuovi
                 </button>
@@ -356,7 +444,8 @@ export const Composer = () => {
                       <input
                         type="checkbox"
                         checked={selectedChannels.includes(channel.id)}
-                        onChange={() => {}}
+                        onChange={(e) => e.stopPropagation()}
+                        readOnly
                       />
                     </div>
                   )}
@@ -401,7 +490,7 @@ export const Composer = () => {
                 <div className="preview-content">
                   {message}
                 </div>
-                {media.length > 0 && (
+                {media.length > 0 && media[0] && (
                   <div className="preview-media">
                     {media[0].type === 'image' ? (
                       <img src={media[0].url} alt="Preview" />

@@ -1,4 +1,4 @@
-import { createElement, useState, useEffect } from '@wordpress/element';
+import { createElement, useState, useEffect, useCallback } from '@wordpress/element';
 import { useClient } from '../hooks/useClient';
 
 interface DashboardStats {
@@ -29,11 +29,7 @@ export const Dashboard = () => {
   const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [selectedClientId]);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -43,11 +39,23 @@ export const Dashboard = () => {
 
       // Fetch stats
       const [scheduled, completed, failed, accounts] = await Promise.all([
-        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=pending`).then(r => r.json()),
-        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=completed`).then(r => r.json()),
-        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=failed`).then(r => r.json()),
+        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=pending`).then(async r => {
+          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+          return r.json();
+        }),
+        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=completed`).then(async r => {
+          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+          return r.json();
+        }),
+        fetch(`/wp-json/fp-publisher/v1/jobs?${params}&status=failed`).then(async r => {
+          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+          return r.json();
+        }),
         selectedClientId 
-          ? fetch(`/wp-json/fp-publisher/v1/clients/${selectedClientId}/accounts`).then(r => r.json())
+          ? fetch(`/wp-json/fp-publisher/v1/clients/${selectedClientId}/accounts`).then(async r => {
+              if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+              return r.json();
+            })
           : Promise.resolve({ total: 0 }),
       ]);
 
@@ -60,14 +68,21 @@ export const Dashboard = () => {
       });
 
       // Recent jobs
-      const recent = await fetch(`/wp-json/fp-publisher/v1/jobs?${params}&limit=10`).then(r => r.json());
+      const recent = await fetch(`/wp-json/fp-publisher/v1/jobs?${params}&limit=10`).then(async r => {
+        if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+        return r.json();
+      });
       setRecentJobs(recent.jobs || []);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedClientId]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const getChannelIcon = (channel: string): string => {
     const icons: Record<string, string> = {
@@ -98,6 +113,18 @@ export const Dashboard = () => {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
+
+    // Handle future dates
+    if (diffMs < 0) {
+      const absDiffMins = Math.abs(diffMins);
+      const absDiffHours = Math.abs(diffHours);
+      const absDiffDays = Math.abs(diffDays);
+      
+      if (absDiffMins < 1) return 'Ora';
+      if (absDiffMins < 60) return `Tra ${absDiffMins} min`;
+      if (absDiffHours < 24) return `Tra ${absDiffHours} ore`;
+      if (absDiffDays < 7) return `Tra ${absDiffDays} giorni`;
+    }
 
     if (diffMins < 1) return 'Adesso';
     if (diffMins < 60) return `${diffMins} min fa`;

@@ -40,10 +40,10 @@ final class QueuePage
             wp_die(esc_html__('You do not have permission to access the FP Publisher queue.', 'fp-publisher'));
         }
 
-        $status = isset($_GET['status']) ? sanitize_key((string) wp_unslash($_GET['status'])) : '';
-        $channelParam = isset($_GET['channel']) ? (string) wp_unslash($_GET['channel']) : '';
+        $status = isset($_GET['status']) ? sanitize_key($_GET['status']) : '';
+        $channelParam = isset($_GET['channel']) ? sanitize_text_field($_GET['channel']) : '';
         $channel = Channels::normalize($channelParam);
-        $search = isset($_GET['s']) ? (string) wp_unslash($_GET['s']) : '';
+        $search = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
         $page = isset($_GET['paged']) ? max(1, (int) $_GET['paged']) : 1;
 
         /** @var \FP\Publisher\Support\Contracts\QueueInterface $queue */

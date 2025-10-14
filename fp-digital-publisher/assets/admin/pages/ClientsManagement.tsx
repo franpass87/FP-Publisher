@@ -1,4 +1,4 @@
-import { createElement, useState, useEffect } from '@wordpress/element';
+import { createElement, useState, useEffect, useCallback } from '@wordpress/element';
 
 interface Client {
   id: number;
@@ -27,14 +27,15 @@ export const ClientsManagement = () => {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
-
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch('/wp-json/fp-publisher/v1/clients');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setClients(data.clients || []);
     } catch (error) {
@@ -42,7 +43,11 @@ export const ClientsManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
 
   const handleAddClient = () => {
     setEditingClient(null);
@@ -60,9 +65,14 @@ export const ClientsManagement = () => {
     }
 
     try {
-      await fetch(`/wp-json/fp-publisher/v1/clients/${client.id}`, {
+      const response = await fetch(`/wp-json/fp-publisher/v1/clients/${client.id}`, {
         method: 'DELETE',
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       fetchClients();
     } catch (error) {
       console.error('Failed to delete client:', error);
@@ -248,6 +258,22 @@ const ClientModal = ({ client, onClose, onSave }: ClientModalProps) => {
   });
   const [saving, setSaving] = useState(false);
 
+  // Update form data when client prop changes
+  useEffect(() => {
+    if (client) {
+      setFormData({
+        name: client.name || '',
+        slug: client.slug || '',
+        logo_url: client.logo_url || '',
+        website: client.website || '',
+        industry: client.industry || '',
+        timezone: client.timezone || 'Europe/Rome',
+        color: client.color || '#666666',
+        status: client.status || 'active',
+      });
+    }
+  }, [client]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -259,7 +285,7 @@ const ClientModal = ({ client, onClose, onSave }: ClientModalProps) => {
 
       const method = client ? 'PUT' : 'POST';
 
-      await fetch(url, {
+      const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -267,7 +293,12 @@ const ClientModal = ({ client, onClose, onSave }: ClientModalProps) => {
         body: JSON.stringify(formData),
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       onSave();
+      onClose();
     } catch (error) {
       console.error('Failed to save client:', error);
       alert('Errore durante il salvataggio del cliente');

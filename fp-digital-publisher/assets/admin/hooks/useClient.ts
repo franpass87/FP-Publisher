@@ -1,4 +1,4 @@
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useCallback } from '@wordpress/element';
 
 interface Client {
   id: number;
@@ -18,7 +18,11 @@ interface Client {
 export const useClient = () => {
   const [selectedClientId, setSelectedClientId] = useState<number | null>(() => {
     const saved = localStorage.getItem('fp_selected_client');
-    return saved ? parseInt(saved) : null;
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      return !isNaN(parsed) ? parsed : null;
+    }
+    return null;
   });
 
   const [currentClient, setCurrentClient] = useState<Client | null>(null);
@@ -36,6 +40,11 @@ export const useClient = () => {
     setLoading(true);
     try {
       const response = await fetch(`/wp-json/fp-publisher/v1/clients/${clientId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setCurrentClient(data);
     } catch (error) {
@@ -48,10 +57,15 @@ export const useClient = () => {
 
   const selectClient = (clientId: number | null) => {
     setSelectedClientId(clientId);
-    if (clientId) {
-      localStorage.setItem('fp_selected_client', clientId.toString());
-    } else {
-      localStorage.removeItem('fp_selected_client');
+    try {
+      if (clientId) {
+        localStorage.setItem('fp_selected_client', clientId.toString());
+      } else {
+        localStorage.removeItem('fp_selected_client');
+      }
+    } catch (error) {
+      // Handle localStorage quota exceeded or disabled
+      console.warn('Failed to save client selection to localStorage:', error);
     }
   };
 
@@ -68,11 +82,7 @@ export const useClientJobs = (status?: string) => {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchJobs();
-  }, [selectedClientId, status]);
-
-  const fetchJobs = async () => {
+  const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -84,6 +94,11 @@ export const useClientJobs = (status?: string) => {
       }
 
       const response = await fetch(`/wp-json/fp-publisher/v1/jobs?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setJobs(data.jobs || []);
     } catch (error) {
@@ -92,7 +107,11 @@ export const useClientJobs = (status?: string) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedClientId, status]);
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
 
   return { jobs, loading, refetch: fetchJobs };
 };

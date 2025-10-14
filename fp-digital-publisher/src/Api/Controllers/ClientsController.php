@@ -145,8 +145,9 @@ final class ClientsController extends BaseController
         $userId = get_current_user_id();
         $filters = [];
 
-        if ($request->get_param('status')) {
-            $filters['status'] = $request->get_param('status');
+        $status = $request->get_param('status');
+        if ($status && is_string($status)) {
+            $filters['status'] = sanitize_key($status);
         }
 
         $clients = ClientService::listForUser($userId, $filters);
@@ -158,6 +159,14 @@ final class ClientsController extends BaseController
     public static function createClient(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
         $data = $request->get_json_params();
+
+        if (!is_array($data)) {
+            return new WP_Error(
+                'invalid_data',
+                'Request body must be a valid JSON object',
+                ['status' => 400]
+            );
+        }
 
         try {
             $client = ClientService::create($data);
@@ -191,6 +200,14 @@ final class ClientsController extends BaseController
     {
         $id = (int) $request->get_param('id');
         $data = $request->get_json_params();
+
+        if (!is_array($data)) {
+            return new WP_Error(
+                'invalid_data',
+                'Request body must be a valid JSON object',
+                ['status' => 400]
+            );
+        }
 
         try {
             $updated = ClientService::update($id, $data);
@@ -226,7 +243,8 @@ final class ClientsController extends BaseController
     public static function listAccounts(WP_REST_Request $request): WP_REST_Response
     {
         $clientId = (int) $request->get_param('id');
-        $channel = $request->get_param('channel');
+        $channel = sanitize_key($request->get_param('channel') ?? '');
+        $channel = $channel !== '' ? $channel : null;
 
         $accounts = ClientService::getAccountsForClient($clientId, $channel);
         $data = array_map(fn ($account) => $account->toArray(), $accounts);
@@ -238,6 +256,14 @@ final class ClientsController extends BaseController
     {
         $clientId = (int) $request->get_param('id');
         $data = $request->get_json_params();
+
+        if (!is_array($data)) {
+            return new WP_Error(
+                'invalid_data',
+                'Request body must be a valid JSON object',
+                ['status' => 400]
+            );
+        }
 
         try {
             $account = ClientService::connectAccount($clientId, $data);
@@ -277,8 +303,17 @@ final class ClientsController extends BaseController
     {
         $clientId = (int) $request->get_param('id');
         $data = $request->get_json_params();
+
+        if (!is_array($data)) {
+            return new WP_Error(
+                'invalid_data',
+                'Request body must be a valid JSON object',
+                ['status' => 400]
+            );
+        }
+
         $userId = (int) ($data['user_id'] ?? 0);
-        $role = (string) ($data['role'] ?? 'viewer');
+        $role = sanitize_key($data['role'] ?? 'viewer');
         $invitedBy = get_current_user_id();
 
         try {

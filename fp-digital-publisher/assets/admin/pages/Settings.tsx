@@ -1,4 +1,4 @@
-import { createElement, useState, useEffect } from '@wordpress/element';
+import { createElement, useState, useEffect, useRef } from '@wordpress/element';
 
 interface PluginSettings {
   worker_enabled: boolean;
@@ -22,16 +22,35 @@ export const Settings = () => {
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
 
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
     try {
       // TODO: Implementare salvataggio settings via API
       await new Promise(resolve => setTimeout(resolve, 1000));
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      timeoutRef.current = window.setTimeout(() => {
+        setSaved(false);
+        timeoutRef.current = null;
+      }, 3000);
     } catch (error) {
       console.error('Failed to save settings:', error);
       alert('Errore durante il salvataggio delle impostazioni');
@@ -80,7 +99,12 @@ export const Settings = () => {
               min="30"
               max="600"
               value={settings.worker_interval}
-              onChange={(e) => setSettings({...settings, worker_interval: parseInt(e.target.value)})}
+              onChange={(e) => {
+                const value = parseInt(e.target.value, 10);
+                if (!isNaN(value)) {
+                  setSettings({...settings, worker_interval: value});
+                }
+              }}
               className="small-input"
             />
             <p className="setting-description">
@@ -105,7 +129,12 @@ export const Settings = () => {
               min="1"
               max="10"
               value={settings.max_retries}
-              onChange={(e) => setSettings({...settings, max_retries: parseInt(e.target.value)})}
+              onChange={(e) => {
+                const value = parseInt(e.target.value, 10);
+                if (!isNaN(value)) {
+                  setSettings({...settings, max_retries: value});
+                }
+              }}
               className="small-input"
             />
             <p className="setting-description">
@@ -122,7 +151,12 @@ export const Settings = () => {
               min="60"
               max="3600"
               value={settings.retry_backoff}
-              onChange={(e) => setSettings({...settings, retry_backoff: parseInt(e.target.value)})}
+              onChange={(e) => {
+                const value = parseInt(e.target.value, 10);
+                if (!isNaN(value)) {
+                  setSettings({...settings, retry_backoff: value});
+                }
+              }}
               className="small-input"
             />
             <p className="setting-description">
@@ -161,7 +195,12 @@ export const Settings = () => {
               min="3"
               max="20"
               value={settings.circuit_breaker_threshold}
-              onChange={(e) => setSettings({...settings, circuit_breaker_threshold: parseInt(e.target.value)})}
+              onChange={(e) => {
+                const value = parseInt(e.target.value, 10);
+                if (!isNaN(value)) {
+                  setSettings({...settings, circuit_breaker_threshold: value});
+                }
+              }}
               className="small-input"
             />
             <p className="setting-description">

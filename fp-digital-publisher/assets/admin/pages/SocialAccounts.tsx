@@ -1,4 +1,4 @@
-import { createElement, useState, useEffect } from '@wordpress/element';
+import { createElement, useState, useEffect, useCallback } from '@wordpress/element';
 import { useClient } from '../hooks/useClient';
 
 interface Account {
@@ -14,18 +14,17 @@ export const SocialAccounts = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (selectedClientId) {
-      fetchAccounts();
-    }
-  }, [selectedClientId]);
-
-  const fetchAccounts = async () => {
+  const fetchAccounts = useCallback(async () => {
     if (!selectedClientId) return;
     
     setLoading(true);
     try {
       const response = await fetch(`/wp-json/fp-publisher/v1/clients/${selectedClientId}/accounts`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setAccounts(data.accounts || []);
     } catch (error) {
@@ -33,7 +32,13 @@ export const SocialAccounts = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedClientId]);
+
+  useEffect(() => {
+    if (selectedClientId) {
+      fetchAccounts();
+    }
+  }, [selectedClientId, fetchAccounts]);
 
   const handleConnect = (channel: string) => {
     alert(`Connessione OAuth per ${channel} - Implementare flow OAuth 2.0`);
@@ -45,9 +50,14 @@ export const SocialAccounts = () => {
     if (!confirm('Vuoi davvero disconnettere questo account?')) return;
 
     try {
-      await fetch(`/wp-json/fp-publisher/v1/clients/${selectedClientId}/accounts/${accountId}`, {
+      const response = await fetch(`/wp-json/fp-publisher/v1/clients/${selectedClientId}/accounts/${accountId}`, {
         method: 'DELETE'
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       fetchAccounts();
     } catch (error) {
       console.error('Failed to disconnect account:', error);

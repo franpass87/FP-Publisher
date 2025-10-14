@@ -80,7 +80,16 @@ export class CommentsService {
    * Cerca utenti per mentions autocomplete
    */
   async searchUsers(query: string, limit: number = 5): Promise<MentionSuggestion[]> {
-    const url = `/wp-json/wp/v2/users?per_page=${limit}&search=${encodeURIComponent(query)}`;
+    // Validate and clamp limit
+    const validLimit = Math.max(1, Math.min(100, limit));
+    const trimmedQuery = query.trim();
+    
+    // Don't search if query is too short
+    if (trimmedQuery.length < 2) {
+      return [];
+    }
+    
+    const url = `/wp-json/wp/v2/users?per_page=${validLimit}&search=${encodeURIComponent(trimmedQuery)}`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -96,6 +105,12 @@ export class CommentsService {
     }
 
     const users = await response.json();
+    
+    // Valida che la risposta sia un array
+    if (!Array.isArray(users)) {
+      console.warn('searchUsers: expected array, got', typeof users);
+      return [];
+    }
     
     // Mappa i dati WordPress al nostro formato
     return users.map((user: any) => ({

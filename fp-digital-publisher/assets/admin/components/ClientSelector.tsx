@@ -17,7 +17,11 @@ export const ClientSelector = ({ onClientChange }: ClientSelectorProps) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | null>(() => {
     const saved = localStorage.getItem('fp_selected_client');
-    return saved ? parseInt(saved) : null;
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      return !isNaN(parsed) ? parsed : null;
+    }
+    return null;
   });
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -41,6 +45,11 @@ export const ClientSelector = ({ onClientChange }: ClientSelectorProps) => {
   const fetchClients = async () => {
     try {
       const response = await fetch('/wp-json/fp-publisher/v1/clients');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setClients(data.clients || []);
     } catch (error) {
@@ -54,10 +63,15 @@ export const ClientSelector = ({ onClientChange }: ClientSelectorProps) => {
     setSelectedClientId(clientId);
     setIsOpen(false);
     
-    if (clientId) {
-      localStorage.setItem('fp_selected_client', clientId.toString());
-    } else {
-      localStorage.removeItem('fp_selected_client');
+    try {
+      if (clientId) {
+        localStorage.setItem('fp_selected_client', clientId.toString());
+      } else {
+        localStorage.removeItem('fp_selected_client');
+      }
+    } catch (error) {
+      // Handle localStorage quota exceeded or disabled
+      console.warn('Failed to save client selection to localStorage:', error);
     }
 
     if (onClientChange) {
@@ -65,7 +79,8 @@ export const ClientSelector = ({ onClientChange }: ClientSelectorProps) => {
     }
 
     // Trigger page reload to update all data
-    window.location.reload();
+    // Using replace() to avoid adding to browser history
+    window.location.replace(window.location.href);
   };
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
