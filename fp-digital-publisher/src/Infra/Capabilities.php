@@ -58,6 +58,8 @@ final class Capabilities
             $editorCaps
         );
 
+        // Always sync core roles to ensure capabilities are up-to-date
+        // This is crucial for administrators to see the admin menu
         self::syncCoreRole('administrator', $adminCaps);
         self::syncCoreRole('editor', $editorCaps);
     }
