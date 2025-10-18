@@ -18,8 +18,9 @@ final class Menu
 
     public static function addMenuPages(): void
     {
-        // Use manage_options as fallback for administrators
-        $capability = current_user_can('fp_publisher_manage_plans') ? 'fp_publisher_manage_plans' : 'manage_options';
+        // Use manage_options for administrators as the primary capability
+        // This ensures the menu is always visible to WordPress administrators
+        $capability = 'manage_options';
         
         // Main menu
         add_menu_page(
