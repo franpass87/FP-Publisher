@@ -18,11 +18,14 @@ final class Menu
 
     public static function addMenuPages(): void
     {
+        // Use manage_options as fallback for administrators
+        $capability = current_user_can('fp_publisher_manage_plans') ? 'fp_publisher_manage_plans' : 'manage_options';
+        
         // Main menu
         add_menu_page(
             'FP Publisher',                    // page_title
             'FP Publisher',                    // menu_title
-            'fp_publisher_manage_plans',      // capability
+            $capability,                       // capability
             'fp-publisher',                    // menu_slug
             [self::class, 'renderApp'],        // callback
             'dashicons-megaphone',             // icon
@@ -34,7 +37,7 @@ final class Menu
             'fp-publisher',
             'Dashboard',
             'Dashboard',
-            'fp_publisher_manage_plans',
+            $capability,
             'fp-publisher',
             [self::class, 'renderApp']
         );
@@ -44,7 +47,7 @@ final class Menu
             'fp-publisher',
             'Nuovo Post',
             'Nuovo Post',
-            'fp_publisher_manage_plans',
+            $capability,
             'fp-publisher-composer',
             [self::class, 'renderApp']
         );
@@ -54,7 +57,7 @@ final class Menu
             'fp-publisher',
             'Calendario',
             'Calendario',
-            'fp_publisher_manage_plans',
+            $capability,
             'fp-publisher-calendar',
             [self::class, 'renderApp']
         );
@@ -64,7 +67,7 @@ final class Menu
             'fp-publisher',
             'Libreria Media',
             'Libreria Media',
-            'fp_publisher_manage_plans',
+            $capability,
             'fp-publisher-library',
             [self::class, 'renderApp']
         );
@@ -74,7 +77,7 @@ final class Menu
             'fp-publisher',
             'Analytics',
             'Analytics',
-            'fp_publisher_manage_plans',
+            $capability,
             'fp-publisher-analytics',
             [self::class, 'renderApp']
         );
@@ -84,7 +87,7 @@ final class Menu
             'fp-publisher',
             '',
             '<span style="opacity:0.3">────────</span>',
-            'fp_publisher_manage_plans',
+            $capability,
             '#',
             function() {}
         );
@@ -94,7 +97,7 @@ final class Menu
             'fp-publisher',
             'Gestione Clienti',
             'Clienti',
-            'fp_publisher_manage_plans',
+            $capability,
             'fp-publisher-clients',
             [self::class, 'renderApp']
         );
@@ -104,7 +107,7 @@ final class Menu
             'fp-publisher',
             'Account Social',
             'Account Social',
-            'fp_publisher_manage_accounts',
+            $capability,
             'fp-publisher-accounts',
             [self::class, 'renderApp']
         );
@@ -114,7 +117,7 @@ final class Menu
             'fp-publisher',
             'Cronologia Job',
             'Job',
-            'fp_publisher_manage_plans',
+            $capability,
             'fp-publisher-jobs',
             [self::class, 'renderApp']
         );
@@ -124,7 +127,7 @@ final class Menu
             'fp-publisher',
             'Impostazioni',
             'Impostazioni',
-            'fp_publisher_manage_settings',
+            $capability,
             'fp-publisher-settings',
             [self::class, 'renderApp']
         );
