@@ -8,6 +8,7 @@ use WP_REST_Response;
 
 use function add_action;
 use function admin_url;
+use function current_user_can;
 use function plugins_url;
 use function register_rest_route;
 use function rest_url;
@@ -34,11 +35,14 @@ final class OpenApiSpec
 
     public static function registerAdminPage(): void
     {
+        // Use same capability logic as main menu for consistency
+        $capability = current_user_can('fp_publisher_manage_plans') ? 'fp_publisher_manage_plans' : 'manage_options';
+        
         add_submenu_page(
             'fp-publisher',
             'API Documentation',
             'API Docs',
-            'manage_options',
+            $capability,
             'fp-publisher-api-docs',
             [self::class, 'renderDocsPage']
         );
