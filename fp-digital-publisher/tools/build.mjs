@@ -22,6 +22,33 @@ const wpI18nPlugin = {
   },
 };
 
+const wpExternalsPlugin = {
+  name: 'wp-externals',
+  setup(buildApi) {
+    // Map @wordpress/* packages to window.wp global
+    buildApi.onResolve({ filter: /^@wordpress\// }, (args) => {
+      if (args.path === '@wordpress/i18n') {
+        return null; // Let the wp-i18n-shim handle it
+      }
+      return {
+        path: args.path,
+        namespace: 'wp-externals',
+      };
+    });
+
+    buildApi.onLoad({ filter: /.*/, namespace: 'wp-externals' }, (args) => {
+      // Convert @wordpress/element -> window.wp.element
+      const packageName = args.path.replace('@wordpress/', '');
+      const globalName = packageName.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+      
+      return {
+        contents: `module.exports = window.wp.${globalName};`,
+        loader: 'js',
+      };
+    });
+  },
+};
+
 const isProduction = process.env.NODE_ENV === 'production';
 
 const buildOptions = {
@@ -37,11 +64,10 @@ const buildOptions = {
   logLevel: 'info',
   drop: isProduction ? ['console', 'debugger'] : [],
   treeShaking: true,
-  plugins: [wpI18nPlugin],
+  plugins: [wpI18nPlugin, wpExternalsPlugin],
   loader: {
     '.css': 'css',
   },
-  external: ['@wordpress/*'],
 };
 
 async function ensureOutDir() {
