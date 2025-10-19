@@ -10,6 +10,14 @@ interface PluginSettings {
   metrics_enabled: boolean;
 }
 
+interface IntegrationToken {
+  service: string;
+  label: string;
+  icon: string;
+  token: string;
+  description: string;
+}
+
 export const Settings = () => {
   const [settings, setSettings] = useState<PluginSettings>({
     worker_enabled: true,
@@ -20,9 +28,46 @@ export const Settings = () => {
     circuit_breaker_threshold: 5,
     metrics_enabled: true
   });
+  const [tokens, setTokens] = useState<IntegrationToken[]>([
+    { service: 'meta_facebook', label: 'Facebook', icon: '📘', token: '', description: 'Token di accesso per Facebook Graph API' },
+    { service: 'meta_instagram', label: 'Instagram', icon: '📷', token: '', description: 'Token di accesso per Instagram Business API' },
+    { service: 'youtube', label: 'YouTube', icon: '📹', token: '', description: 'API Key per YouTube Data API v3' },
+    { service: 'tiktok', label: 'TikTok', icon: '🎵', token: '', description: 'Access Token per TikTok Business API' },
+    { service: 'google_business', label: 'Google Business', icon: '🗺️', token: '', description: 'API Key per Google Business Profile API' }
+  ]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [loadingTokens, setLoadingTokens] = useState(true);
   const timeoutRef = useRef<number | null>(null);
+
+  // Load existing tokens from API
+  useEffect(() => {
+    const loadTokens = async () => {
+      try {
+        const response = await fetch('/wp-json/fp-publisher/v1/settings', {
+          headers: {
+            'X-WP-Nonce': (window as any).fpPublisher?.nonce || ''
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.options && data.options.tokens) {
+            setTokens(prev => prev.map(t => ({
+              ...t,
+              token: data.options.tokens[t.service] || ''
+            })));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load tokens:', error);
+      } finally {
+        setLoadingTokens(false);
+      }
+    };
+    
+    loadTokens();
+  }, []);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -32,6 +77,68 @@ export const Settings = () => {
       }
     };
   }, []);
+
+  const handleTokenChange = (service: string, value: string) => {
+    setTokens(prev => prev.map(t => 
+      t.service === service ? { ...t, token: value } : t
+    ));
+  };
+
+  const handleSaveTokens = async () => {
+    setSaving(true);
+    setSaved(false);
+
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    try {
+      // Save only non-empty tokens
+      const tokensToSave: Record<string, string> = {};
+      tokens.forEach(t => {
+        if (t.token.trim() !== '') {
+          tokensToSave[t.service] = t.token.trim();
+        }
+      });
+
+      // Save each token individually using Options API
+      for (const [service, token] of Object.entries(tokensToSave)) {
+        const response = await fetch('/wp-json/fp-publisher/v1/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-WP-Nonce': (window as any).fpPublisher?.nonce || ''
+          },
+          body: JSON.stringify({
+            key: `tokens.${service}`,
+            value: token
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to save token for ${service}`);
+        }
+      }
+
+      setSaved(true);
+      timeoutRef.current = window.setTimeout(() => {
+        setSaved(false);
+        timeoutRef.current = null;
+      }, 3000);
+      
+      // Reload page to clear the notice
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (error) {
+      console.error('Failed to save tokens:', error);
+      alert('Errore durante il salvataggio dei token');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -69,6 +176,57 @@ export const Settings = () => {
       </div>
 
       <div className="settings-container">
+        {/* Integration Tokens */}
+        <div className="settings-section">
+          <h2>🔑 Token di Integrazione</h2>
+          <p className="section-description">
+            Configura i token di accesso per i vari canali social. Almeno un token è richiesto per utilizzare il plugin.
+          </p>
+
+          {loadingTokens ? (
+            <p>Caricamento token...</p>
+          ) : (
+            <>
+              {tokens.map(token => (
+                <div key={token.service} className="setting-item">
+                  <label className="setting-label">
+                    <strong>{token.icon} {token.label}</strong>
+                  </label>
+                  <input 
+                    type="password"
+                    value={token.token}
+                    onChange={(e) => handleTokenChange(token.service, e.target.value)}
+                    placeholder="Inserisci token di accesso..."
+                    className="regular-text"
+                  />
+                  <p className="setting-description">
+                    {token.description}
+                  </p>
+                </div>
+              ))}
+
+              <div className="settings-actions">
+                <button 
+                  className="button button-primary button-large"
+                  onClick={handleSaveTokens}
+                  disabled={saving}
+                >
+                  {saving ? '💾 Salvataggio...' : '💾 Salva Token'}
+                </button>
+
+                {saved && (
+                  <span className="save-notice">✅ Token salvati con successo!</span>
+                )}
+              </div>
+
+              <div className="info-box" style={{ marginTop: '20px' }}>
+                <strong>💡 Nota:</strong> I token vengono crittografati automaticamente nel database. 
+                Puoi configurare token solo per i canali che intendi utilizzare.
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Worker Settings */}
         <div className="settings-section">
           <h2>🔄 Worker Queue</h2>
