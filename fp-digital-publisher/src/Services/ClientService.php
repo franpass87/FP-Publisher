@@ -151,9 +151,20 @@ final class ClientService
             $data['meta'] = wp_json_encode($data['meta']);
         }
 
+        // Filter out unsupported columns (e.g. billing_plan) to avoid SQL errors
+        $allowedColumns = [
+            'name', 'slug', 'logo_url', 'website', 'industry', 'timezone',
+            'color', 'status', 'meta', 'updated_at',
+        ];
+        $filtered = array_intersect_key($data, array_flip($allowedColumns));
+
+        if ($filtered === []) {
+            return true; // nothing to update
+        }
+
         $updated = $wpdb->update(
             self::table(),
-            $data,
+            $filtered,
             ['id' => $id],
             null,
             ['%d']

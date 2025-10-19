@@ -55,6 +55,9 @@ final class Client
         string $timezone,
         string $color,
         string $status,
+        string $billingPlan,
+        ?DateTimeImmutable $billingCycleStart,
+        ?DateTimeImmutable $billingCycleEnd,
         array $meta,
         ?DateTimeImmutable $createdAt,
         ?DateTimeImmutable $updatedAt
@@ -107,6 +110,20 @@ final class Client
                 'client.status'
             );
 
+            $billingPlan = Validation::enum(
+                $payload['billing_plan'] ?? self::PLAN_FREE,
+                self::billingPlans(),
+                'client.billing_plan'
+            );
+
+            $billingCycleStart = isset($payload['billing_cycle_start'])
+                ? Dates::ensure((string) $payload['billing_cycle_start'])
+                : null;
+
+            $billingCycleEnd = isset($payload['billing_cycle_end'])
+                ? Dates::ensure((string) $payload['billing_cycle_end'])
+                : null;
+
             $meta = is_array($payload['meta'] ?? null) ? $payload['meta'] : [];
 
             $createdAt = isset($payload['created_at'])
@@ -127,6 +144,9 @@ final class Client
                 $timezone,
                 $color,
                 $status,
+                $billingPlan,
+                $billingCycleStart,
+                $billingCycleEnd,
                 $meta,
                 $createdAt,
                 $updatedAt
@@ -143,6 +163,20 @@ final class Client
             self::STATUS_ACTIVE,
             self::STATUS_PAUSED,
             self::STATUS_ARCHIVED,
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function billingPlans(): array
+    {
+        return [
+            self::PLAN_FREE,
+            self::PLAN_BASIC,
+            self::PLAN_PRO,
+            self::PLAN_AGENCY,
+            self::PLAN_ENTERPRISE,
         ];
     }
 
@@ -190,6 +224,11 @@ final class Client
     public function status(): string
     {
         return $this->status;
+    }
+
+    public function billingPlan(): string
+    {
+        return $this->billingPlan;
     }
 
     /**
@@ -266,6 +305,7 @@ final class Client
             'timezone' => $this->timezone,
             'color' => $this->color,
             'status' => $this->status,
+            'billing_plan' => $this->billingPlan,
             'limits' => [
                 'max_channels' => $this->getMaxChannels(),
                 'max_posts_monthly' => $this->getMonthlyPostLimit(),
