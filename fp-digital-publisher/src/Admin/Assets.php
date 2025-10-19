@@ -49,7 +49,7 @@ final class Assets
         wp_register_script(
             self::SCRIPT_HANDLE,
             FP_PUBLISHER_URL . $scriptRelativePath,
-            ['wp-i18n'],
+            ['wp-element', 'wp-i18n'],
             $scriptVersion,
             true
         );
