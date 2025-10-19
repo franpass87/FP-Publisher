@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace FP\Publisher\Support\Cli;
 
+// Prevent loading if WP_CLI is not available
+if (! class_exists('WP_CLI')) {
+    return;
+}
+
 use FP\Publisher\Monitoring\Metrics;
 use WP_CLI;
 
