@@ -12,7 +12,8 @@ final class Menu
 {
     public static function register(): void
     {
-        add_action('admin_menu', [self::class, 'addMenuPages']);
+        // Use priority 20 to ensure capabilities are initialized first
+        add_action('admin_menu', [self::class, 'addMenuPages'], 20);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
     }
 

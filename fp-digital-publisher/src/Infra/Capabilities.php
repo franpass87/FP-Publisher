@@ -33,7 +33,14 @@ final class Capabilities
 
     public static function register(): void
     {
-        add_action('init', [self::class, 'ensureRoles']);
+        // Ensure roles are synced early and on every init
+        add_action('init', [self::class, 'ensureRoles'], 1);
+        
+        // Also sync immediately when register is called
+        // This ensures capabilities are available when the plugin loads
+        if (did_action('init')) {
+            self::ensureRoles();
+        }
     }
 
     public static function activate(): void
