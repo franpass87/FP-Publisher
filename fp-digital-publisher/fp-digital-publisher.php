@@ -29,9 +29,13 @@ define('FP_PUBLISHER_PATH', plugin_dir_path(__FILE__));
 define('FP_PUBLISHER_URL', plugin_dir_url(__FILE__));
 define('FP_PUBLISHER_BASENAME', plugin_basename(__FILE__));
 
-$autoload = __DIR__ . '/vendor/autoload.php';
-if (is_readable($autoload)) {
-    require_once $autoload;
+// Load custom autoloader (works with or without Composer)
+require_once __DIR__ . '/includes/autoloader.php';
+
+// If Composer autoloader exists, use it for additional dependencies
+$composer_autoload = __DIR__ . '/vendor/autoload.php';
+if (is_readable($composer_autoload)) {
+    require_once $composer_autoload;
 }
 
 if (! function_exists('fp_publisher_activate')) {
