@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace FP\Publisher\Support\Cli;
 
+// Prevent loading if WP_CLI_Command is not available
+if (! class_exists('WP_CLI_Command')) {
+    return;
+}
+
 use FP\Publisher\Infra\Queue;
 use FP\Publisher\Support\ContainerRegistry;
 use FP\Publisher\Support\Contracts\SchedulerInterface;
