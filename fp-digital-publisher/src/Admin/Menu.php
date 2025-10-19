@@ -149,8 +149,10 @@ final class Menu
         $assetPath = plugin_dir_path(dirname(__DIR__, 2)) . 'assets/dist/admin/';
         $assetUrl = plugin_dir_url(dirname(__DIR__, 2)) . 'assets/dist/admin/';
 
+        $scriptExists = file_exists($assetPath . 'index.js');
+        
         // Check if built assets exist
-        if (file_exists($assetPath . 'index.js')) {
+        if ($scriptExists) {
             wp_enqueue_script(
                 'fp-publisher-admin',
                 $assetUrl . 'index.js',
@@ -158,6 +160,13 @@ final class Menu
                 filemtime($assetPath . 'index.js'),
                 true
             );
+            
+            // Pass data to JavaScript - only if script was enqueued
+            wp_localize_script('fp-publisher-admin', 'fpPublisher', [
+                'apiUrl' => rest_url('fp-publisher/v1'),
+                'nonce' => wp_create_nonce('wp_rest'),
+                'currentUser' => get_current_user_id(),
+            ]);
         }
 
         if (file_exists($assetPath . 'index.css')) {
@@ -168,12 +177,5 @@ final class Menu
                 filemtime($assetPath . 'index.css')
             );
         }
-
-        // Pass data to JavaScript
-        wp_localize_script('fp-publisher-admin', 'fpPublisher', [
-            'apiUrl' => rest_url('fp-publisher/v1'),
-            'nonce' => wp_create_nonce('wp_rest'),
-            'currentUser' => get_current_user_id(),
-        ]);
     }
 }
