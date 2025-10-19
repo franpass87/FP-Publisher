@@ -76,7 +76,7 @@ final class Routes
         self::registerCrudRoutes('accounts', 'fp_publisher_manage_accounts');
         self::registerCrudRoutes('templates', 'fp_publisher_manage_templates');
         self::registerCrudRoutes('alerts', 'fp_publisher_manage_alerts', [self::class, 'getAlerts']);
-        self::registerCrudRoutes('settings', 'fp_publisher_manage_settings', [self::class, 'getSettings']);
+        self::registerCrudRoutes('settings', 'fp_publisher_manage_settings', [self::class, 'getSettings'], [self::class, 'updateSettings']);
         self::registerCrudRoutes('logs', 'fp_publisher_view_logs');
         self::registerCrudRoutes('links', 'fp_publisher_manage_links', [self::class, 'getLinks'], [self::class, 'saveLink']);
         self::registerReadRoute('besttime', 'fp_publisher_manage_plans', [self::class, 'getBestTime']);
@@ -313,6 +313,37 @@ final class Routes
         return new WP_REST_Response([
             'options' => Options::all(),
         ]);
+    }
+
+    public static function updateSettings(WP_REST_Request $request)
+    {
+        $payload = self::extractPayload($request);
+        
+        if (!isset($payload['key']) || !is_string($payload['key'])) {
+            return new WP_Error(
+                'fp_publisher_settings_invalid',
+                esc_html__('Missing or invalid setting key.', 'fp-publisher'),
+                ['status' => 400]
+            );
+        }
+        
+        $key = sanitize_text_field($payload['key']);
+        $value = $payload['value'] ?? null;
+        
+        try {
+            Options::set($key, $value);
+        } catch (RuntimeException $exception) {
+            return new WP_Error(
+                'fp_publisher_settings_error',
+                esc_html__('Unable to update settings.', 'fp-publisher'),
+                ['status' => 500, 'detail' => $exception->getMessage()]
+            );
+        }
+        
+        return new WP_REST_Response([
+            'success' => true,
+            'key' => $key,
+        ], 200);
     }
 
     public static function getAlerts(): WP_REST_Response

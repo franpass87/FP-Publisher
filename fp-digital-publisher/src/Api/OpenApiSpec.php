@@ -21,7 +21,7 @@ final class OpenApiSpec
     public static function register(): void
     {
         add_action('rest_api_init', [self::class, 'registerRoutes']);
-        add_action('admin_menu', [self::class, 'registerAdminPage']);
+        add_action('admin_menu', [self::class, 'registerAdminPage'], 30);
     }
 
     public static function registerRoutes(): void
