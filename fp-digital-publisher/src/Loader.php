@@ -66,6 +66,9 @@ final class Loader
         YouTubeDispatcher::register();
         WordPressDispatcher::register();
         Worker::register();
-        QueueCommand::register();
+        
+        if (class_exists(QueueCommand::class)) {
+            QueueCommand::register();
+        }
     }
 }
