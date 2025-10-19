@@ -6,6 +6,8 @@ namespace FP\Publisher\Api;
 
 use DateTimeImmutable;
 use DateTimeInterface;
+use FP\Publisher\Api\Controllers\ClientsController;
+use FP\Publisher\Api\Controllers\PublishController;
 use FP\Publisher\Domain\PostPlan;
 use FP\Publisher\Infra\Capabilities;
 use FP\Publisher\Infra\Options;
